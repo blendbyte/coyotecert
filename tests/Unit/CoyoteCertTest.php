@@ -18,7 +18,7 @@ function makeCoyote(): CoyoteCert
     return CoyoteCert::with(new Pebble());
 }
 
-function makeStoredCert(string $caBundle = '', int $expiresInDays = 90): StoredCertificate
+function makeCoyoteCert(string $caBundle = '', int $expiresInDays = 90): StoredCertificate
 {
     return new StoredCertificate(
         certificate: 'cert-pem',
@@ -112,7 +112,7 @@ it('issue() throws when no challenge handler is configured', function () {
 // ── revoke() guard ────────────────────────────────────────────────────────────
 
 it('revoke() throws when no storage is configured', function () {
-    expect(fn () => makeCoyote()->revoke(makeStoredCert()))
+    expect(fn () => makeCoyote()->revoke(makeCoyoteCert()))
         ->toThrow(LetsEncryptClientException::class, 'No storage');
 });
 
@@ -132,7 +132,7 @@ it('needsRenewal() returns true when no certificate is stored', function () {
 
 it('needsRenewal() returns false when certificate has plenty of time remaining', function () {
     $storage = new InMemoryStorage();
-    $storage->saveCertificate('example.com', makeStoredCert(expiresInDays: 90));
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 90));
 
     expect(
         makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30)
@@ -141,7 +141,7 @@ it('needsRenewal() returns false when certificate has plenty of time remaining',
 
 it('needsRenewal() returns true when certificate expires within the threshold', function () {
     $storage = new InMemoryStorage();
-    $storage->saveCertificate('example.com', makeStoredCert(expiresInDays: 10));
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 10));
 
     expect(
         makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30)
@@ -152,7 +152,7 @@ it('needsRenewal() returns true when certificate expires within the threshold', 
 
 it('issueOrRenew() returns existing cert when renewal is not needed', function () {
     $storage = new InMemoryStorage();
-    $cert    = makeStoredCert(expiresInDays: 90);
+    $cert    = makeCoyoteCert(expiresInDays: 90);
     $storage->saveCertificate('example.com', $cert);
 
     $result = makeCoyote()
