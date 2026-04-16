@@ -26,11 +26,6 @@ jobs:
           PEBBLE_VA_NOSLEEP: "1"
           PEBBLE_VA_ALWAYS_VALID: "1"
           PEBBLE_WFE_NONCEREJECT: "0"
-        options: >-
-          --health-cmd "curl -sk https://localhost:14000/dir > /dev/null || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
 
     steps:
       - uses: actions/checkout@v6
