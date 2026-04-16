@@ -26,8 +26,11 @@ class KeyId
             'url'   => $url,
         ];
 
+        // null  → empty string (POST-as-GET per RFC 8555)
+        // []    → '{}' (challenge response: empty JSON object per RFC 8555 §7.5.1)
+        // [...] → JSON-encoded object
         $payload = is_array($payload)
-            ? str_replace('\\/', '/', json_encode($payload))
+            ? str_replace('\\/', '/', empty($payload) ? '{}' : json_encode($payload))
             : '';
 
         $payload64   = Base64::urlSafeEncode($payload);

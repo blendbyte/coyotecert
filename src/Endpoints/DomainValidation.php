@@ -134,11 +134,8 @@ class DomainValidation extends Endpoint
             }
         }
 
-        $payload = [
-            'keyAuthorization' => $keyAuthorization,
-        ];
-
-        $data = $this->createKeyId($accountData->url, $challengeData['url'], $payload);
+        // RFC 8555 §7.5.1: challenge response payload must be an empty JSON object {}
+        $data = $this->createKeyId($accountData->url, $challengeData['url'], []);
 
         $response = $this->client->getHttpClient()->post($challengeData['url'], $data);
 
@@ -147,7 +144,7 @@ class DomainValidation extends Endpoint
                 'error',
                 $response->getBody()['detail'] ?? 'Unknown error',
                 $response,
-                ['payload' => $payload, 'data' => $data]
+                ['data' => $data]
             );
         }
 
