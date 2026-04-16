@@ -6,8 +6,6 @@ use CoyoteCert\Http\Response;
 
 interface HttpClientInterface
 {
-    public function __construct(int $timeout = 10);
-
     public function head(string $url): Response;
 
     public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response;

@@ -8,7 +8,9 @@ use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Exceptions\LetsEncryptClientException;
+use CoyoteCert\Http\Psr18Adapter;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
+use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
 use CoyoteCert\Storage\StoredCertificate;
 use CoyoteCert\Storage\StorageInterface;
@@ -37,6 +39,7 @@ class CoyoteCert
 {
     private ?StorageInterface          $storage          = null;
     private ?LoggerInterface           $logger           = null;
+    private ?HttpClientInterface       $httpClient       = null;
     private string                     $email            = '';
     private string                     $profile          = '';
     private array                      $domains          = [];
@@ -84,6 +87,22 @@ class CoyoteCert
     public function logger(LoggerInterface $logger): self
     {
         $this->logger = $logger;
+
+        return $this;
+    }
+
+    /**
+     * Use a PSR-18 HTTP client instead of the built-in curl client.
+     *
+     * $requestFactory and $streamFactory are optional when the PSR-18 client
+     * also implements those interfaces (e.g. Symfony's Psr18Client).
+     */
+    public function httpClient(
+        \Psr\Http\Client\ClientInterface $client,
+        ?\Psr\Http\Message\RequestFactoryInterface $requestFactory = null,
+        ?\Psr\Http\Message\StreamFactoryInterface $streamFactory = null,
+    ): self {
+        $this->httpClient = new Psr18Adapter($client, $requestFactory, $streamFactory);
 
         return $this;
     }
@@ -173,6 +192,7 @@ class CoyoteCert
             provider:       $this->provider,
             storage:        $this->storage,
             logger:         $this->logger,
+            httpClient:     $this->httpClient,
             accountKeyType: $this->accountKeyType,
         );
 
@@ -297,7 +317,7 @@ class CoyoteCert
         }
 
         try {
-            return (new Api(provider: $this->provider, logger: $this->logger))
+            return (new Api(provider: $this->provider, logger: $this->logger, httpClient: $this->httpClient))
                 ->renewalInfo()
                 ->get($cert->certificate, $m[1]);
         } catch (\Throwable) {
