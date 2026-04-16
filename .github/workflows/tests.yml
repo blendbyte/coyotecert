@@ -12,11 +12,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.3", "8.4"]
+        php: ["8.3", "8.4", "8.5"]
 
     services:
       pebble:
-        image: letsencrypt/pebble:latest
+        image: ghcr.io/letsencrypt/pebble:latest
         ports:
           - 14000:14000
           - 15000:15000
