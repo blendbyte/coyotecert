@@ -17,10 +17,25 @@ class JsonWebKey
 
         $details = openssl_pkey_get_details($privateKey);
 
+        if ($details['type'] === OPENSSL_KEYTYPE_EC) {
+            [$crv, $coordLen] = match ($details['ec']['curve_name']) {
+                'prime256v1' => ['P-256', 32],
+                'secp384r1'  => ['P-384', 48],
+                default      => throw new LetsEncryptClientException("Unsupported EC curve: {$details['ec']['curve_name']}"),
+            };
+
+            return [
+                'crv' => $crv,
+                'kty' => 'EC',
+                'x'   => Base64::urlSafeEncode(str_pad($details['ec']['x'], $coordLen, "\x00", STR_PAD_LEFT)),
+                'y'   => Base64::urlSafeEncode(str_pad($details['ec']['y'], $coordLen, "\x00", STR_PAD_LEFT)),
+            ];
+        }
+
         return [
-            'e' => Base64::urlSafeEncode($details['rsa']['e']),
+            'e'   => Base64::urlSafeEncode($details['rsa']['e']),
             'kty' => 'RSA',
-            'n' => Base64::urlSafeEncode($details['rsa']['n']),
+            'n'   => Base64::urlSafeEncode($details['rsa']['n']),
         ];
     }
 

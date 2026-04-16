@@ -48,4 +48,9 @@ class Directory extends Endpoint
     {
         return $this->all()->getBody()['revokeCert'];
     }
+
+    public function renewalInfo(): ?string
+    {
+        return $this->all()->getBody()['renewalInfo'] ?? null;
+    }
 }

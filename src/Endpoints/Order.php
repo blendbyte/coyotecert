@@ -78,6 +78,30 @@ class Order extends Endpoint
         };
     }
 
+    public function waitUntilValid(OrderData $order, int $maxAttempts = 10, int $sleepSeconds = 2): OrderData
+    {
+        for ($i = 0; $i < $maxAttempts; $i++) {
+            $response = $this->client->getHttpClient()->post(
+                $order->url,
+                $this->createKeyId($order->accountUrl, $order->url)
+            );
+
+            $body = $response->getBody();
+
+            if (($body['status'] ?? '') === 'valid') {
+                return OrderData::fromResponse($response, $order->accountUrl);
+            }
+
+            if (($body['status'] ?? '') === 'invalid') {
+                throw new LetsEncryptClientException('Order became invalid during finalization.');
+            }
+
+            sleep($sleepSeconds);
+        }
+
+        throw new LetsEncryptClientException("Order did not become valid after {$maxAttempts} attempts.");
+    }
+
     public function finalize(OrderData $orderData, string $csr): bool
     {
         if (!$orderData->isReady()) {

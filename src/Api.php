@@ -5,6 +5,7 @@ namespace CoyoteCert;
 use Psr\Log\LoggerInterface;
 use CoyoteCert\Endpoints\Account;
 use CoyoteCert\Endpoints\Certificate;
+use CoyoteCert\Endpoints\RenewalInfo;
 use CoyoteCert\Endpoints\Directory;
 use CoyoteCert\Endpoints\DomainValidation;
 use CoyoteCert\Endpoints\Nonce;
@@ -73,6 +74,11 @@ class Api
     public function certificate(): Certificate
     {
         return new Certificate($this);
+    }
+
+    public function renewalInfo(): RenewalInfo
+    {
+        return new RenewalInfo($this);
     }
 
     public function getHttpClient(): HttpClientInterface

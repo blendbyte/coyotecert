@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
+use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Exceptions\LetsEncryptClientException;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
@@ -34,13 +35,14 @@ use CoyoteCert\Support\OpenSsl;
  */
 class CoyoteCert
 {
-    private ?StorageInterface       $storage         = null;
-    private ?LoggerInterface        $logger          = null;
-    private array                   $domains         = [];
+    private ?StorageInterface          $storage          = null;
+    private ?LoggerInterface           $logger           = null;
+    private string                     $email            = '';
+    private array                      $domains          = [];
     private ?ChallengeHandlerInterface $challengeHandler = null;
-    private KeyType                 $certKeyType     = KeyType::EC_P256;
-    private KeyType                 $accountKeyType  = KeyType::RSA_2048;
-    private bool                    $localTest       = true;
+    private KeyType                    $certKeyType      = KeyType::EC_P256;
+    private KeyType                    $accountKeyType   = KeyType::RSA_2048;
+    private bool                       $localTest        = true;
 
     private function __construct(private readonly AcmeProviderInterface $provider)
     {
@@ -51,6 +53,13 @@ class CoyoteCert
     public static function with(AcmeProviderInterface $provider): self
     {
         return new self($provider);
+    }
+
+    public function email(string $email): self
+    {
+        $this->email = $email;
+
+        return $this;
     }
 
     public function storage(StorageInterface $storage): self
@@ -126,7 +135,17 @@ class CoyoteCert
 
         $cert = $this->storage->getCertificate($this->domains[0]);
 
-        return $cert === null || $cert->remainingDays() <= $daysBeforeExpiry;
+        if ($cert === null) {
+            return true;
+        }
+
+        $window = $this->ariWindow($cert);
+
+        if ($window !== null) {
+            return $window->isOpen();
+        }
+
+        return $cert->remainingDays() <= $daysBeforeExpiry;
     }
 
     // ── Terminal actions ──────────────────────────────────────────────────────
@@ -148,7 +167,7 @@ class CoyoteCert
         // ── 1. Get or create ACME account ──────────────────────────────────
         $account = $api->account()->exists()
             ? $api->account()->get()
-            : $api->account()->create();
+            : $api->account()->create($this->email);
 
         // ── 2. Create order ────────────────────────────────────────────────
         $order = $api->order()->new($account, $this->domains);
@@ -200,16 +219,19 @@ class CoyoteCert
             throw new LetsEncryptClientException('Order finalization failed.');
         }
 
-        // ── 13. Download certificate bundle ───────────────────────────────
+        // ── 13. Poll until order transitions processing → valid ────────────
+        $order = $api->order()->waitUntilValid($order);
+
+        // ── 14. Download certificate bundle ───────────────────────────────
         $bundle = $api->certificate()->getBundle($order);
 
-        // ── 14. Parse expiry date from the DER-encoded certificate ─────────
+        // ── 15. Parse expiry date from the DER-encoded certificate ─────────
         $parsed    = openssl_x509_parse($bundle->certificate);
         $expiresAt = isset($parsed['validTo_time_t'])
             ? (new DateTimeImmutable())->setTimestamp((int) $parsed['validTo_time_t'])
             : new DateTimeImmutable('+90 days');
 
-        // ── 15. Build and persist the stored certificate ───────────────────
+        // ── 16. Build and persist the stored certificate ───────────────────
         $stored = new StoredCertificate(
             certificate: $bundle->certificate,
             privateKey:  $certKeyPem,
@@ -251,6 +273,25 @@ class CoyoteCert
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private function ariWindow(StoredCertificate $cert): ?RenewalWindow
+    {
+        if (empty($cert->caBundle)) {
+            return null;
+        }
+
+        if (!preg_match('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~', $cert->caBundle, $m)) {
+            return null;
+        }
+
+        try {
+            return (new Api(provider: $this->provider, logger: $this->logger))
+                ->renewalInfo()
+                ->get($cert->certificate, $m[1]);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
 
     private function validate(): void
     {
