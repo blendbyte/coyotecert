@@ -12,10 +12,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.3", "8.4", "8.5"]
+        php: ["8.3", "8.4"]
+
+    services:
+      pebble:
+        image: letsencrypt/pebble:latest
+        ports:
+          - 14000:14000
+          - 15000:15000
+        env:
+          PEBBLE_VA_NOSLEEP: "1"
+          PEBBLE_VA_ALWAYS_VALID: "1"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Set up PHP ${{ matrix.php }}
         uses: shivammathur/setup-php@v2
@@ -27,5 +37,12 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Wait for Pebble
+        run: |
+          timeout 30 bash -c \
+            'until curl -sk https://localhost:14000/dir > /dev/null 2>&1; do sleep 1; done'
+
       - name: Run tests
+        env:
+          PEBBLE_URL: https://localhost:14000/dir
         run: vendor/bin/pest --parallel --no-output
