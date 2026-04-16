@@ -56,6 +56,24 @@ abstract class Endpoint
         return $this->client->localAccount()->getPrivateKey();
     }
 
+    /**
+     * Seconds to wait before the next polling attempt.
+     *
+     * Respects the ACME server's Retry-After header when present; otherwise
+     * applies exponential back-off (baseDelay * 2^attempt) capped at 64 s.
+     *
+     * @param int $attempt   Zero-based attempt index for the back-off exponent.
+     * @param int $baseDelay Initial delay in seconds (used when no header is set).
+     */
+    protected function retryAfterDelay(Response $response, int $attempt, int $baseDelay): int
+    {
+        $retryAfter = (int) $response->getHeader('retry-after', 0);
+
+        return $retryAfter > 0
+            ? $retryAfter
+            : min($baseDelay * (2 ** $attempt), 64);
+    }
+
     protected function logResponse(string $level, string $message, Response $response, array $additionalContext = []): void
     {
         $this->client->logger($level, $message, array_merge([

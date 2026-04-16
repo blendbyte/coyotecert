@@ -104,7 +104,7 @@ class Order extends Endpoint
                 throw new LetsEncryptClientException('Order became invalid during finalization.');
             }
 
-            sleep($sleepSeconds);
+            sleep($this->retryAfterDelay($response, $i, $sleepSeconds));
         }
 
         throw new LetsEncryptClientException("Order did not become valid after {$maxAttempts} attempts.");

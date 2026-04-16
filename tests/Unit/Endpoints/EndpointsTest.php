@@ -1282,6 +1282,78 @@ it('Order::new() omits replaces from the payload when replacesId is empty', func
     expect($inner)->not->toHaveKey('replaces');
 });
 
+// ── Retry-After / exponential back-off ───────────────────────────────────────
+
+it('Order::waitUntilValid() respects the Retry-After header and resolves to valid', function () {
+    $storage   = withKeyStorage();
+    $callCount = 0;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use (&$callCount) {
+            $callCount++;
+            // First poll: processing + Retry-After hint; second poll: valid
+            return $callCount === 1
+                ? new Response(['retry-after' => '3'], $url, 200, orderBody('processing'))
+                : new Response([], $url, 200, orderBody('valid'));
+        },
+    );
+
+    $order = makeEndpointApi($mock, $storage)->order()->waitUntilValid(pendingOrderData(), 5, 1);
+
+    expect($order->status)->toBe('valid');
+    expect($callCount)->toBe(2);
+});
+
+it('Order::waitUntilValid() uses exponential back-off when Retry-After is absent', function () {
+    $storage   = withKeyStorage();
+    $callCount = 0;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use (&$callCount) {
+            $callCount++;
+            // Two processing rounds then valid — no Retry-After header
+            return $callCount < 3
+                ? new Response([], $url, 200, orderBody('processing'))
+                : new Response([], $url, 200, orderBody('valid'));
+        },
+    );
+
+    $order = makeEndpointApi($mock, $storage)->order()->waitUntilValid(pendingOrderData(), 5, 0);
+
+    expect($order->status)->toBe('valid');
+    expect($callCount)->toBe(3);
+});
+
+it('DomainValidation::allChallengesPassed() respects the Retry-After header', function () {
+    $storage   = withKeyStorage();
+    $callCount = 0;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use (&$callCount) {
+            $callCount++;
+            $status = $callCount === 1 ? 'pending' : 'valid';
+            $headers = $callCount === 1 ? ['retry-after' => '2'] : [];
+
+            return new Response($headers, $url, 200, [
+                'identifier' => ['type' => 'dns', 'value' => 'example.com'],
+                'status'     => $status,
+                'expires'    => '2099-01-01T00:00:00Z',
+                'challenges' => [],
+            ]);
+        },
+    );
+
+    $passed = makeEndpointApi($mock, $storage)->domainValidation()->allChallengesPassed(
+        orderDataWithAuthzUrls(['https://acme.example/authz/1'])
+    );
+
+    expect($passed)->toBeTrue();
+    expect($callCount)->toBe(2); // pending → valid after one retry
+});
+
 // ── RenewalInfo::certId() ─────────────────────────────────────────────────────
 
 it('RenewalInfo::certId() returns a string in issuerHash.serial format', function () {

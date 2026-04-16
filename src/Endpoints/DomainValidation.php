@@ -19,21 +19,35 @@ class DomainValidation extends Endpoint
     /** @return DomainValidationData[] */
     public function status(OrderData $orderData): array
     {
-        $data = [];
+        return $this->statusWithRetryHint($orderData)[0];
+    }
+
+    /**
+     * Fetch all authz statuses and capture the first Retry-After hint.
+     *
+     * @return array{0: DomainValidationData[], 1: ?int}  [statuses, retryAfterSeconds|null]
+     */
+    private function statusWithRetryHint(OrderData $orderData): array
+    {
+        $data       = [];
+        $retryAfter = null;
 
         foreach ($orderData->domainValidationUrls as $domainValidationUrl) {
             $response = $this->postSigned($domainValidationUrl, $orderData->accountUrl);
 
             if ($response->getHttpResponseCode() === 200) {
                 $data[] = DomainValidationData::fromResponse($response);
-
-                continue;
+            } else {
+                $this->logResponse('error', 'Cannot get domain validation', $response);
             }
 
-            $this->logResponse('error', 'Cannot get domain validation', $response);
+            $ra = (int) $response->getHeader('retry-after', 0);
+            if ($ra > 0 && $retryAfter === null) {
+                $retryAfter = $ra;
+            }
         }
 
-        return $data;
+        return [$data, $retryAfter];
     }
 
     /** @param DomainValidationData[] $challenges */
@@ -141,24 +155,23 @@ class DomainValidation extends Endpoint
 
     public function allChallengesPassed(OrderData $orderData): bool
     {
-        $count = 0;
-        while (($status = $this->status($orderData)) && $count < 4) {
-            if ($this->challengeSucceeded($status)) {
-                break;
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            [$statuses, $retryAfter] = $this->statusWithRetryHint($orderData);
+
+            if ($this->challengeSucceeded($statuses)) {
+                return true;
             }
 
-            if ($count === 3) {
+            if ($attempt === 3) {
                 return false;
             }
 
-            $this->client->logger('info', 'Challenge is not valid yet. Another attempt in 5 seconds.');
-
-            sleep(5);
-
-            $count++;
+            $delay = $retryAfter ?? min(5 * (2 ** $attempt), 64);
+            $this->client->logger('info', "Challenge is not valid yet. Another attempt in {$delay} seconds.");
+            sleep($delay);
         }
 
-        return true;
+        return false;
     }
 
     /** @param DomainValidationData[] $domainValidation */
