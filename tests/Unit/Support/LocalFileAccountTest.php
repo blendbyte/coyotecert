@@ -58,3 +58,18 @@ it('trailing slash is normalised in the path', function () {
     $account->generateNewKeys('RSA');
     expect($account->exists())->toBeTrue();
 });
+
+it('exists returns false when the directory exists but key files are absent', function () {
+    mkdir($this->dir, 0755, true);
+    expect($this->account->exists())->toBeFalse();
+});
+
+it('generateNewKeys throws when the directory cannot be created', function () {
+    // Create a FILE at the path so mkdir inside it fails
+    file_put_contents($this->dir, 'not-a-dir');
+
+    expect(fn () => $this->account->generateNewKeys('RSA'))
+        ->toThrow(LetsEncryptClientException::class, 'was not created');
+
+    @unlink($this->dir);
+});

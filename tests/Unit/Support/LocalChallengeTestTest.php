@@ -84,3 +84,21 @@ it('localDnsChallengeTestFailed includes domain in message', function () {
     expect($e)->toBeInstanceOf(DomainValidationException::class);
     expect($e->getMessage())->toContain('example.com');
 });
+
+// ── Private method coverage via reflection ────────────────────────────────────
+
+it('validateTxtRecords returns true when a record txt() matches the expected value', function () {
+    // A duck-typed record with txt() is all that validateTxtRecords() needs
+    $matchingRecord = new class {
+        public function txt(): string { return 'expected-digest'; }
+    };
+    $nonMatchingRecord = new class {
+        public function txt(): string { return 'wrong-digest'; }
+    };
+
+    $method = new \ReflectionMethod(LocalChallengeTest::class, 'validateTxtRecords');
+
+    expect($method->invoke(null, [$matchingRecord], 'expected-digest'))->toBeTrue();
+    expect($method->invoke(null, [$nonMatchingRecord], 'expected-digest'))->toBeFalse();
+    expect($method->invoke(null, [], 'expected-digest'))->toBeFalse();
+});

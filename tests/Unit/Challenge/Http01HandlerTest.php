@@ -70,3 +70,24 @@ it('cleanup removes the challenge file', function () {
 it('cleanup is a no-op when the file does not exist', function () {
     expect(fn () => $this->handler->cleanup('example.com', 'nonexistent'))->not->toThrow(\Throwable::class);
 });
+
+it('deploy throws when the challenge directory cannot be created', function () {
+    // Place a FILE at $this->webroot so mkdir(.well-known/acme-challenge) inside it fails
+    file_put_contents($this->webroot, 'not-a-dir');
+
+    expect(fn () => $this->handler->deploy('example.com', 'tok', 'content'))
+        ->toThrow(LetsEncryptClientException::class, 'Could not create challenge directory');
+
+    @unlink($this->webroot);
+});
+
+it('deploy throws when file_put_contents fails', function () {
+    // Pre-create a DIRECTORY at the token path so file_put_contents returns false
+    $tokenPath = $this->webroot . '/.well-known/acme-challenge/mytoken';
+    mkdir($tokenPath, 0755, true);
+
+    expect(fn () => $this->handler->deploy('example.com', 'mytoken', 'content'))
+        ->toThrow(LetsEncryptClientException::class, 'Could not write challenge file');
+
+    @rmdir($tokenPath);
+});

@@ -1,5 +1,18 @@
 <?php
 
+// ── Override sleep() in the Endpoints namespace ───────────────────────────────
+// Polling loops in DomainValidation::allChallengesPassed() and
+// Order::waitUntilValid() call sleep() without a namespace prefix, so PHP
+// first looks for a function in the current (CoyoteCert\Endpoints) namespace.
+// Defining one here turns every sleep() call in that namespace into a no-op,
+// keeping unit tests fast.
+namespace CoyoteCert\Endpoints {
+    function sleep(int $seconds): void {}
+}
+
+// ── Global helpers ────────────────────────────────────────────────────────────
+namespace {
+
 use CoyoteCert\Provider\Pebble;
 use Tests\TestCase;
 
@@ -71,3 +84,5 @@ function pebble(): Pebble
         verifyTls: false,
     );
 }
+
+} // end namespace {}

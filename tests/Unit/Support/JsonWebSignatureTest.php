@@ -96,3 +96,11 @@ it('produces a verifiable ES384 signature', function () {
 
     expect(openssl_verify($signingInput, $derSig, $pubKey, 'SHA384'))->toBe(1);
 });
+
+it('ecParams throws RuntimeException for unsupported EC curve', function () {
+    // secp521r1 is not in the match — triggers the default RuntimeException branch
+    $pem = ecKeyPem('secp521r1');
+
+    expect(fn () => JsonWebSignature::generate([], 'https://example.com', 'nonce', $pem))
+        ->toThrow(\RuntimeException::class, 'Unsupported EC curve: secp521r1');
+});

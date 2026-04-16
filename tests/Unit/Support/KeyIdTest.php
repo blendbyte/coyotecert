@@ -94,3 +94,11 @@ it('encodes an empty array payload as {} (RFC 8555 §7.5.1 challenge response)',
     expect($payload)->toBe('{}');
 });
 
+it('ecParams throws RuntimeException for unsupported EC curve', function () {
+    // secp521r1 is not in the match — triggers the default RuntimeException branch
+    $pem = ecKeyPem('secp521r1');
+
+    expect(fn () => \CoyoteCert\Support\KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce'))
+        ->toThrow(\RuntimeException::class, 'Unsupported EC curve: secp521r1');
+});
+

@@ -110,3 +110,34 @@ it('createTableSql uses the provided table name', function () {
     $sql = DatabaseStorage::createTableSql('my_table');
     expect($sql)->toContain('my_table');
 });
+
+it('set() uses ON DUPLICATE KEY UPDATE syntax for non-sqlite/non-pgsql drivers', function () {
+    // Mock PDO that reports 'mysql' as driver but records prepared SQL
+    $mockPdo = new class extends \PDO {
+        public array $capturedSql = [];
+
+        public function __construct() {} // intentionally skip parent — this is a mock
+
+        public function getAttribute(int $attribute): mixed
+        {
+            return 'mysql'; // simulate MySQL driver
+        }
+
+        public function prepare(string $query, array $options = []): \PDOStatement|false
+        {
+            $this->capturedSql[] = $query;
+            return new class extends \PDOStatement {
+                public function execute(?array $params = null): bool { return true; }
+            };
+        }
+    };
+
+    $storage = new DatabaseStorage($mockPdo);
+    $storage->saveAccountKey('pem-data', KeyType::RSA_2048);
+
+    $mysqlSqls = array_filter(
+        $mockPdo->capturedSql,
+        fn ($sql) => str_contains($sql, 'ON DUPLICATE KEY UPDATE')
+    );
+    expect($mysqlSqls)->not->toBeEmpty();
+});
