@@ -2,6 +2,7 @@
 
 namespace CoyoteCert\Support;
 
+use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\LetsEncryptClientException;
 use CoyoteCert\Interfaces\AcmeAccountInterface;
 
@@ -59,6 +60,24 @@ class LocalFileAccount implements AcmeAccountInterface
         }
 
         return true;
+    }
+
+    public function savePrivateKey(string $pem, KeyType $keyType): void
+    {
+        $privateKeyPath = $this->accountKeysPath.$this->getKeyName('private');
+
+        if (file_put_contents($privateKeyPath, $pem) === false) {
+            throw new LetsEncryptClientException('Failed to write private key to file.');
+        }
+
+        // Derive and persist the new public key
+        $privateKey = openssl_pkey_get_private($pem);
+        $details    = openssl_pkey_get_details($privateKey);
+        $publicKeyPath = $this->accountKeysPath.$this->getKeyName('public');
+
+        if (file_put_contents($publicKeyPath, $details['key']) === false) {
+            throw new LetsEncryptClientException('Failed to write public key to file.');
+        }
     }
 
     protected function getKey(string $type): string

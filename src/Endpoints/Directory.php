@@ -53,4 +53,9 @@ class Directory extends Endpoint
     {
         return $this->all()->getBody()['renewalInfo'] ?? null;
     }
+
+    public function keyChange(): string
+    {
+        return $this->all()->getBody()['keyChange'];
+    }
 }

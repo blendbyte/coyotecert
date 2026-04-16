@@ -11,4 +11,7 @@ interface AcmeAccountInterface
     public function exists(): bool;
 
     public function generateNewKeys(string $keyType = 'RSA'): bool;
+
+    /** Persist a specific private key PEM (used after a key rollover). */
+    public function savePrivateKey(string $pem, \CoyoteCert\Enums\KeyType $keyType): void;
 }

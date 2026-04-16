@@ -11,7 +11,11 @@ use CoyoteCert\Support\Base64;
 
 class Order extends Endpoint
 {
-    public function new(AccountData $accountData, array $domains, string $profile = ''): OrderData
+    /**
+     * @param string $replacesId ARI certId of the certificate being replaced (RFC 9773 §5).
+     *                           Pass an empty string when issuing a brand-new certificate.
+     */
+    public function new(AccountData $accountData, array $domains, string $profile = '', string $replacesId = ''): OrderData
     {
         $identifiers = [];
         foreach ($domains as $domain) {
@@ -35,15 +39,12 @@ class Order extends Endpoint
             $payload['profile'] = $profile;
         }
 
+        if ($replacesId !== '') {
+            $payload['replaces'] = $replacesId;
+        }
+
         $newOrderUrl = $this->client->directory()->newOrder();
-
-        $keyId = $this->createKeyId(
-            $accountData->url,
-            $this->client->directory()->newOrder(),
-            $payload
-        );
-
-        $response = $this->client->getHttpClient()->post($newOrderUrl, $keyId);
+        $response    = $this->postSigned($newOrderUrl, $accountData->url, $payload);
 
         if ($response->getHttpResponseCode() === 201) {
             return OrderData::fromResponse($response, $accountData->url);
@@ -84,10 +85,7 @@ class Order extends Endpoint
 
     public function refresh(OrderData $order): OrderData
     {
-        $response = $this->client->getHttpClient()->post(
-            $order->url,
-            $this->createKeyId($order->accountUrl, $order->url)
-        );
+        $response = $this->postSigned($order->url, $order->accountUrl);
 
         return OrderData::fromResponse($response, $order->accountUrl);
     }
@@ -95,12 +93,8 @@ class Order extends Endpoint
     public function waitUntilValid(OrderData $order, int $maxAttempts = 10, int $sleepSeconds = 2): OrderData
     {
         for ($i = 0; $i < $maxAttempts; $i++) {
-            $response = $this->client->getHttpClient()->post(
-                $order->url,
-                $this->createKeyId($order->accountUrl, $order->url)
-            );
-
-            $body = $response->getBody();
+            $response = $this->postSigned($order->url, $order->accountUrl);
+            $body     = $response->getBody();
 
             if (($body['status'] ?? '') === 'valid') {
                 return OrderData::fromResponse($response, $order->accountUrl);
@@ -133,13 +127,7 @@ class Order extends Endpoint
 
         $csr = trim(Base64::urlSafeEncode(base64_decode($csr)));
 
-        $signedPayload = $this->createKeyId(
-            $orderData->accountUrl,
-            $orderData->finalizeUrl,
-            compact('csr')
-        );
-
-        $response = $this->client->getHttpClient()->post($orderData->finalizeUrl, $signedPayload);
+        $response = $this->postSigned($orderData->finalizeUrl, $orderData->accountUrl, compact('csr'));
 
         if ($response->getHttpResponseCode() === 200) {
             $body = $response->getBody();

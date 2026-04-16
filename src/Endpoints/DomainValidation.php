@@ -22,12 +22,7 @@ class DomainValidation extends Endpoint
         $data = [];
 
         foreach ($orderData->domainValidationUrls as $domainValidationUrl) {
-            $response = $this->client
-                ->getHttpClient()
-                ->post(
-                    $domainValidationUrl,
-                    $this->createKeyId($orderData->accountUrl, $domainValidationUrl)
-                );
+            $response = $this->postSigned($domainValidationUrl, $orderData->accountUrl);
 
             if ($response->getHttpResponseCode() === 200) {
                 $data[] = DomainValidationData::fromResponse($response);
@@ -135,17 +130,10 @@ class DomainValidation extends Endpoint
         }
 
         // RFC 8555 §7.5.1: challenge response payload must be an empty JSON object {}
-        $data = $this->createKeyId($accountData->url, $challengeData['url'], []);
-
-        $response = $this->client->getHttpClient()->post($challengeData['url'], $data);
+        $response = $this->postSigned($challengeData['url'], $accountData->url, []);
 
         if ($response->getHttpResponseCode() >= 400) {
-            $this->logResponse(
-                'error',
-                $response->getBody()['detail'] ?? 'Unknown error',
-                $response,
-                ['data' => $data]
-            );
+            $this->logResponse('error', $response->getBody()['detail'] ?? 'Unknown error', $response);
         }
 
         return $response;

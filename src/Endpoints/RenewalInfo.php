@@ -32,7 +32,7 @@ class RenewalInfo extends Endpoint
         );
     }
 
-    private function certId(string $certPem, string $issuerPem): string
+    public function certId(string $certPem, string $issuerPem): string
     {
         $issuerSpki = $this->spkiDer(openssl_get_publickey($issuerPem));
         $issuerHash = Base64::urlSafeEncode(hash('sha256', $issuerSpki, true));

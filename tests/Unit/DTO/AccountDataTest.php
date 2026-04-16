@@ -62,3 +62,41 @@ it('uses empty string for missing agreement', function () {
     $account = AccountData::fromResponse($response);
     expect($account->agreement)->toBe('');
 });
+
+it('defaults contact to an empty array when the field is absent', function () {
+    $account = AccountData::fromResponse(makeAccountResponse());
+    expect($account->contact)->toBe([]);
+});
+
+it('parses the contact array when present in the response', function () {
+    $response = new Response(
+        headers:      ['location' => 'https://acme.example.com/acct/42'],
+        requestedUrl: 'https://acme.example.com/new-acct',
+        statusCode:   201,
+        body:         [
+            'key'       => [],
+            'status'    => 'valid',
+            'agreement' => '',
+            'createdAt' => null,
+            'contact'   => ['mailto:admin@example.com'],
+        ],
+    );
+
+    $account = AccountData::fromResponse($response);
+    expect($account->contact)->toBe(['mailto:admin@example.com']);
+});
+
+it('fromBody() builds AccountData from a URL and body array without Location header', function () {
+    $account = AccountData::fromBody('https://acme.example.com/acct/42', [
+        'key'       => ['kty' => 'RSA'],
+        'status'    => 'deactivated',
+        'agreement' => '',
+        'createdAt' => null,
+        'contact'   => ['mailto:ops@example.com'],
+    ]);
+
+    expect($account->id)->toBe('42');
+    expect($account->url)->toBe('https://acme.example.com/acct/42');
+    expect($account->status)->toBe('deactivated');
+    expect($account->contact)->toBe(['mailto:ops@example.com']);
+});

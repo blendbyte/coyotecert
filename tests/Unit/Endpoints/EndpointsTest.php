@@ -297,17 +297,18 @@ function orderDataWithAuthzUrls(array $urls): OrderData
 /**
  * Generates a self-signed leaf + issuer certificate pair.
  * Returns [$leafPem, $issuerPem].
+ * serial: 1 on the leaf ensures an even-length hex serial for certId().
  */
 function makeTestCerts(): array
 {
     $issuerKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
     $issuerCsr  = openssl_csr_new(['commonName' => 'Test Issuer CA'], $issuerKey);
-    $issuerCert = openssl_csr_sign($issuerCsr, null, $issuerKey, 3650);
+    $issuerCert = openssl_csr_sign($issuerCsr, null, $issuerKey, 3650, serial: 1);
     openssl_x509_export($issuerCert, $issuerPem);
 
     $leafKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
     $leafCsr  = openssl_csr_new(['commonName' => 'leaf.example.com'], $leafKey);
-    $leafCert = openssl_csr_sign($leafCsr, $issuerCert, $issuerKey, 365);
+    $leafCert = openssl_csr_sign($leafCsr, $issuerCert, $issuerKey, 365, serial: 1);
     openssl_x509_export($leafCert, $leafPem);
 
     return [$leafPem, $issuerPem];
@@ -1053,4 +1054,246 @@ it('RenewalInfo::get() returns null when ARI endpoint returns non-200', function
     );
 
     expect(makeEndpointApi($mock, $storage)->renewalInfo()->get($leafPem, $issuerPem))->toBeNull();
+});
+
+// ── badNonce retry ────────────────────────────────────────────────────────────
+
+it('postSigned() retries once on badNonce and succeeds (KID path)', function () {
+    $storage = withKeyStorage();
+    $calls   = 0;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return new Response([], $url, 400, [
+                    'type'   => 'urn:ietf:params:acme:error:badNonce',
+                    'detail' => 'JWS has an invalid anti-replay nonce',
+                ]);
+            }
+            return new Response([], $url, 200, accountBody());
+        },
+    );
+
+    $result = makeEndpointApi($mock, $storage)->account()->update(makeAccountData(), []);
+    expect($result->status)->toBe('valid');
+    expect($calls)->toBe(2);
+});
+
+it('postToAccountUrl() retries once on badNonce and succeeds (JWK path)', function () {
+    $storage = withKeyStorage();
+    $calls   = 0;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return new Response([], $url, 400, [
+                    'type'   => 'urn:ietf:params:acme:error:badNonce',
+                    'detail' => 'JWS has an invalid anti-replay nonce',
+                ]);
+            }
+            return new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody());
+        },
+    );
+
+    $result = makeEndpointApi($mock, $storage)->account()->get();
+    expect($result->url)->toBe('https://acme.example/account/1');
+    expect($calls)->toBe(2);
+});
+
+// ── Account::update() ─────────────────────────────────────────────────────────
+
+it('Account::update() returns AccountData with updated contact on success', function () {
+    $storage = withKeyStorage();
+    $contact = ['mailto:admin@example.com'];
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn ($url) => new Response([], $url, 200, array_merge(accountBody(), ['contact' => $contact])),
+    );
+
+    $updated = makeEndpointApi($mock, $storage)->account()->update(makeAccountData(), $contact);
+
+    expect($updated->contact)->toBe($contact);
+    expect($updated->status)->toBe('valid');
+});
+
+it('Account::update() throws on non-200 response', function () {
+    $storage = withKeyStorage();
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn ($url) => new Response([], $url, 403, ['detail' => 'Unauthorized']),
+    );
+
+    expect(fn () => makeEndpointApi($mock, $storage)->account()->update(makeAccountData(), []))
+        ->toThrow(LetsEncryptClientException::class, 'Unauthorized');
+});
+
+// ── Account::deactivate() ─────────────────────────────────────────────────────
+
+it('Account::deactivate() returns account with status=deactivated on success', function () {
+    $storage = withKeyStorage();
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn ($url) => new Response([], $url, 200, array_merge(accountBody(), ['status' => 'deactivated'])),
+    );
+
+    $updated = makeEndpointApi($mock, $storage)->account()->deactivate(makeAccountData());
+    expect($updated->status)->toBe('deactivated');
+});
+
+it('Account::deactivate() throws on non-200 response', function () {
+    $storage = withKeyStorage();
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn ($url) => new Response([], $url, 400, ['detail' => 'Bad Request']),
+    );
+
+    expect(fn () => makeEndpointApi($mock, $storage)->account()->deactivate(makeAccountData()))
+        ->toThrow(LetsEncryptClientException::class);
+});
+
+// ── Account::keyRollover() ────────────────────────────────────────────────────
+
+function directoryBodyWithKeyChange(bool $withRenewalInfo = false): array
+{
+    return array_merge(directoryBody($withRenewalInfo), ['keyChange' => 'https://acme.example/key-change']);
+}
+
+it('Account::keyRollover() saves a new RSA key and returns AccountData on success', function () {
+    $storage = withKeyStorage();
+    $oldKey  = $storage->getAccountKey();
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBodyWithKeyChange()),
+        postHandler: fn ($url) => new Response([], $url, 200, accountBody()),
+    );
+
+    $result = makeEndpointApi($mock, $storage)->account()->keyRollover(makeAccountData());
+
+    expect($result->status)->toBe('valid');
+    expect($storage->getAccountKey())->not->toBe($oldKey);
+});
+
+it('Account::keyRollover() saves a new EC key when the account key is EC', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveAccountKey(ecKeyPem(), KeyType::EC_P256);
+    $oldKey = $storage->getAccountKey();
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBodyWithKeyChange()),
+        postHandler: fn ($url) => new Response([], $url, 200, accountBody()),
+    );
+
+    $result = makeEndpointApi($mock, $storage)->account()->keyRollover(makeAccountData());
+
+    expect($result->status)->toBe('valid');
+    expect($storage->getAccountKey())->not->toBe($oldKey);
+});
+
+it('Account::keyRollover() retries once on badNonce', function () {
+    $storage = withKeyStorage();
+    $calls   = 0;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBodyWithKeyChange()),
+        postHandler: function ($url) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return new Response([], $url, 400, [
+                    'type'   => 'urn:ietf:params:acme:error:badNonce',
+                    'detail' => 'JWS has an invalid anti-replay nonce',
+                ]);
+            }
+            return new Response([], $url, 200, accountBody());
+        },
+    );
+
+    $result = makeEndpointApi($mock, $storage)->account()->keyRollover(makeAccountData());
+    expect($result->status)->toBe('valid');
+    expect($calls)->toBe(2);
+});
+
+it('Account::keyRollover() throws on non-200 response', function () {
+    $storage = withKeyStorage();
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBodyWithKeyChange()),
+        postHandler: fn ($url) => new Response([], $url, 400, ['detail' => 'Key rollover failed']),
+    );
+
+    expect(fn () => makeEndpointApi($mock, $storage)->account()->keyRollover(makeAccountData()))
+        ->toThrow(LetsEncryptClientException::class, 'Key rollover failed');
+});
+
+// ── Directory::keyChange() ────────────────────────────────────────────────────
+
+it('Directory::keyChange() returns the keyChange URL', function () {
+    $api = makeEndpointApi(endpointMock(getBody: directoryBodyWithKeyChange()));
+    expect($api->directory()->keyChange())->toBe('https://acme.example/key-change');
+});
+
+// ── Order::new() with replaces ────────────────────────────────────────────────
+
+it('Order::new() includes replaces in the JWS payload when replacesId is provided', function () {
+    $storage  = withKeyStorage();
+    $captured = null;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url, $payload) use (&$captured) {
+            if (str_contains($url, 'new-order')) {
+                $captured = $payload;
+            }
+            return new Response(['location' => 'https://acme.example/order/1'], $url, 201, orderBody('pending'));
+        },
+    );
+
+    makeEndpointApi($mock, $storage)->order()->new(makeAccountData(), ['example.com'], '', 'hashA.serialB');
+
+    $inner = json_decode(base64_decode(strtr($captured['payload'], '-_', '+/')), true);
+    expect($inner)->toHaveKey('replaces');
+    expect($inner['replaces'])->toBe('hashA.serialB');
+});
+
+it('Order::new() omits replaces from the payload when replacesId is empty', function () {
+    $storage  = withKeyStorage();
+    $captured = null;
+
+    $mock = closureMock(
+        getHandler:  fn ($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url, $payload) use (&$captured) {
+            if (str_contains($url, 'new-order')) {
+                $captured = $payload;
+            }
+            return new Response(['location' => 'https://acme.example/order/1'], $url, 201, orderBody('pending'));
+        },
+    );
+
+    makeEndpointApi($mock, $storage)->order()->new(makeAccountData(), ['example.com']);
+
+    $inner = json_decode(base64_decode(strtr($captured['payload'], '-_', '+/')), true);
+    expect($inner)->not->toHaveKey('replaces');
+});
+
+// ── RenewalInfo::certId() ─────────────────────────────────────────────────────
+
+it('RenewalInfo::certId() returns a string in issuerHash.serial format', function () {
+    $storage = withKeyStorage();
+    [$leafPem, $issuerPem] = makeTestCerts();
+
+    $mock   = closureMock(getHandler: fn ($url) => new Response([], $url, 200, directoryBody(withRenewalInfo: true)));
+    $certId = makeEndpointApi($mock, $storage)->renewalInfo()->certId($leafPem, $issuerPem);
+
+    expect($certId)->toBeString();
+    $parts = explode('.', $certId);
+    expect($parts)->toHaveCount(2);
+    expect($parts[0])->not->toBeEmpty();
+    expect($parts[1])->not->toBeEmpty();
 });

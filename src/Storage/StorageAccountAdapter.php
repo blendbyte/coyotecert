@@ -48,4 +48,9 @@ class StorageAccountAdapter implements AcmeAccountInterface
 
         return true;
     }
+
+    public function savePrivateKey(string $pem, \CoyoteCert\Enums\KeyType $keyType): void
+    {
+        $this->storage->saveAccountKey($pem, $keyType);
+    }
 }

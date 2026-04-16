@@ -51,7 +51,7 @@ class JsonWebSignature
         };
     }
 
-    private static function derToRaw(string $der, int $componentLen): string
+    public static function derToRaw(string $der, int $componentLen): string
     {
         // DER ECDSA: 0x30 [len] 0x02 [r-len] [r] 0x02 [s-len] [s]
         $pos  = 2;

@@ -4,11 +4,14 @@ namespace CoyoteCert\Endpoints;
 
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\EabCredentials;
+use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\LetsEncryptClientException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Support\Base64;
 use CoyoteCert\Support\JsonWebKey;
 use CoyoteCert\Support\JsonWebSignature;
+use CoyoteCert\Support\KeyId;
+use CoyoteCert\Support\OpenSsl;
 
 class Account extends Endpoint
 {
@@ -60,7 +63,7 @@ class Account extends Endpoint
 
         // Use the newAccountUrl to get the account data based on the key.
         // See https://datatracker.ietf.org/doc/html/rfc8555#section-7.3.1
-        $payload = ['onlyReturnExisting' => true];
+        $payload  = ['onlyReturnExisting' => true];
         $response = $this->postToAccountUrl($payload);
 
         if ($response->getHttpResponseCode() === 200) {
@@ -69,6 +72,96 @@ class Account extends Endpoint
 
         $this->throwError($response, 'Retrieving account failed');
     }
+
+    /**
+     * Update account contact information (RFC 8555 §7.3.2).
+     *
+     * @param string[] $contact Contact URIs, e.g. ['mailto:admin@example.com']
+     */
+    public function update(AccountData $account, array $contact): AccountData
+    {
+        $response = $this->postSigned($account->url, $account->url, ['contact' => $contact]);
+
+        if ($response->getHttpResponseCode() === 200) {
+            return AccountData::fromBody($account->url, $response->getBody());
+        }
+
+        $this->throwError($response, 'Updating account failed');
+    }
+
+    /**
+     * Deactivate an account (RFC 8555 §7.3.6).
+     * This is irreversible — a deactivated account cannot be reactivated.
+     */
+    public function deactivate(AccountData $account): AccountData
+    {
+        $response = $this->postSigned($account->url, $account->url, ['status' => 'deactivated']);
+
+        if ($response->getHttpResponseCode() === 200) {
+            return AccountData::fromBody($account->url, $response->getBody());
+        }
+
+        $this->throwError($response, 'Deactivating account failed');
+    }
+
+    /**
+     * Roll over the account key (RFC 8555 §7.3.5).
+     *
+     * Generates a new key of the same type as the current account key,
+     * sends a signed key-change request, and — on success — persists the
+     * new key via the account interface so future requests use it.
+     */
+    public function keyRollover(AccountData $account): AccountData
+    {
+        $keyChangeUrl = $this->client->directory()->keyChange();
+        $oldKeyPem    = $this->client->localAccount()->getPrivateKey();
+        $oldJwk       = JsonWebKey::compute($oldKeyPem);
+
+        // Detect current key type so the new key matches
+        $existingKey = openssl_pkey_get_private($oldKeyPem);
+        $details     = openssl_pkey_get_details($existingKey);
+        if ($details['type'] === OPENSSL_KEYTYPE_EC) {
+            $keyType = match ($details['ec']['curve_name']) {
+                'prime256v1' => KeyType::EC_P256,
+                'secp384r1'  => KeyType::EC_P384,
+                default      => KeyType::EC_P256,
+            };
+        } else {
+            $keyType = $details['bits'] >= 4096 ? KeyType::RSA_4096 : KeyType::RSA_2048;
+        }
+
+        $newKeyPem = OpenSsl::openSslKeyToString(OpenSsl::generateKey($keyType));
+
+        // The outer JWS is signed by the OLD key (KID), with the inner JWS as payload.
+        // Both outer and inner must be rebuilt if we get a badNonce.
+        $buildOuter = function () use ($oldKeyPem, $account, $newKeyPem, $oldJwk, $keyChangeUrl): array {
+            $innerJws = $this->buildKeyChangeInnerJws($newKeyPem, $oldJwk, $account->url, $keyChangeUrl);
+
+            return KeyId::generate(
+                $oldKeyPem,
+                $account->url,
+                $keyChangeUrl,
+                $this->client->nonce()->getNew(),
+                $innerJws
+            );
+        };
+
+        $response = $this->client->getHttpClient()->post($keyChangeUrl, $buildOuter());
+
+        if ($this->isBadNonce($response)) {
+            $response = $this->client->getHttpClient()->post($keyChangeUrl, $buildOuter());
+        }
+
+        if ($response->getHttpResponseCode() === 200) {
+            $this->client->localAccount()->savePrivateKey($newKeyPem, $keyType);
+
+            return AccountData::fromBody($account->url, $response->getBody());
+        }
+
+        $this->throwError($response, 'Key rollover failed');
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     private function buildEab(string $jwkJson, string $url, EabCredentials $eab): array
     {
@@ -88,6 +181,55 @@ class Account extends Endpoint
         ];
     }
 
+    /**
+     * Build the inner JWS for key rollover (RFC 8555 §7.3.5).
+     *
+     * Signed by the NEW key with JWK header; no nonce (outer JWS carries it).
+     */
+    private function buildKeyChangeInnerJws(
+        string $newKeyPem,
+        array  $oldJwk,
+        string $accountUrl,
+        string $keyChangeUrl
+    ): array {
+        $privateKey = openssl_pkey_get_private($newKeyPem);
+        $details    = openssl_pkey_get_details($privateKey);
+        $isEc       = $details['type'] === OPENSSL_KEYTYPE_EC;
+
+        if ($isEc) {
+            [$alg, $digest, $sigLen] = match ($details['ec']['curve_name']) {
+                'prime256v1' => ['ES256', 'SHA256', 32],
+                'secp384r1'  => ['ES384', 'SHA384', 48],
+                default      => throw new \RuntimeException("Unsupported EC curve: {$details['ec']['curve_name']}"),
+            };
+        } else {
+            [$alg, $digest, $sigLen] = ['RS256', 'SHA256', null];
+        }
+
+        $protected64 = Base64::urlSafeEncode(json_encode([
+            'alg' => $alg,
+            'jwk' => JsonWebKey::compute($newKeyPem),
+            'url' => $keyChangeUrl,
+        ], JSON_THROW_ON_ERROR));
+
+        $payload64 = Base64::urlSafeEncode(json_encode([
+            'account' => $accountUrl,
+            'oldKey'  => $oldJwk,
+        ], JSON_THROW_ON_ERROR));
+
+        openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest);
+
+        if ($isEc) {
+            $signed = JsonWebSignature::derToRaw($signed, $sigLen);
+        }
+
+        return [
+            'protected' => $protected64,
+            'payload'   => $payload64,
+            'signature' => Base64::urlSafeEncode($signed),
+        ];
+    }
+
     private function signPayload(array $payload): array
     {
         return JsonWebSignature::generate(
@@ -100,10 +242,16 @@ class Account extends Endpoint
 
     private function postToAccountUrl(array $payload): Response
     {
-        return $this->client->getHttpClient()->post(
-            $this->client->directory()->newAccount(),
-            $this->signPayload($payload)
-        );
+        $url  = $this->client->directory()->newAccount();
+        $send = fn () => $this->client->getHttpClient()->post($url, $this->signPayload($payload));
+
+        $response = $send();
+
+        if ($this->isBadNonce($response)) {
+            $response = $send();
+        }
+
+        return $response;
     }
 
     protected function throwError(Response $response, string $defaultMessage): never

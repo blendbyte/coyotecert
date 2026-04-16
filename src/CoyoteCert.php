@@ -201,8 +201,18 @@ class CoyoteCert
             ? $api->account()->get()
             : $api->account()->create($this->email);
 
-        // ── 2. Create order ────────────────────────────────────────────────
-        $order = $api->order()->new($account, $this->domains, $this->profile);
+        // ── 2. Create order (include 'replaces' certId when renewing) ─────
+        $replacesId   = '';
+        $existingCert = $this->storage?->getCertificate($this->domains[0]);
+        if ($existingCert !== null && ($issuerPem = $this->extractIssuerPem($existingCert)) !== null) {
+            try {
+                $replacesId = $api->renewalInfo()->certId($existingCert->certificate, $issuerPem);
+            } catch (\Throwable) {
+                // certId failure is non-critical; proceed without replaces
+            }
+        }
+
+        $order = $api->order()->new($account, $this->domains, $this->profile, $replacesId);
 
         // ── 3. Fetch authorization challenges ──────────────────────────────
         $challenges = $api->domainValidation()->status($order);
@@ -337,6 +347,23 @@ class CoyoteCert
 
     private function ariWindow(StoredCertificate $cert): ?RenewalWindow
     {
+        $issuerPem = $this->extractIssuerPem($cert);
+
+        if ($issuerPem === null) {
+            return null;
+        }
+
+        try {
+            return (new Api(provider: $this->provider, logger: $this->logger, httpClient: $this->httpClient))
+                ->renewalInfo()
+                ->get($cert->certificate, $issuerPem);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function extractIssuerPem(StoredCertificate $cert): ?string
+    {
         if (empty($cert->caBundle)) {
             return null;
         }
@@ -345,13 +372,7 @@ class CoyoteCert
             return null;
         }
 
-        try {
-            return (new Api(provider: $this->provider, logger: $this->logger, httpClient: $this->httpClient))
-                ->renewalInfo()
-                ->get($cert->certificate, $m[1]);
-        } catch (\Throwable) {
-            return null;
-        }
+        return $m[1];
     }
 
     private function validate(): void

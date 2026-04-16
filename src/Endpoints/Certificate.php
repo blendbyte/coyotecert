@@ -11,9 +11,7 @@ class Certificate extends Endpoint
 {
     public function getBundle(OrderData $orderData): CertificateBundleData
     {
-        $signedPayload = $this->createKeyId($orderData->accountUrl, $orderData->certificateUrl);
-
-        $response = $this->client->getHttpClient()->post($orderData->certificateUrl, $signedPayload);
+        $response = $this->postSigned($orderData->certificateUrl, $orderData->accountUrl);
 
         if ($response->getHttpResponseCode() !== 200) {
             $this->logResponse('error', 'Failed to fetch certificate', $response);
@@ -37,18 +35,12 @@ class Certificate extends Endpoint
         preg_match('~-----BEGIN\sCERTIFICATE-----(.*)-----END\sCERTIFICATE-----~s', $certificate, $matches);
         $certificate = trim(Base64::urlSafeEncode(base64_decode(trim($matches[1]))));
 
-        $revokeUrl = $this->client->directory()->revoke();
-
-        $signedPayload = $this->createKeyId(
-            $this->client->account()->get()->url,
-            $revokeUrl,
-            [
-                'certificate' => $certificate,
-                'reason' => $reason,
-            ]
-        );
-
-        $response = $this->client->getHttpClient()->post($revokeUrl, $signedPayload);
+        $revokeUrl  = $this->client->directory()->revoke();
+        $accountUrl = $this->client->account()->get()->url;
+        $response   = $this->postSigned($revokeUrl, $accountUrl, [
+            'certificate' => $certificate,
+            'reason'      => $reason,
+        ]);
 
         if ($response->getHttpResponseCode() !== 200) {
             $this->logResponse('error', 'Failed to revoke certificate', $response);
