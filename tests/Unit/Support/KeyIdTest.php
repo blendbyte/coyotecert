@@ -72,3 +72,16 @@ it('uses an empty payload string for POST-as-GET (null payload)', function () {
     // base64url('') = ''
     expect($result['payload'])->toBe('');
 });
+
+it('encodes an empty array payload as {} (RFC 8555 §7.5.1 challenge response)', function () {
+    openssl_pkey_export(
+        openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
+        $pem
+    );
+
+    $result  = KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce', []);
+    $payload = Base64::urlSafeDecode($result['payload']);
+
+    expect($payload)->toBe('{}');
+});
+

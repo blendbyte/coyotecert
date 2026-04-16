@@ -160,3 +160,48 @@ it('CustomProvider supports profiles when configured', function () {
 it('CustomProvider profiles disabled by default', function () {
     expect((new CustomProvider(directoryUrl: 'https://host/dir'))->supportsProfiles())->toBeFalse();
 });
+
+// ── Pebble ────────────────────────────────────────────────────────────────────
+
+it('Pebble has the correct default directory URL', function () {
+    $p = new \CoyoteCert\Provider\Pebble();
+    expect($p->getDirectoryUrl())->toBe('https://localhost:14000/dir');
+});
+
+it('Pebble accepts a custom directory URL', function () {
+    $p = new \CoyoteCert\Provider\Pebble('https://pebble.local:14000/dir');
+    expect($p->getDirectoryUrl())->toBe('https://pebble.local:14000/dir');
+});
+
+it('Pebble display name identifies it as a test CA', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->getDisplayName())->toContain('Pebble');
+});
+
+it('Pebble does not require EAB by default', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->isEabRequired())->toBeFalse();
+});
+
+it('Pebble requires EAB when configured', function () {
+    $p = new \CoyoteCert\Provider\Pebble(eab: true);
+    expect($p->isEabRequired())->toBeTrue();
+});
+
+it('Pebble returns null EAB credentials when not configured', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->getEabCredentials('test@example.com'))->toBeNull();
+});
+
+it('Pebble returns EAB credentials when configured', function () {
+    $p     = new \CoyoteCert\Provider\Pebble(eabKid: 'kid1', eabHmac: 'hmac1');
+    $creds = $p->getEabCredentials('test@example.com');
+
+    expect($creds->kid)->toBe('kid1');
+    expect($creds->hmacKey)->toBe('hmac1');
+});
+
+it('Pebble skips TLS verification by default', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->verifyTls())->toBeFalse();
+});
+
+it('Pebble supports profiles', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->supportsProfiles())->toBeTrue();
+});

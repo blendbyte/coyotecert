@@ -23,6 +23,9 @@ class OpenSsl
             : [
                 'private_key_type' => OPENSSL_KEYTYPE_EC,
                 'curve_name'       => $type->curveName(),
+                // private_key_bits is ignored for EC (curve_name determines size) but some
+                // openssl.cnf configs enforce a minimum; supply a value to satisfy them.
+                'private_key_bits' => 2048,
             ];
 
         $key = openssl_pkey_new($config);
