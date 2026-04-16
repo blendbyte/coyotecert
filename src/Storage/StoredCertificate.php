@@ -43,6 +43,8 @@ readonly class StoredCertificate
 
     public function remainingDays(): int
     {
-        return (int) (new \DateTimeImmutable())->diff($this->expiresAt)->days;
+        $diff = (new \DateTimeImmutable())->diff($this->expiresAt);
+
+        return $diff->invert ? 0 : (int) $diff->days;
     }
 }
