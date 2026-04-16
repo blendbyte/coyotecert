@@ -15,6 +15,9 @@ class Order extends Endpoint
      * @param string $replacesId ARI certId of the certificate being replaced (RFC 9773 §5).
      *                           Pass an empty string when issuing a brand-new certificate.
      */
+    /**
+     * @param string[] $domains
+     */
     public function new(AccountData $accountData, array $domains, string $profile = '', string $replacesId = ''): OrderData
     {
         $identifiers = [];

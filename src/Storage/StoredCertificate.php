@@ -4,6 +4,9 @@ namespace CoyoteCert\Storage;
 
 readonly class StoredCertificate
 {
+    /**
+     * @param string[] $domains
+     */
     public function __construct(
         public string             $certificate,
         public string             $privateKey,
@@ -15,6 +18,7 @@ readonly class StoredCertificate
     ) {
     }
 
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
@@ -28,6 +32,7 @@ readonly class StoredCertificate
         ];
     }
 
+    /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
         return new self(

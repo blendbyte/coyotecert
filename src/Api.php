@@ -104,6 +104,7 @@ class Api
         return $this;
     }
 
+    /** @param array<string, mixed> $context */
     public function logger(string $level, string $message, array $context = []): void
     {
         if ($this->logger instanceof LoggerInterface) {

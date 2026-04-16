@@ -42,6 +42,7 @@ class CoyoteCert
     private ?HttpClientInterface       $httpClient       = null;
     private string                     $email            = '';
     private string                     $profile          = '';
+    /** @var string[] */
     private array                      $domains          = [];
     private ?ChallengeHandlerInterface $challengeHandler = null;
     private KeyType                    $certKeyType      = KeyType::EC_P256;
@@ -188,6 +189,13 @@ class CoyoteCert
     {
         $this->validate();
 
+        // validate() guarantees these are set; capture in non-nullable locals for PHPStan.
+        $challengeHandler = $this->challengeHandler;
+
+        if ($challengeHandler === null) {
+            throw new AcmeException('No challenge handler configured.');
+        }
+
         $api = new Api(
             provider:       $this->provider,
             storage:        $this->storage,
@@ -226,7 +234,7 @@ class CoyoteCert
         // ── 6. Deploy challenge files/records for every domain ─────────────
         foreach ($validationData as $item) {
             [$token, $keyAuth] = $this->extractTokenAndKeyAuth($item, $challengeType);
-            $this->challengeHandler->deploy($item['identifier'], $token, $keyAuth);
+            $challengeHandler->deploy($item['identifier'], $token, $keyAuth);
         }
 
         // ── 7. Trigger ACME validation ─────────────────────────────────────
@@ -240,7 +248,7 @@ class CoyoteCert
         // ── 9. Clean up challenge files/records ────────────────────────────
         foreach ($validationData as $item) {
             [$token] = $this->extractTokenAndKeyAuth($item, $challengeType);
-            $this->challengeHandler->cleanup($item['identifier'], $token);
+            $challengeHandler->cleanup($item['identifier'], $token);
         }
 
         if (!$allPassed) {
@@ -336,6 +344,10 @@ class CoyoteCert
     {
         if (!$this->needsRenewal($daysBeforeExpiry)) {
             // needsRenewal() returns false only when storage is set and the cert exists.
+            if ($this->storage === null) {
+                throw new AcmeException('Certificate unexpectedly missing from storage.');
+            }
+
             return $this->storage->getCertificate($this->domains[0])
                 ?? throw new AcmeException('Certificate unexpectedly missing from storage.');
         }
@@ -392,6 +404,12 @@ class CoyoteCert
 
     private function detectChallengeType(): AuthorizationChallengeEnum
     {
+        if ($this->challengeHandler === null) {
+            throw new AcmeException(
+                'No challenge handler configured. Call ->challenge() before issuing a certificate.'
+            );
+        }
+
         foreach (AuthorizationChallengeEnum::cases() as $type) {
             if ($this->challengeHandler->supports($type)) {
                 return $type;
@@ -405,6 +423,9 @@ class CoyoteCert
 
     /**
      * Returns [token, keyAuthorization] from a getValidationData() item.
+     *
+     * @param array<string, string> $item
+     * @return array{0: string, 1: string}
      */
     private function extractTokenAndKeyAuth(array $item, AuthorizationChallengeEnum $type): array
     {

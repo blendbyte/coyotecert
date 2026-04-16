@@ -59,7 +59,7 @@ class ZeroSSL implements AcmeProviderInterface
 
     private function provisionEab(string $email): EabCredentials
     {
-        $url = 'https://api.zerossl.com/acme/eab-credentials-email?access_key=' . urlencode($this->apiKey);
+        $url = 'https://api.zerossl.com/acme/eab-credentials-email?access_key=' . urlencode((string) $this->apiKey);
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -81,7 +81,7 @@ class ZeroSSL implements AcmeProviderInterface
             );
         }
 
-        $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $data = json_decode((string) $body, true, 512, JSON_THROW_ON_ERROR);
 
         if (empty($data['success']) || empty($data['eab_kid']) || empty($data['eab_hmac_key'])) {
             throw new AcmeException(

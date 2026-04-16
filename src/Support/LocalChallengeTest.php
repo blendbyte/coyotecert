@@ -53,6 +53,7 @@ class LocalChallengeTest
         throw DomainValidationException::localDnsChallengeTestFailed($domain);
     }
 
+    /** @param array<mixed> $records */
     private static function validateTxtRecords(array $records, string $value): bool
     {
         foreach ($records as $record) {
@@ -64,6 +65,7 @@ class LocalChallengeTest
         return false;
     }
 
+    /** @param array<mixed> $records */
     private static function validateCnameRecords(array $records, string $value): bool
     {
         foreach ($records as $record) {
@@ -96,6 +98,7 @@ class LocalChallengeTest
             : $result[0]->target();
     }
 
+    /** @return array<mixed> */
     private static function getRecords(string $nameserver, string $name, int $dnsType): array
     {
         $dnsResolver = new Dns();

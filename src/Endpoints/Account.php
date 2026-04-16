@@ -120,7 +120,17 @@ class Account extends Endpoint
 
         // Detect current key type so the new key matches
         $existingKey = openssl_pkey_get_private($oldKeyPem);
-        $details     = openssl_pkey_get_details($existingKey);
+
+        if ($existingKey === false) {
+            throw new CryptoException('Cannot load account private key.');
+        }
+
+        $details = openssl_pkey_get_details($existingKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
+
         if ($details['type'] === OPENSSL_KEYTYPE_EC) {
             $keyType = match ($details['ec']['curve_name']) {
                 'prime256v1' => KeyType::EC_P256,
@@ -164,6 +174,7 @@ class Account extends Endpoint
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    /** @return array<string, string> */
     private function buildEab(string $jwkJson, string $url, EabCredentials $eab): array
     {
         $protected64 = Base64::urlSafeEncode(json_encode([
@@ -187,6 +198,10 @@ class Account extends Endpoint
      *
      * Signed by the NEW key with JWK header; no nonce (outer JWS carries it).
      */
+    /**
+     * @param array<string, string> $oldJwk
+     * @return array<string, string>
+     */
     private function buildKeyChangeInnerJws(
         string $newKeyPem,
         array  $oldJwk,
@@ -194,8 +209,18 @@ class Account extends Endpoint
         string $keyChangeUrl
     ): array {
         $privateKey = openssl_pkey_get_private($newKeyPem);
-        $details    = openssl_pkey_get_details($privateKey);
-        $isEc       = $details['type'] === OPENSSL_KEYTYPE_EC;
+
+        if ($privateKey === false) {
+            throw new CryptoException('Cannot load new private key.');
+        }
+
+        $details = openssl_pkey_get_details($privateKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
+
+        $isEc = $details['type'] === OPENSSL_KEYTYPE_EC;
 
         if ($isEc) {
             [$alg, $digest, $sigLen] = match ($details['ec']['curve_name']) {
@@ -204,7 +229,9 @@ class Account extends Endpoint
                 default      => throw new CryptoException("Unsupported EC curve: {$details['ec']['curve_name']}"),
             };
         } else {
-            [$alg, $digest, $sigLen] = ['RS256', 'SHA256', null];
+            $alg    = 'RS256';
+            $digest = 'SHA256';
+            $sigLen = null;
         }
 
         $protected64 = Base64::urlSafeEncode(json_encode([
@@ -218,7 +245,9 @@ class Account extends Endpoint
             'oldKey'  => $oldJwk,
         ], JSON_THROW_ON_ERROR));
 
-        openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest);
+        if (!openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest)) {
+            throw new CryptoException('Failed to sign key-change payload.');
+        }
 
         if ($isEc) {
             $signed = JsonWebSignature::derToRaw($signed, $sigLen);
@@ -231,6 +260,10 @@ class Account extends Endpoint
         ];
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, string>
+     */
     private function signPayload(array $payload): array
     {
         return JsonWebSignature::generate(
@@ -241,6 +274,7 @@ class Account extends Endpoint
         );
     }
 
+    /** @param array<string, mixed> $payload */
     private function postToAccountUrl(array $payload): Response
     {
         $url  = $this->client->directory()->newAccount();

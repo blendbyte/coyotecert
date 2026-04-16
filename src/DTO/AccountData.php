@@ -7,6 +7,10 @@ use CoyoteCert\Support\Url;
 
 readonly class AccountData
 {
+    /**
+     * @param array<string, mixed> $key
+     * @param string[] $contact Contact URIs, e.g. ['mailto:admin@example.com']
+     */
     public function __construct(
         public string  $id,
         public string  $url,
@@ -14,7 +18,6 @@ readonly class AccountData
         public string  $status,
         public string  $agreement,
         public ?string $createdAt,
-        /** @var string[] Contact URIs, e.g. ['mailto:admin@example.com'] */
         public array   $contact = [],
     ) {
     }
@@ -30,6 +33,7 @@ readonly class AccountData
      * Build from an account URL and a response body array.
      * Used for update/deactivate responses where the Location header is absent.
      */
+    /** @param array<string, mixed> $body */
     public static function fromBody(string $url, array $body): AccountData
     {
         return new self(

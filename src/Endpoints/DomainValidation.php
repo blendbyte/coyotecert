@@ -50,7 +50,10 @@ class DomainValidation extends Endpoint
         return [$data, $retryAfter];
     }
 
-    /** @param DomainValidationData[] $challenges */
+    /**
+     * @param DomainValidationData[] $challenges
+     * @return array<int, array<string, string>>
+     */
     public function getValidationData(array $challenges, ?AuthorizationChallengeEnum $authChallenge = null): array
     {
         $thumbprint = Thumbprint::make($this->getAccountPrivateKey());

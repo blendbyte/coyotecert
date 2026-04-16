@@ -11,6 +11,10 @@ class Certificate extends Endpoint
 {
     public function getBundle(OrderData $orderData): CertificateBundleData
     {
+        if ($orderData->certificateUrl === null) {
+            throw new AcmeException('Order does not have a certificate URL yet.');
+        }
+
         $response = $this->postSigned($orderData->certificateUrl, $orderData->accountUrl);
 
         if ($response->getHttpResponseCode() !== 200) {
@@ -32,7 +36,10 @@ class Certificate extends Endpoint
             throw new AcmeException('Could not export the certificate.');
         }
 
-        preg_match('~-----BEGIN\sCERTIFICATE-----(.*)-----END\sCERTIFICATE-----~s', $certificate, $matches);
+        if (!preg_match('~-----BEGIN\sCERTIFICATE-----(.*)-----END\sCERTIFICATE-----~s', $certificate, $matches)) {
+            throw new AcmeException('Could not extract certificate body.');
+        }
+
         $certificate = trim(Base64::urlSafeEncode(base64_decode(trim($matches[1]))));
 
         $revokeUrl  = $this->client->directory()->revoke();

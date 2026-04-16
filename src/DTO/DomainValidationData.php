@@ -8,6 +8,13 @@ use CoyoteCert\Support\Arr;
 
 readonly class DomainValidationData
 {
+    /**
+     * @param array<string, mixed> $identifier
+     * @param array<string, mixed> $file
+     * @param array<string, mixed> $dns
+     * @param array<string, mixed> $dnsPersist
+     * @param array<string, mixed> $validationRecord
+     */
     public function __construct(
         public array $identifier,
         public string $status,
@@ -35,6 +42,10 @@ readonly class DomainValidationData
         );
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $haystack
+     * @return array<string, mixed>
+     */
     private static function getValidationByType(array $haystack, AuthorizationChallengeEnum $authChallenge): array
     {
         foreach ($haystack as $key => $data) {
@@ -73,6 +84,7 @@ readonly class DomainValidationData
         return false;
     }
 
+    /** @return array<int, array<string, mixed>> */
     public function getErrors(): array
     {
         if (!$this->hasErrors()) {
@@ -94,6 +106,7 @@ readonly class DomainValidationData
         return $errors;
     }
 
+    /** @return array<string, mixed> */
     public function challengeData(AuthorizationChallengeEnum $type): array
     {
         return match ($type) {

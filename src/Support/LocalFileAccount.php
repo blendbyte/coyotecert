@@ -3,6 +3,7 @@
 namespace CoyoteCert\Support;
 
 use CoyoteCert\Enums\KeyType;
+use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Exceptions\StorageException;
 use CoyoteCert\Interfaces\AcmeAccountInterface;
 use CoyoteCert\Support\OpenSsl;
@@ -46,9 +47,15 @@ class LocalFileAccount implements AcmeAccountInterface
             throw new StorageException(sprintf('Directory "%s" was not created', $dir));
         }
 
-        $key       = OpenSsl::generateKey($keyType);
+        $key        = OpenSsl::generateKey($keyType);
         $privateKey = OpenSsl::openSslKeyToString($key);
-        $publicKey  = openssl_pkey_get_details($key)['key'];
+        $keyDetails = openssl_pkey_get_details($key);
+
+        if ($keyDetails === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
+
+        $publicKey = $keyDetails['key'];
 
         $privateKeyPath = $dir.$this->getKeyName('private');
         $publicKeyPath  = $dir.$this->getKeyName('public');
@@ -70,8 +77,18 @@ class LocalFileAccount implements AcmeAccountInterface
         }
 
         // Derive and persist the new public key
-        $privateKey = openssl_pkey_get_private($pem);
-        $details    = openssl_pkey_get_details($privateKey);
+        $privateKeyResource = openssl_pkey_get_private($pem);
+
+        if ($privateKeyResource === false) {
+            throw new CryptoException('Cannot load private key from PEM.');
+        }
+
+        $details = openssl_pkey_get_details($privateKeyResource);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
+
         $publicKeyPath = $this->accountKeysPath.$this->getKeyName('public');
 
         if (file_put_contents($publicKeyPath, $details['key']) === false) {

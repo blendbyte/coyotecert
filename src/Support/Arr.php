@@ -6,12 +6,19 @@ use ArrayAccess;
 
 class Arr
 {
-    public static function accessible($value)
+    /**
+     * @param mixed $value
+     */
+    public static function accessible(mixed $value): bool
     {
         return is_array($value) || $value instanceof ArrayAccess;
     }
 
-    public static function exists($array, $key)
+    /**
+     * @param array<mixed>|ArrayAccess<mixed, mixed> $array
+     * @param int|string $key
+     */
+    public static function exists(array|ArrayAccess $array, int|string $key): bool
     {
         if ($array instanceof ArrayAccess) {
             return $array->offsetExists($key);
@@ -20,7 +27,13 @@ class Arr
         return array_key_exists($key, $array);
     }
 
-    public static function get($array, $key, $default = null)
+    /**
+     * @param mixed $array
+     * @param int|string|null $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public static function get(mixed $array, int|string|null $key, mixed $default = null): mixed
     {
         if (!static::accessible($array)) {
             return value($default);
@@ -34,7 +47,7 @@ class Arr
             return $array[$key];
         }
 
-        if (strpos($key, '.') === false) {
+        if (!is_string($key) || strpos($key, '.') === false) {
             return $array[$key] ?? value($default);
         }
 
@@ -49,7 +62,12 @@ class Arr
         return $array;
     }
 
-    public static function first($array, ?callable $callback = null, $default = null)
+    /**
+     * @param array<mixed> $array
+     * @param mixed $default
+     * @return mixed
+     */
+    public static function first(array $array, ?callable $callback = null, mixed $default = null): mixed
     {
         if (is_null($callback)) {
             if (empty($array)) {

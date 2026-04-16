@@ -16,11 +16,19 @@ class CryptRSA
             'private_key_bits' => 4096,
         ]);
 
+        if ($pKey === false) {
+            throw new CryptoException('RSA keypair generation failed.');
+        }
+
         if (!openssl_pkey_export($pKey, $privateKey)) {
             throw new CryptoException('RSA keypair export failed.');
         }
 
         $details = openssl_pkey_get_details($pKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get RSA key details.');
+        }
 
         return [
             'privateKey' => $privateKey,

@@ -8,6 +8,10 @@ use CoyoteCert\Support\Url;
 
 class OrderData
 {
+    /**
+     * @param array<int, array<string, string>> $identifiers
+     * @param string[] $domainValidationUrls
+     */
     public function __construct(
         public readonly string $id,
         public readonly string $url,

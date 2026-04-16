@@ -2,8 +2,14 @@
 
 namespace CoyoteCert\Support;
 
+use CoyoteCert\Exceptions\CryptoException;
+
 class KeyId
 {
+    /**
+     * @param array<string, mixed>|null $payload
+     * @return array<string, string>
+     */
     public static function generate(
         #[\SensitiveParameter] string $accountPrivateKey,
         string $kid,
@@ -12,8 +18,18 @@ class KeyId
         ?array $payload = null
     ): array {
         $privateKey = openssl_pkey_get_private($accountPrivateKey);
-        $details    = openssl_pkey_get_details($privateKey);
-        $isEc       = $details['type'] === OPENSSL_KEYTYPE_EC;
+
+        if ($privateKey === false) {
+            throw new CryptoException('Cannot load private key.');
+        }
+
+        $details = openssl_pkey_get_details($privateKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
+
+        $isEc = $details['type'] === OPENSSL_KEYTYPE_EC;
 
         [$alg, $digest, $sigLen] = $isEc
             ? self::ecParams($details['ec']['curve_name'])
@@ -29,16 +45,18 @@ class KeyId
         // null  → empty string (POST-as-GET per RFC 8555)
         // []    → '{}' (challenge response: empty JSON object per RFC 8555 §7.5.1)
         // [...] → JSON-encoded object
-        $payload = is_array($payload)
-            ? str_replace('\\/', '/', empty($payload) ? '{}' : json_encode($payload))
+        $payloadStr = is_array($payload)
+            ? str_replace('\\/', '/', empty($payload) ? '{}' : (string) json_encode($payload))
             : '';
 
-        $payload64   = Base64::urlSafeEncode($payload);
-        $protected64 = Base64::urlSafeEncode(json_encode($data));
+        $payload64   = Base64::urlSafeEncode($payloadStr);
+        $protected64 = Base64::urlSafeEncode((string) json_encode($data));
 
-        openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest);
+        if (!openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest)) {
+            throw new CryptoException('Failed to sign payload.');
+        }
 
-        if ($isEc) {
+        if ($isEc && $sigLen !== null) {
             $signed = self::derToRaw($signed, $sigLen);
         }
 

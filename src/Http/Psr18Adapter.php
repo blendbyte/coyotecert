@@ -57,6 +57,10 @@ class Psr18Adapter implements HttpClientInterface
         return $this->send($request, $url);
     }
 
+    /**
+     * @param array<int, string> $headers
+     * @param array<string, mixed> $arguments
+     */
     public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
     {
         if (!empty($arguments)) {
@@ -75,6 +79,10 @@ class Psr18Adapter implements HttpClientInterface
         return $this->send($request, $url);
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<int, string> $headers
+     */
     public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
     {
         $body    = json_encode($payload, JSON_THROW_ON_ERROR);

@@ -3,6 +3,7 @@
 namespace CoyoteCert\Storage;
 
 use CoyoteCert\Enums\KeyType;
+use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Interfaces\AcmeAccountInterface;
 use CoyoteCert\Support\OpenSsl;
 
@@ -30,7 +31,16 @@ class StorageAccountAdapter implements AcmeAccountInterface
     public function getPublicKey(): string
     {
         $privateKey = openssl_pkey_get_private($this->getPrivateKey());
-        $details    = openssl_pkey_get_details($privateKey);
+
+        if ($privateKey === false) {
+            throw new CryptoException('Cannot load private key.');
+        }
+
+        $details = openssl_pkey_get_details($privateKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
 
         return $details['key'];
     }

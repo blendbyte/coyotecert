@@ -41,7 +41,7 @@ class OpenSsl
 
     public static function generatePrivateKey(int $key_type = OPENSSL_KEYTYPE_RSA): OpenSSLAsymmetricKey
     {
-        return match ($key_type) {
+        $key = match ($key_type) {
             OPENSSL_KEYTYPE_RSA => openssl_pkey_new([
                 'private_key_type' => OPENSSL_KEYTYPE_RSA,
                 'private_key_bits' => 2048,
@@ -54,6 +54,12 @@ class OpenSsl
             ]),
             default => throw new CryptoException('Invalid keytype'),
         };
+
+        if ($key === false) {
+            throw new CryptoException('Failed to generate private key.');
+        }
+
+        return $key;
     }
 
     public static function openSslKeyToString(OpenSSLAsymmetricKey $key): string
@@ -65,15 +71,22 @@ class OpenSsl
         return trim($output);
     }
 
+    /**
+     * @param string[] $domains
+     */
     public static function generateCsr(array $domains, OpenSSLAsymmetricKey $privateKey): string
     {
         $dn = ['commonName' => $domains[0]];
 
-        $san = implode(',', array_map(function ($dns) {
+        $san = implode(',', array_map(function (string $dns): string {
             return 'DNS:' . $dns;
         }, $domains));
 
         $tempFile = tmpfile();
+
+        if ($tempFile === false) {
+            throw new CryptoException('Failed to create temporary file for CSR config.');
+        }
 
         fwrite(
             $tempFile,
@@ -92,12 +105,24 @@ class OpenSsl
 			keyUsage = nonRepudiation, digitalSignature, keyEncipherment'
         );
 
+        $meta = stream_get_meta_data($tempFile);
+        $uri  = $meta['uri'] ?? null;
+
+        if ($uri === null) {
+            fclose($tempFile);
+            throw new CryptoException('Failed to obtain temporary file URI for CSR config.');
+        }
+
         $csr = openssl_csr_new($dn, $privateKey, [
             'digest_alg' => 'sha256',
-            'config' => stream_get_meta_data($tempFile)['uri'],
+            'config' => $uri,
         ]);
 
         fclose($tempFile);
+
+        if (!($csr instanceof \OpenSSLCertificateSigningRequest)) {
+            throw new CryptoException('Generating CSR failed.');
+        }
 
         if (!openssl_csr_export($csr, $out)) {
             throw new CryptoException('Exporting CSR failed.');

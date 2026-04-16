@@ -2,8 +2,14 @@
 
 namespace CoyoteCert\Support;
 
+use CoyoteCert\Exceptions\CryptoException;
+
 class JsonWebSignature
 {
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, string>
+     */
     public static function generate(
         array $payload,
         string $url,
@@ -11,12 +17,26 @@ class JsonWebSignature
         #[\SensitiveParameter] string $accountPrivateKey
     ): array {
         $privateKey = openssl_pkey_get_private($accountPrivateKey);
-        $details    = openssl_pkey_get_details($privateKey);
-        $isEc       = $details['type'] === OPENSSL_KEYTYPE_EC;
 
-        [$alg, $digest, $sigLen] = $isEc
-            ? self::ecParams($details['ec']['curve_name'])
-            : ['RS256', 'SHA256', null];
+        if ($privateKey === false) {
+            throw new CryptoException('Cannot load private key.');
+        }
+
+        $details = openssl_pkey_get_details($privateKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
+
+        $isEc = $details['type'] === OPENSSL_KEYTYPE_EC;
+
+        if ($isEc) {
+            [$alg, $digest, $sigLen] = self::ecParams($details['ec']['curve_name']);
+        } else {
+            $alg    = 'RS256';
+            $digest = 'SHA256';
+            $sigLen = null;
+        }
 
         $protected = [
             'alg'   => $alg,
@@ -28,7 +48,9 @@ class JsonWebSignature
         $payload64   = Base64::urlSafeEncode(str_replace('\\/', '/', json_encode($payload, JSON_THROW_ON_ERROR)));
         $protected64 = Base64::urlSafeEncode(json_encode($protected, JSON_THROW_ON_ERROR));
 
-        openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest);
+        if (!openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest)) {
+            throw new CryptoException('Failed to sign payload.');
+        }
 
         if ($isEc) {
             $signed = self::derToRaw($signed, $sigLen);

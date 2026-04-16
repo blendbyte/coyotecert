@@ -13,6 +13,10 @@ abstract class Endpoint
     {
     }
 
+    /**
+     * @param array<string, mixed>|null $payload
+     * @return array<string, string>
+     */
     protected function createKeyId(string $accountUrl, string $url, ?array $payload = null): array
     {
         return KeyId::generate(
@@ -29,6 +33,7 @@ abstract class Endpoint
      * Each call to $this->createKeyId() fetches a fresh nonce, so the retry
      * automatically gets a new one from the server.
      */
+    /** @param array<string, mixed>|null $payload */
     protected function postSigned(string $url, string $accountUrl, ?array $payload = null): Response
     {
         $send = fn () => $this->client->getHttpClient()->post(
@@ -79,9 +84,10 @@ abstract class Endpoint
 
         return $retryAfter > 0
             ? $retryAfter
-            : min($baseDelay * (2 ** $attempt), 64);
+            : (int) min($baseDelay * (2 ** $attempt), 64);
     }
 
+    /** @param array<string, mixed> $additionalContext */
     protected function logResponse(string $level, string $message, Response $response, array $additionalContext = []): void
     {
         $this->client->logger($level, $message, array_merge([

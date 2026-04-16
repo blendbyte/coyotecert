@@ -6,6 +6,9 @@ use CoyoteCert\Exceptions\CryptoException;
 
 class JsonWebKey
 {
+    /**
+     * @return array<string, string>
+     */
     public static function compute(
         #[\SensitiveParameter] string $accountKey
     ): array {
@@ -16,6 +19,10 @@ class JsonWebKey
         }
 
         $details = openssl_pkey_get_details($privateKey);
+
+        if ($details === false) {
+            throw new CryptoException('Failed to get key details.');
+        }
 
         if ($details['type'] === OPENSSL_KEYTYPE_EC) {
             [$crv, $coordLen] = match ($details['ec']['curve_name']) {
@@ -39,6 +46,9 @@ class JsonWebKey
         ];
     }
 
+    /**
+     * @param array<string, string> $jwk
+     */
     public static function thumbprint(array $jwk): string
     {
         return Base64::urlSafeEncode(hash('sha256', json_encode($jwk, JSON_THROW_ON_ERROR), true));
