@@ -39,19 +39,26 @@ function pebbleAvailable(): bool
     static $result = null;
 
     if ($result === null) {
-        $url = getenv('PEBBLE_URL') ?: 'https://localhost:14000/dir';
-        $ch  = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_TIMEOUT        => 3,
-            CURLOPT_CONNECTTIMEOUT => 2,
-        ]);
-        curl_exec($ch);
-        $code   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        $result = $code > 0;
+        $envUrl = getenv('PEBBLE_URL');
+
+        if ($envUrl !== false && $envUrl !== '') {
+            // PEBBLE_URL explicitly set (e.g. CI) — trust that Pebble is up
+            $result = true;
+        } else {
+            // No env var — probe the default localhost address
+            $ch = curl_init('https://localhost:14000/dir');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_TIMEOUT        => 3,
+                CURLOPT_CONNECTTIMEOUT => 2,
+            ]);
+            curl_exec($ch);
+            $code   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            $result = $code > 0;
+        }
     }
 
     return $result;
