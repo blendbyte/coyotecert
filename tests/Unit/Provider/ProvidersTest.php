@@ -29,6 +29,10 @@ it('LetsEncrypt verifies TLS', function () {
     expect((new LetsEncrypt())->verifyTls())->toBeTrue();
 });
 
+it('LetsEncrypt has a display name', function () {
+    expect((new LetsEncrypt())->getDisplayName())->toContain("Let's Encrypt");
+});
+
 // ── LetsEncryptStaging ────────────────────────────────────────────────────────
 
 it('LetsEncryptStaging has a different directory URL from production', function () {
@@ -38,6 +42,19 @@ it('LetsEncryptStaging has a different directory URL from production', function 
 
 it('LetsEncryptStaging does not require EAB', function () {
     expect((new LetsEncryptStaging())->isEabRequired())->toBeFalse();
+    expect((new LetsEncryptStaging())->getEabCredentials('e@example.com'))->toBeNull();
+});
+
+it('LetsEncryptStaging has a display name', function () {
+    expect((new LetsEncryptStaging())->getDisplayName())->toContain("Let's Encrypt");
+});
+
+it('LetsEncryptStaging supports profiles', function () {
+    expect((new LetsEncryptStaging())->supportsProfiles())->toBeTrue();
+});
+
+it('LetsEncryptStaging verifies TLS', function () {
+    expect((new LetsEncryptStaging())->verifyTls())->toBeTrue();
 });
 
 // ── BuypassGo ────────────────────────────────────────────────────────────────
@@ -51,9 +68,38 @@ it('BuypassGo does not require EAB', function () {
     expect((new BuypassGo())->getEabCredentials('e@example.com'))->toBeNull();
 });
 
+it('BuypassGo has a display name', function () {
+    expect((new BuypassGo())->getDisplayName())->toContain('Buypass');
+});
+
+it('BuypassGo does not support profiles', function () {
+    expect((new BuypassGo())->supportsProfiles())->toBeFalse();
+});
+
+it('BuypassGo verifies TLS', function () {
+    expect((new BuypassGo())->verifyTls())->toBeTrue();
+});
+
 it('BuypassGoStaging has a different directory URL', function () {
     expect((new BuypassGoStaging())->getDirectoryUrl())
         ->not->toBe((new BuypassGo())->getDirectoryUrl());
+});
+
+it('BuypassGoStaging has a display name', function () {
+    expect((new BuypassGoStaging())->getDisplayName())->toContain('Buypass');
+});
+
+it('BuypassGoStaging does not require EAB', function () {
+    expect((new BuypassGoStaging())->isEabRequired())->toBeFalse();
+    expect((new BuypassGoStaging())->getEabCredentials('e@example.com'))->toBeNull();
+});
+
+it('BuypassGoStaging does not support profiles', function () {
+    expect((new BuypassGoStaging())->supportsProfiles())->toBeFalse();
+});
+
+it('BuypassGoStaging verifies TLS', function () {
+    expect((new BuypassGoStaging())->verifyTls())->toBeTrue();
 });
 
 // ── ZeroSSL ───────────────────────────────────────────────────────────────────
@@ -79,6 +125,18 @@ it('ZeroSSL does not support profiles', function () {
     expect((new ZeroSSL())->supportsProfiles())->toBeFalse();
 });
 
+it('ZeroSSL has a directory URL', function () {
+    expect((new ZeroSSL())->getDirectoryUrl())->toContain('zerossl.com');
+});
+
+it('ZeroSSL has a display name', function () {
+    expect((new ZeroSSL())->getDisplayName())->toBe('ZeroSSL');
+});
+
+it('ZeroSSL verifies TLS', function () {
+    expect((new ZeroSSL())->verifyTls())->toBeTrue();
+});
+
 // ── GoogleTrustServices ───────────────────────────────────────────────────────
 
 it('GoogleTrustServices returns EAB credentials', function () {
@@ -91,6 +149,22 @@ it('GoogleTrustServices returns EAB credentials', function () {
 
 it('GoogleTrustServices requires EAB', function () {
     expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->isEabRequired())->toBeTrue();
+});
+
+it('GoogleTrustServices has a directory URL', function () {
+    expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->getDirectoryUrl())->toContain('pki.goog');
+});
+
+it('GoogleTrustServices has a display name', function () {
+    expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->getDisplayName())->toContain('Google');
+});
+
+it('GoogleTrustServices does not support profiles', function () {
+    expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->supportsProfiles())->toBeFalse();
+});
+
+it('GoogleTrustServices verifies TLS', function () {
+    expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->verifyTls())->toBeTrue();
 });
 
 // ── SslCom ────────────────────────────────────────────────────────────────────
@@ -108,6 +182,26 @@ it('SslCom RSA and ECC variants have different directory URLs', function () {
     $ecc = new SslCom(eabKid: 'k', eabHmac: 'h', ecc: true);
 
     expect($rsa->getDirectoryUrl())->not->toBe($ecc->getDirectoryUrl());
+});
+
+it('SslCom RSA display name contains RSA', function () {
+    expect((new SslCom(eabKid: 'k', eabHmac: 'h'))->getDisplayName())->toContain('RSA');
+});
+
+it('SslCom ECC display name contains ECC', function () {
+    expect((new SslCom(eabKid: 'k', eabHmac: 'h', ecc: true))->getDisplayName())->toContain('ECC');
+});
+
+it('SslCom requires EAB', function () {
+    expect((new SslCom(eabKid: 'k', eabHmac: 'h'))->isEabRequired())->toBeTrue();
+});
+
+it('SslCom does not support profiles', function () {
+    expect((new SslCom(eabKid: 'k', eabHmac: 'h'))->supportsProfiles())->toBeFalse();
+});
+
+it('SslCom verifies TLS', function () {
+    expect((new SslCom(eabKid: 'k', eabHmac: 'h'))->verifyTls())->toBeTrue();
 });
 
 // ── CustomProvider ────────────────────────────────────────────────────────────
