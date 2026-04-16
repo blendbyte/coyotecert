@@ -3,6 +3,11 @@
 use CoyoteCert\Support\Base64;
 use CoyoteCert\Support\JsonWebKey;
 
+it('throws when given an invalid private key string', function () {
+    expect(fn () => JsonWebKey::compute('not-a-pem'))
+        ->toThrow(\CoyoteCert\Exceptions\LetsEncryptClientException::class, 'Can not create private key');
+});
+
 it('computes an RSA JWK with e, kty, n', function () {
     $jwk = JsonWebKey::compute(rsaKeyPem());
 

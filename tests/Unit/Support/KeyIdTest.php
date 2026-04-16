@@ -73,6 +73,15 @@ it('uses an empty payload string for POST-as-GET (null payload)', function () {
     expect($result['payload'])->toBe('');
 });
 
+it('generates an ES384 KID JWS for secp384r1 keys', function () {
+    $pem = "-----BEGIN EC PRIVATE KEY-----\nMIGkAgEBBDDgub3rNdQD28MtMUkOsFxxDIlS5mzPotXUzl/5IQLTd0oGtNdbovij\nV6H+2jzWT66gBwYFK4EEACKhZANiAAR+uI186ZeIR46EbYd7XRLWI4fotezzHLUS\noaF73Sp236v453E4W/V7QnMevfA3WtLnrhb7F1IATQLGO4f1skqmMSqHYXzRSLOW\nCejQifvrz0TqrkyVdK9e7uq36NPEDDw=\n-----END EC PRIVATE KEY-----";
+
+    $result    = KeyId::generate($pem, 'https://acme.example/account/1', 'https://acme.example/order/1', 'nonce');
+    $protected = json_decode(Base64::urlSafeDecode($result['protected']), true);
+
+    expect($protected['alg'])->toBe('ES384');
+});
+
 it('encodes an empty array payload as {} (RFC 8555 §7.5.1 challenge response)', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),

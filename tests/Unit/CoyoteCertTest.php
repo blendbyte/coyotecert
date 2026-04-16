@@ -77,6 +77,19 @@ it('profile() returns self (fluent)', function () {
     expect($c->profile('shortlived'))->toBe($c);
 });
 
+it('httpClient() returns self (fluent)', function () {
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $stub    = new class implements \Psr\Http\Client\ClientInterface {
+        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
+        {
+            throw new \RuntimeException('not implemented');
+        }
+    };
+
+    $c = makeCoyote();
+    expect($c->httpClient($stub, $factory, $factory))->toBe($c);
+});
+
 it('storage() returns self (fluent)', function () {
     $c = makeCoyote();
     expect($c->storage(new InMemoryStorage()))->toBe($c);
