@@ -3,7 +3,9 @@
 namespace CoyoteCert\Endpoints;
 
 use CoyoteCert\DTO\AccountData;
+use CoyoteCert\DTO\Dns01ValidationData;
 use CoyoteCert\DTO\DomainValidationData;
+use CoyoteCert\DTO\Http01ValidationData;
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Exceptions\DomainValidationException;
@@ -52,7 +54,7 @@ class DomainValidation extends Endpoint
 
     /**
      * @param DomainValidationData[] $challenges
-     * @return array<int, array<string, string>>
+     * @return array<int, Http01ValidationData|Dns01ValidationData>
      */
     public function getValidationData(array $challenges, ?AuthorizationChallengeEnum $authChallenge = null): array
     {
@@ -64,36 +66,42 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::HTTP)
                 && !empty($domainValidationData->file)
             ) {
-                $authorizations[] = [
-                    'identifier' => $domainValidationData->identifier['value'],
-                    'type' => $domainValidationData->file['type'],
-                    'filename' => $domainValidationData->file['token'],
-                    'content' => $domainValidationData->file['token'].'.'.$thumbprint,
-                ];
+                $token = $domainValidationData->file['token'];
+                $keyAuth = $token . '.' . $thumbprint;
+                $authorizations[] = new Http01ValidationData(
+                    identifier:       $domainValidationData->identifier['value'],
+                    filename:         $token,
+                    content:          $keyAuth,
+                    keyAuthorization: $keyAuth,
+                );
             }
 
             if (
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::DNS)
                 && !empty($domainValidationData->dns)
             ) {
-                $authorizations[] = [
-                    'identifier' => $domainValidationData->identifier['value'],
-                    'type' => $domainValidationData->dns['type'],
-                    'name' => '_acme-challenge',
-                    'value' => DnsDigest::make($domainValidationData->dns['token'], $thumbprint),
-                ];
+                $token   = $domainValidationData->dns['token'];
+                $keyAuth = $token . '.' . $thumbprint;
+                $authorizations[] = new Dns01ValidationData(
+                    identifier:       $domainValidationData->identifier['value'],
+                    name:             '_acme-challenge',
+                    value:            DnsDigest::make($token, $thumbprint),
+                    keyAuthorization: $keyAuth,
+                );
             }
 
             if (
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::DNS_PERSIST)
                 && !empty($domainValidationData->dnsPersist)
             ) {
-                $authorizations[] = [
-                    'identifier' => $domainValidationData->identifier['value'],
-                    'type' => $domainValidationData->dnsPersist['type'],
-                    'name' => '_acme-challenge',
-                    'value' => DnsDigest::make($domainValidationData->dnsPersist['token'], $thumbprint),
-                ];
+                $token   = $domainValidationData->dnsPersist['token'];
+                $keyAuth = $token . '.' . $thumbprint;
+                $authorizations[] = new Dns01ValidationData(
+                    identifier:       $domainValidationData->identifier['value'],
+                    name:             '_acme-challenge',
+                    value:            DnsDigest::make($token, $thumbprint),
+                    keyAuthorization: $keyAuth,
+                );
             }
         }
 

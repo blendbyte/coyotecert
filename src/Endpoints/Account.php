@@ -18,12 +18,12 @@ class Account extends Endpoint
 {
     public function exists(): bool
     {
-        return $this->client->localAccount()->exists();
+        return $this->client->accountAdapter()->exists();
     }
 
     public function create(string $email = ''): AccountData
     {
-        $this->client->localAccount()->generateNewKeys();
+        $this->client->accountAdapter()->generateNewKeys();
 
         $payload = ['termsOfServiceAgreed' => true];
 
@@ -37,7 +37,7 @@ class Account extends Endpoint
                 ));
             }
 
-            $accountKey    = $this->client->localAccount()->getPrivateKey();
+            $accountKey    = $this->client->accountAdapter()->getPrivateKey();
             $newAccountUrl = $this->client->directory()->newAccount();
 
             $payload['externalAccountBinding'] = $this->buildEab(
@@ -115,7 +115,7 @@ class Account extends Endpoint
     public function keyRollover(AccountData $account): AccountData
     {
         $keyChangeUrl = $this->client->directory()->keyChange();
-        $oldKeyPem    = $this->client->localAccount()->getPrivateKey();
+        $oldKeyPem    = $this->client->accountAdapter()->getPrivateKey();
         $oldJwk       = JsonWebKey::compute($oldKeyPem);
 
         // Detect current key type so the new key matches
@@ -145,26 +145,20 @@ class Account extends Endpoint
 
         // The outer JWS is signed by the OLD key (KID), with the inner JWS as payload.
         // Both outer and inner must be rebuilt if we get a badNonce.
-        $buildOuter = function () use ($oldKeyPem, $account, $newKeyPem, $oldJwk, $keyChangeUrl): array {
-            $innerJws = $this->buildKeyChangeInnerJws($newKeyPem, $oldJwk, $account->url, $keyChangeUrl);
-
-            return KeyId::generate(
-                $oldKeyPem,
-                $account->url,
-                $keyChangeUrl,
-                $this->client->nonce()->getNew(),
-                $innerJws
-            );
-        };
-
-        $response = $this->client->getHttpClient()->post($keyChangeUrl, $buildOuter());
+        $response = $this->client->getHttpClient()->post(
+            $keyChangeUrl,
+            $this->buildKeyChangeOuterJws($oldKeyPem, $newKeyPem, $oldJwk, $account->url, $keyChangeUrl)
+        );
 
         if ($this->isBadNonce($response)) {
-            $response = $this->client->getHttpClient()->post($keyChangeUrl, $buildOuter());
+            $response = $this->client->getHttpClient()->post(
+                $keyChangeUrl,
+                $this->buildKeyChangeOuterJws($oldKeyPem, $newKeyPem, $oldJwk, $account->url, $keyChangeUrl)
+            );
         }
 
         if ($response->getHttpResponseCode() === 200) {
-            $this->client->localAccount()->savePrivateKey($newKeyPem, $keyType);
+            $this->client->accountAdapter()->savePrivateKey($newKeyPem, $keyType);
 
             return AccountData::fromBody($account->url, $response->jsonBody());
         }
@@ -173,6 +167,33 @@ class Account extends Endpoint
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Build the outer JWS for a key-change request (RFC 8555 §7.3.5).
+     *
+     * The outer JWS is signed by the OLD account key (KID header) and wraps
+     * the inner JWS (signed by the NEW key, JWK header) as its payload.
+     *
+     * @param array<string, string> $oldJwk
+     * @return array<string, string>
+     */
+    private function buildKeyChangeOuterJws(
+        string $oldKeyPem,
+        string $newKeyPem,
+        array  $oldJwk,
+        string $accountUrl,
+        string $keyChangeUrl
+    ): array {
+        $innerJws = $this->buildKeyChangeInnerJws($newKeyPem, $oldJwk, $accountUrl, $keyChangeUrl);
+
+        return KeyId::generate(
+            $oldKeyPem,
+            $accountUrl,
+            $keyChangeUrl,
+            $this->client->nonce()->getNew(),
+            $innerJws
+        );
+    }
 
     /** @return array<string, string> */
     private function buildEab(string $jwkJson, string $url, EabCredentials $eab): array
@@ -270,7 +291,7 @@ class Account extends Endpoint
             $payload,
             $this->client->directory()->newAccount(),
             $this->client->nonce()->getNew(),
-            $this->client->localAccount()->getPrivateKey(),
+            $this->client->accountAdapter()->getPrivateKey(),
         );
     }
 

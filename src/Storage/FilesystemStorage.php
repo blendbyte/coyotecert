@@ -117,7 +117,7 @@ class FilesystemStorage implements StorageInterface
             );
         }
 
-        $contents = file_get_contents($path);
+        $contents = $this->readLocked($path);
 
         if ($contents === false) {
             throw new StorageException(
@@ -126,6 +126,33 @@ class FilesystemStorage implements StorageInterface
         }
 
         return $contents;
+    }
+
+    /**
+     * Read a file with a shared (read) lock to prevent reading a partially
+     * written file when a concurrent writer holds LOCK_EX.
+     */
+    private function readLocked(string $path): string|false
+    {
+        $handle = fopen($path, 'rb');
+
+        if ($handle === false) {
+            return false;
+        }
+
+        if (!flock($handle, LOCK_SH)) {
+            fclose($handle);
+
+            return false;
+        }
+
+        $size     = filesize($path);
+        $contents = $size > 0 ? fread($handle, $size) : '';
+
+        flock($handle, LOCK_UN);
+        fclose($handle);
+
+        return $contents !== false ? $contents : false;
     }
 
     private function writeFile(string $path, string $contents): void

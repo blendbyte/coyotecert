@@ -53,6 +53,66 @@ readonly class StoredCertificate
         return $diff->invert ? 0 : (int) $diff->days;
     }
 
+    /**
+     * Number of days until the certificate expires, counting partial days up
+     * (ceiling). Returns a negative value when the certificate has already expired.
+     */
+    public function daysUntilExpiry(): int
+    {
+        return (int) ceil(($this->expiresAt->getTimestamp() - time()) / 86400);
+    }
+
+    /**
+     * Returns true when this certificate covers all the requested domains.
+     *
+     * Wildcard matching: *.example.com covers sub.example.com but not
+     * example.com itself (RFC 2818 §3.1).
+     *
+     * @param string[] $domains
+     */
+    public function isValidForDomains(array $domains): bool
+    {
+        $covered = $this->sans();
+
+        foreach ($domains as $domain) {
+            if (!$this->domainCoveredBy($domain, $covered)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check whether $domain is covered by any entry in $covered.
+     *
+     * @param string[] $covered
+     */
+    private function domainCoveredBy(string $domain, array $covered): bool
+    {
+        $domain = strtolower($domain);
+
+        foreach ($covered as $entry) {
+            $entry = strtolower($entry);
+
+            if ($entry === $domain) {
+                return true;
+            }
+
+            // Wildcard: *.example.com covers sub.example.com
+            if (str_starts_with($entry, '*.')) {
+                $wildcard = substr($entry, 2); // e.g. "example.com"
+                $suffix   = '.' . $wildcard;
+
+                if (str_ends_with($domain, $suffix) && substr_count($domain, '.') === substr_count($wildcard, '.') + 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // ── Certificate inspection ────────────────────────────────────────────────
 
     /**

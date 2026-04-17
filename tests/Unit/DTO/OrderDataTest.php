@@ -67,8 +67,7 @@ it('isFinalized returns true when status is valid', function () {
 });
 
 it('isFinalized returns true when finalized flag is set', function () {
-    $order = OrderData::fromResponse(makeOrderResponse('processing'));
-    $order->finalized = true;
+    $order = OrderData::fromResponse(makeOrderResponse('processing'))->withFinalized(true);
     expect($order->isFinalized())->toBeTrue();
 });
 
@@ -77,9 +76,9 @@ it('isNotFinalized returns true for pending/processing', function () {
     expect($order->isNotFinalized())->toBeTrue();
 });
 
-it('setCertificateUrl updates url and marks finalized', function () {
-    $order = OrderData::fromResponse(makeOrderResponse('processing'));
-    $order->setCertificateUrl('https://acme.example.com/cert/99');
+it('withCertificateUrl updates url and marks finalized', function () {
+    $order = OrderData::fromResponse(makeOrderResponse('processing'))
+        ->withCertificateUrl('https://acme.example.com/cert/99');
 
     expect($order->certificateUrl)->toBe('https://acme.example.com/cert/99');
     expect($order->finalized)->toBeTrue();

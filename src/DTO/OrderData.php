@@ -13,16 +13,16 @@ class OrderData
      * @param string[] $domainValidationUrls
      */
     public function __construct(
-        public readonly string $id,
-        public readonly string $url,
-        public readonly string $status,
-        public readonly string $expires,
-        public readonly array $identifiers,
-        public readonly array $domainValidationUrls,
-        public readonly string $finalizeUrl,
-        public readonly string $accountUrl,
-        public ?string $certificateUrl,
-        public bool $finalized = false,
+        public readonly string  $id,
+        public readonly string  $url,
+        public readonly string  $status,
+        public readonly string  $expires,
+        public readonly array   $identifiers,
+        public readonly array   $domainValidationUrls,
+        public readonly string  $finalizeUrl,
+        public readonly string  $accountUrl,
+        public readonly ?string $certificateUrl,
+        public readonly bool    $finalized = false,
     ) {
     }
 
@@ -37,22 +37,48 @@ class OrderData
         $url = trim(rtrim($url, '?'));
 
         return new self(
-            id: Url::extractId($url),
-            url: $url,
-            status: $response->jsonBody()['status'],
-            expires: $response->jsonBody()['expires'],
-            identifiers: $response->jsonBody()['identifiers'],
+            id:                   Url::extractId($url),
+            url:                  $url,
+            status:               $response->jsonBody()['status'],
+            expires:              $response->jsonBody()['expires'],
+            identifiers:          $response->jsonBody()['identifiers'],
             domainValidationUrls: $response->jsonBody()['authorizations'],
-            finalizeUrl: $response->jsonBody()['finalize'],
-            accountUrl: $accountUrl,
-            certificateUrl: Arr::get($response->jsonBody(), 'certificate'),
+            finalizeUrl:          $response->jsonBody()['finalize'],
+            accountUrl:           $accountUrl,
+            certificateUrl:       Arr::get($response->jsonBody(), 'certificate'),
         );
     }
 
-    public function setCertificateUrl(string $url): void
+    public function withCertificateUrl(string $url): self
     {
-        $this->certificateUrl = $url;
-        $this->finalized = true;
+        return new self(
+            id:                   $this->id,
+            url:                  $this->url,
+            status:               $this->status,
+            expires:              $this->expires,
+            identifiers:          $this->identifiers,
+            domainValidationUrls: $this->domainValidationUrls,
+            finalizeUrl:          $this->finalizeUrl,
+            accountUrl:           $this->accountUrl,
+            certificateUrl:       $url,
+            finalized:            true,
+        );
+    }
+
+    public function withFinalized(bool $finalized): self
+    {
+        return new self(
+            id:                   $this->id,
+            url:                  $this->url,
+            status:               $this->status,
+            expires:              $this->expires,
+            identifiers:          $this->identifiers,
+            domainValidationUrls: $this->domainValidationUrls,
+            finalizeUrl:          $this->finalizeUrl,
+            accountUrl:           $this->accountUrl,
+            certificateUrl:       $this->certificateUrl,
+            finalized:            $finalized,
+        );
     }
 
     public function isPending(): bool

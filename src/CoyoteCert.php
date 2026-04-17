@@ -4,10 +4,15 @@ namespace CoyoteCert;
 
 use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
+use CoyoteCert\DTO\AccountData;
+use CoyoteCert\DTO\Dns01ValidationData;
+use CoyoteCert\DTO\Http01ValidationData;
+use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Exceptions\AcmeException;
+use CoyoteCert\Http\Client as HttpClient;
 use CoyoteCert\Http\Psr18Adapter;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 use CoyoteCert\Interfaces\HttpClientInterface;
@@ -154,6 +159,24 @@ class CoyoteCert
         return $this;
     }
 
+    /**
+     * Set the HTTP timeout in seconds for the built-in curl client.
+     * No-op when a custom PSR-18 client is configured.
+     */
+    public function withHttpTimeout(int $seconds): static
+    {
+        if ($this->httpClient instanceof HttpClient) {
+            $this->httpClient->setTimeout($seconds);
+        } elseif ($this->httpClient === null) {
+            // Client is lazily created; store for later application.
+            // We create a Client now with the desired timeout so it's ready.
+            $client = new HttpClient(timeout: $seconds);
+            $this->httpClient = $client;
+        }
+
+        return $this;
+    }
+
     // ── Queries ───────────────────────────────────────────────────────────────
 
     /**
@@ -189,7 +212,6 @@ class CoyoteCert
     {
         $this->validate();
 
-        // validate() guarantees these are set; capture in non-nullable locals for PHPStan.
         $challengeHandler = $this->challengeHandler;
 
         if ($challengeHandler === null) {
@@ -204,12 +226,8 @@ class CoyoteCert
             accountKeyType: $this->accountKeyType,
         );
 
-        // ── 1. Get or create ACME account ──────────────────────────────────
-        $account = $api->account()->exists()
-            ? $api->account()->get()
-            : $api->account()->create($this->email);
+        $account = $this->getOrCreateAccount($api);
 
-        // ── 2. Create order (include 'replaces' certId when renewing) ─────
         $replacesId   = '';
         $existingCert = $this->storage?->getCertificate($this->domains[0]);
         if ($existingCert !== null && ($issuerPem = $this->extractIssuerPem($existingCert)) !== null) {
@@ -222,33 +240,47 @@ class CoyoteCert
 
         $order = $api->order()->new($account, $this->domains, $this->profile, $replacesId);
 
-        // ── 3. Fetch authorization challenges ──────────────────────────────
-        $challenges = $api->domainValidation()->status($order);
+        $this->deployAndValidate($api, $order, $account, $challengeHandler);
 
-        // ── 4. Determine challenge type from the registered handler ────────
-        $challengeType = $this->detectChallengeType();
+        // Refresh order — status transitions pending → ready after all challenges pass
+        $order = $api->order()->refresh($order);
 
-        // ── 5. Compute validation data (token + key authorization) ─────────
+        return $this->fetchAndStoreCertificate($api, $order);
+    }
+
+    // ── Private issue() helpers ───────────────────────────────────────────────
+
+    private function getOrCreateAccount(Api $api): AccountData
+    {
+        return $api->account()->exists()
+            ? $api->account()->get()
+            : $api->account()->create($this->email);
+    }
+
+    private function deployAndValidate(
+        Api $api,
+        OrderData $order,
+        AccountData $account,
+        ChallengeHandlerInterface $challengeHandler
+    ): void {
+        $challenges     = $api->domainValidation()->status($order);
+        $challengeType  = $this->detectChallengeType();
         $validationData = $api->domainValidation()->getValidationData($challenges, $challengeType);
 
-        // ── 6. Deploy challenge files/records for every domain ─────────────
         foreach ($validationData as $item) {
-            [$token, $keyAuth] = $this->extractTokenAndKeyAuth($item, $challengeType);
-            $challengeHandler->deploy($item['identifier'], $token, $keyAuth);
+            [$token, $keyAuth] = $this->extractTokenAndKeyAuth($item);
+            $challengeHandler->deploy($item->identifier, $token, $keyAuth);
         }
 
-        // ── 7. Trigger ACME validation ─────────────────────────────────────
         foreach ($challenges as $domainValidation) {
             $api->domainValidation()->start($account, $domainValidation, $challengeType, $this->localTest);
         }
 
-        // ── 8. Poll until all challenges pass (or fail) ────────────────────
         $allPassed = $api->domainValidation()->allChallengesPassed($order);
 
-        // ── 9. Clean up challenge files/records ────────────────────────────
         foreach ($validationData as $item) {
-            [$token] = $this->extractTokenAndKeyAuth($item, $challengeType);
-            $challengeHandler->cleanup($item['identifier'], $token);
+            [$token] = $this->extractTokenAndKeyAuth($item);
+            $challengeHandler->cleanup($item->identifier, $token);
         }
 
         if (!$allPassed) {
@@ -256,35 +288,28 @@ class CoyoteCert
                 'Domain validation failed — one or more challenges did not pass.'
             );
         }
+    }
 
-        // ── 9b. Refresh order — status transitions pending → ready after all challenges pass
-        $order = $api->order()->refresh($order);
-
-        // ── 10. Generate certificate private key ───────────────────────────
+    private function fetchAndStoreCertificate(
+        Api $api,
+        OrderData $order
+    ): StoredCertificate {
         $certKey    = OpenSsl::generateKey($this->certKeyType);
         $certKeyPem = OpenSsl::openSslKeyToString($certKey);
+        $csr        = OpenSsl::generateCsr($this->domains, $certKey);
 
-        // ── 11. Generate CSR ───────────────────────────────────────────────
-        $csr = OpenSsl::generateCsr($this->domains, $certKey);
-
-        // ── 12. Finalize order ─────────────────────────────────────────────
         if (!$api->order()->finalize($order, $csr)) {
             throw new AcmeException('Order finalization failed.');
         }
 
-        // ── 13. Poll until order transitions processing → valid ────────────
-        $order = $api->order()->waitUntilValid($order);
-
-        // ── 14. Download certificate bundle ───────────────────────────────
+        $order  = $api->order()->waitUntilValid($order);
         $bundle = $api->certificate()->getBundle($order);
 
-        // ── 15. Parse expiry date from the DER-encoded certificate ─────────
         $parsed    = openssl_x509_parse($bundle->certificate);
         $expiresAt = isset($parsed['validTo_time_t'])
             ? (new DateTimeImmutable())->setTimestamp((int) $parsed['validTo_time_t'])
             : new DateTimeImmutable('+90 days');
 
-        // ── 16. Build and persist the stored certificate ───────────────────
         $stored = new StoredCertificate(
             certificate: $bundle->certificate,
             privateKey:  $certKeyPem,
@@ -422,17 +447,17 @@ class CoyoteCert
     }
 
     /**
-     * Returns [token, keyAuthorization] from a getValidationData() item.
+     * Returns [token, keyAuthorization] from a typed validation DTO.
      *
-     * @param array<string, string> $item
+     * @param Http01ValidationData|Dns01ValidationData $item
      * @return array{0: string, 1: string}
      */
-    private function extractTokenAndKeyAuth(array $item, AuthorizationChallengeEnum $type): array
+    private function extractTokenAndKeyAuth(Http01ValidationData|Dns01ValidationData $item): array
     {
-        return match ($type) {
-            AuthorizationChallengeEnum::HTTP        => [$item['filename'], $item['content']],
-            AuthorizationChallengeEnum::DNS,
-            AuthorizationChallengeEnum::DNS_PERSIST => [$item['name'],     $item['value']],
-        };
+        if ($item instanceof Http01ValidationData) {
+            return [$item->filename, $item->content];
+        }
+
+        return [$item->name, $item->value];
     }
 }

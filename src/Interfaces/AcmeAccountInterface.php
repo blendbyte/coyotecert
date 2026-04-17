@@ -10,7 +10,7 @@ interface AcmeAccountInterface
 
     public function exists(): bool;
 
-    public function generateNewKeys(\CoyoteCert\Enums\KeyType $keyType = \CoyoteCert\Enums\KeyType::EC_P256): bool;
+    public function generateNewKeys(?\CoyoteCert\Enums\KeyType $keyTypeOverride = null): bool;
 
     /** Persist a specific private key PEM (used after a key rollover). */
     public function savePrivateKey(string $pem, \CoyoteCert\Enums\KeyType $keyType): void;

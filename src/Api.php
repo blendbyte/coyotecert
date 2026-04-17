@@ -21,6 +21,9 @@ use CoyoteCert\Storage\StorageInterface;
 
 class Api
 {
+    /** Cached nonce from the last ACME response's Replay-Nonce header. */
+    private ?string $cachedNonce = null;
+
     public function __construct(
         private readonly AcmeProviderInterface $provider,
         private readonly ?StorageInterface     $storage         = null,
@@ -30,12 +33,32 @@ class Api
     ) {
     }
 
+    /**
+     * Store a nonce returned in a server response's Replay-Nonce header
+     * so the next request can use it without a round-trip HEAD request.
+     */
+    public function storeNonce(string $nonce): void
+    {
+        $this->cachedNonce = $nonce;
+    }
+
+    /**
+     * Consume and return the cached nonce, or null if none is available.
+     */
+    public function consumeCachedNonce(): ?string
+    {
+        $nonce             = $this->cachedNonce;
+        $this->cachedNonce = null;
+
+        return $nonce;
+    }
+
     public function getProvider(): AcmeProviderInterface
     {
         return $this->provider;
     }
 
-    public function localAccount(): AcmeAccountInterface
+    public function accountAdapter(): AcmeAccountInterface
     {
         if ($this->storage !== null) {
             return new StorageAccountAdapter($this->storage, $this->accountKeyType);
@@ -44,6 +67,14 @@ class Api
         throw new AcmeException(
             'No storage configured. Pass a StorageInterface to the Api constructor.'
         );
+    }
+
+    /**
+     * @deprecated Use accountAdapter() instead.
+     */
+    public function localAccount(): AcmeAccountInterface
+    {
+        return $this->accountAdapter();
     }
 
     public function directory(): Directory

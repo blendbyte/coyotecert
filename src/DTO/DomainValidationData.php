@@ -48,13 +48,12 @@ readonly class DomainValidationData
      */
     private static function getValidationByType(array $haystack, AuthorizationChallengeEnum $authChallenge): array
     {
-        foreach ($haystack as $key => $data) {
-            if ($data['type'] === $authChallenge->value) {
-                return $data;
-            }
-        }
+        $matches = array_values(array_filter(
+            $haystack,
+            static fn (array $entry) => ($entry['type'] ?? '') === $authChallenge->value
+        ));
 
-        return [];
+        return $matches[0] ?? [];
     }
 
     public function isPending(): bool

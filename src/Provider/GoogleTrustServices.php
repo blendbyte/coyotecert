@@ -4,7 +4,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 
-class GoogleTrustServices implements AcmeProviderInterface
+class GoogleTrustServices extends AbstractProvider
 {
     /**
      * EAB credentials are obtained from the Google Cloud Console.
@@ -34,15 +34,5 @@ class GoogleTrustServices implements AcmeProviderInterface
     public function getEabCredentials(string $email): ?EabCredentials
     {
         return new EabCredentials($this->eabKid, $this->eabHmac);
-    }
-
-    public function supportsProfiles(): bool
-    {
-        return false;
-    }
-
-    public function verifyTls(): bool
-    {
-        return true;
     }
 }

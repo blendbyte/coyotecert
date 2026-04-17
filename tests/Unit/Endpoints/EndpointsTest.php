@@ -632,9 +632,9 @@ it('DomainValidation::getValidationData() builds HTTP validation item', function
     $data = $api->domainValidation()->getValidationData([$challenge], AuthorizationChallengeEnum::HTTP);
 
     expect($data)->toHaveCount(1);
-    expect($data[0]['filename'])->toBe('abc123');
-    expect($data[0]['identifier'])->toBe('example.com');
-    expect($data[0]['type'])->toBe('http-01');
+    expect($data[0])->toBeInstanceOf(\CoyoteCert\DTO\Http01ValidationData::class);
+    expect($data[0]->filename)->toBe('abc123');
+    expect($data[0]->identifier)->toBe('example.com');
 });
 
 it('DomainValidation::getValidationData() builds DNS validation item', function () {
@@ -654,8 +654,9 @@ it('DomainValidation::getValidationData() builds DNS validation item', function 
     $data = $api->domainValidation()->getValidationData([$challenge], AuthorizationChallengeEnum::DNS);
 
     expect($data)->toHaveCount(1);
-    expect($data[0]['name'])->toBe('_acme-challenge');
-    expect($data[0]['type'])->toBe('dns-01');
+    expect($data[0])->toBeInstanceOf(\CoyoteCert\DTO\Dns01ValidationData::class);
+    expect($data[0]->name)->toBe('_acme-challenge');
+    expect($data[0]->identifier)->toBe('example.com');
 });
 
 it('DomainValidation::getValidationData() builds DNS_PERSIST validation item', function () {
@@ -675,7 +676,8 @@ it('DomainValidation::getValidationData() builds DNS_PERSIST validation item', f
     $data = $api->domainValidation()->getValidationData([$challenge], AuthorizationChallengeEnum::DNS_PERSIST);
 
     expect($data)->toHaveCount(1);
-    expect($data[0]['type'])->toBe('dns-persist-01');
+    expect($data[0])->toBeInstanceOf(\CoyoteCert\DTO\Dns01ValidationData::class);
+    expect($data[0]->identifier)->toBe('example.com');
 });
 
 it('DomainValidation::getValidationData() with null challenge type returns matching types', function () {

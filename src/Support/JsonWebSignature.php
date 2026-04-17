@@ -31,7 +31,7 @@ class JsonWebSignature
         $isEc = $details['type'] === OPENSSL_KEYTYPE_EC;
 
         if ($isEc) {
-            [$alg, $digest, $sigLen] = self::ecParams($details['ec']['curve_name']);
+            [$alg, $digest, $sigLen] = EcSigning::ecParamsFromCurve($details['ec']['curve_name']);
         } else {
             $alg    = 'RS256';
             $digest = 'SHA256';
@@ -53,7 +53,7 @@ class JsonWebSignature
         }
 
         if ($isEc) {
-            $signed = self::derToRaw($signed, $sigLen);
+            $signed = EcSigning::derToRaw($signed, $sigLen);
         }
 
         return [
@@ -63,27 +63,12 @@ class JsonWebSignature
         ];
     }
 
-    /** @return array{0: string, 1: string, 2: int} [alg, digest, componentLen] */
-    private static function ecParams(string $curveName): array
-    {
-        return match ($curveName) {
-            'prime256v1' => ['ES256', 'SHA256', 32],
-            'secp384r1'  => ['ES384', 'SHA384', 48],
-            default      => throw new \CoyoteCert\Exceptions\CryptoException("Unsupported EC curve: {$curveName}"),
-        };
-    }
-
+    /**
+     * Convert a DER-encoded ECDSA signature to raw R||S format.
+     * Kept as a public proxy for backward compatibility.
+     */
     public static function derToRaw(string $der, int $componentLen): string
     {
-        // DER ECDSA: 0x30 [len] 0x02 [r-len] [r] 0x02 [s-len] [s]
-        $pos  = 2;
-        $rLen = ord($der[$pos + 1]);
-        $r    = substr($der, $pos + 2, $rLen);
-        $pos += 2 + $rLen;
-        $sLen = ord($der[$pos + 1]);
-        $s    = substr($der, $pos + 2, $sLen);
-
-        return str_pad(ltrim($r, "\x00"), $componentLen, "\x00", STR_PAD_LEFT)
-             . str_pad(ltrim($s, "\x00"), $componentLen, "\x00", STR_PAD_LEFT);
+        return EcSigning::derToRaw($der, $componentLen);
     }
 }

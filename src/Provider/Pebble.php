@@ -4,7 +4,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 
-class Pebble implements AcmeProviderInterface
+class Pebble extends AbstractProvider
 {
     /**
      * @param string $url       Full directory URL of your Pebble instance.

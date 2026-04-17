@@ -4,7 +4,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 
-class BuypassGo implements AcmeProviderInterface
+class BuypassGo extends AbstractProvider
 {
     public function getDirectoryUrl(): string
     {
@@ -24,15 +24,5 @@ class BuypassGo implements AcmeProviderInterface
     public function getEabCredentials(string $email): ?EabCredentials
     {
         return null;
-    }
-
-    public function supportsProfiles(): bool
-    {
-        return false;
-    }
-
-    public function verifyTls(): bool
-    {
-        return true;
     }
 }

@@ -20,6 +20,20 @@ class DatabaseStorage implements StorageInterface
         private readonly \PDO   $pdo,
         private readonly string $table = 'coyote_cert_storage',
     ) {
+        $this->validateIdentifier($this->table);
+    }
+
+    /**
+     * Ensures an identifier (table/column name) contains only safe characters.
+     * Rejects anything that is not [a-zA-Z0-9_].
+     */
+    private function validateIdentifier(string $name): void
+    {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $name)) {
+            throw new \InvalidArgumentException(
+                sprintf('Invalid SQL identifier "%s": only [a-zA-Z0-9_] are allowed.', $name)
+            );
+        }
     }
 
     /**

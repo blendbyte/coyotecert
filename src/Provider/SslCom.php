@@ -4,7 +4,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 
-class SslCom implements AcmeProviderInterface
+class SslCom extends AbstractProvider
 {
     /**
      * @param string $eabKid  EAB key ID from your SSL.com account.
@@ -38,15 +38,5 @@ class SslCom implements AcmeProviderInterface
     public function getEabCredentials(string $email): ?EabCredentials
     {
         return new EabCredentials($this->eabKid, $this->eabHmac);
-    }
-
-    public function supportsProfiles(): bool
-    {
-        return false;
-    }
-
-    public function verifyTls(): bool
-    {
-        return true;
     }
 }

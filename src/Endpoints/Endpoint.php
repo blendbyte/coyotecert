@@ -20,7 +20,7 @@ abstract class Endpoint
     protected function createKeyId(string $accountUrl, string $url, ?array $payload = null): array
     {
         return KeyId::generate(
-            $this->client->localAccount()->getPrivateKey(),
+            $this->client->accountAdapter()->getPrivateKey(),
             $accountUrl,
             $url,
             $this->client->nonce()->getNew(),
@@ -32,6 +32,7 @@ abstract class Endpoint
      * Sign and POST, retrying once on badNonce (RFC 8555 §6.5).
      * Each call to $this->createKeyId() fetches a fresh nonce, so the retry
      * automatically gets a new one from the server.
+     * The Replay-Nonce from each response is cached for the next request.
      */
     /** @param array<string, mixed>|null $payload */
     protected function postSigned(string $url, string $accountUrl, ?array $payload = null): Response
@@ -42,12 +43,27 @@ abstract class Endpoint
         );
 
         $response = $send();
+        $this->cacheResponseNonce($response);
 
         if ($this->isBadNonce($response)) {
             $response = $send();
+            $this->cacheResponseNonce($response);
         }
 
         return $response;
+    }
+
+    /**
+     * If the response contains a Replay-Nonce header, cache it so the next
+     * request avoids an extra HEAD round-trip.
+     */
+    private function cacheResponseNonce(Response $response): void
+    {
+        $nonce = $response->getHeader('replay-nonce', '');
+
+        if (is_string($nonce) && $nonce !== '') {
+            $this->client->storeNonce(trim($nonce));
+        }
     }
 
     protected function isBadNonce(Response $response): bool
@@ -66,7 +82,7 @@ abstract class Endpoint
 
     protected function getAccountPrivateKey(): string
     {
-        return $this->client->localAccount()->getPrivateKey();
+        return $this->client->accountAdapter()->getPrivateKey();
     }
 
     /**

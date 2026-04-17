@@ -133,12 +133,6 @@ class Order extends Endpoint
         $response = $this->postSigned($orderData->finalizeUrl, $orderData->accountUrl, compact('csr'));
 
         if ($response->getHttpResponseCode() === 200) {
-            $body = $response->jsonBody();
-
-            if (isset($body['certificate'])) {
-                $orderData->setCertificateUrl($body['certificate']);
-            }
-
             return true;
         }
 

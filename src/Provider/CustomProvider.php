@@ -4,7 +4,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 
-class CustomProvider implements AcmeProviderInterface
+class CustomProvider extends AbstractProvider
 {
     /**
      * Use any ACME-compliant CA.

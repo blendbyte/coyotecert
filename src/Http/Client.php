@@ -8,9 +8,14 @@ use CoyoteCert\Interfaces\HttpClientInterface;
 class Client implements HttpClientInterface
 {
     public function __construct(
-        private readonly int  $timeout   = 10,
+        private int  $timeout   = 10,
         private readonly bool $verifyTls = true,
     ) {
+    }
+
+    public function setTimeout(int $seconds): void
+    {
+        $this->timeout = $seconds;
     }
 
     public function head(string $url): Response

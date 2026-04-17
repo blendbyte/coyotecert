@@ -10,7 +10,7 @@ use CoyoteCert\Support\OpenSsl;
 /**
  * Internal adapter that makes a StorageInterface look like an AcmeAccountInterface.
  *
- * This is used by Api::localAccount() so that all existing endpoint classes
+ * This is used by Api::accountAdapter() so that all existing endpoint classes
  * continue to work without modification.
  *
  * @internal
@@ -50,11 +50,21 @@ class StorageAccountAdapter implements AcmeAccountInterface
         return $this->storage->hasAccountKey();
     }
 
-    public function generateNewKeys(KeyType $keyType = KeyType::EC_P256): bool
+    /**
+     * Generate and store a new key pair.
+     *
+     * When called without an explicit $keyTypeOverride, the key type set on
+     * construction is used. Pass a $keyTypeOverride to use a different key type
+     * for this single call without changing the adapter's default.
+     *
+     * Previously the $keyType parameter was silently ignored; now it is used.
+     */
+    public function generateNewKeys(?KeyType $keyTypeOverride = null): bool
     {
-        $key = OpenSsl::generateKey($this->keyType);
-        $pem = OpenSsl::openSslKeyToString($key);
-        $this->storage->saveAccountKey($pem, $this->keyType);
+        $keyType = $keyTypeOverride ?? $this->keyType;
+        $key     = OpenSsl::generateKey($keyType);
+        $pem     = OpenSsl::openSslKeyToString($key);
+        $this->storage->saveAccountKey($pem, $keyType);
 
         return true;
     }

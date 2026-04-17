@@ -39,9 +39,10 @@ class LocalFileAccount implements AcmeAccountInterface
         return false;
     }
 
-    public function generateNewKeys(KeyType $keyType = KeyType::EC_P256): bool
+    public function generateNewKeys(?KeyType $keyTypeOverride = null): bool
     {
-        $dir = rtrim($this->accountKeysPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+        $keyType = $keyTypeOverride ?? KeyType::EC_P256;
+        $dir     = rtrim($this->accountKeysPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
 
         if (!is_dir($dir) && !mkdir($dir) && !is_dir($dir)) {
             throw new StorageException(sprintf('Directory "%s" was not created', $dir));

@@ -5,7 +5,7 @@ namespace CoyoteCert\Provider;
 use CoyoteCert\DTO\EabCredentials;
 use CoyoteCert\Exceptions\AcmeException;
 
-class ZeroSSL implements AcmeProviderInterface
+class ZeroSSL extends AbstractProvider
 {
     /**
      * @param string|null $apiKey   ZeroSSL API key for automatic EAB provisioning.
@@ -47,33 +47,32 @@ class ZeroSSL implements AcmeProviderInterface
         return null;
     }
 
-    public function supportsProfiles(): bool
-    {
-        return false;
-    }
-
-    public function verifyTls(): bool
-    {
-        return true;
-    }
-
     private function provisionEab(string $email): EabCredentials
     {
         $url = 'https://api.zerossl.com/acme/eab-credentials-email?access_key=' . urlencode((string) $this->apiKey);
 
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => http_build_query(['email' => $email]),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'POST',
+                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query(['email' => $email]),
+                'timeout' => 15,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+            ],
         ]);
 
-        $body     = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $body = file_get_contents($url, false, $context);
+
+        // Parse HTTP status from $http_response_header (populated by file_get_contents)
+        $httpCode = 0;
+        if (!empty($http_response_header)) {
+            if (preg_match('/HTTP\/\S+\s+(\d+)/', $http_response_header[0], $m)) {
+                $httpCode = (int) $m[1];
+            }
+        }
 
         if ($body === false || $httpCode !== 200) {
             throw new AcmeException(
@@ -81,7 +80,7 @@ class ZeroSSL implements AcmeProviderInterface
             );
         }
 
-        $data = json_decode((string) $body, true, 512, JSON_THROW_ON_ERROR);
+        $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
 
         if (empty($data['success']) || empty($data['eab_kid']) || empty($data['eab_hmac_key'])) {
             throw new AcmeException(

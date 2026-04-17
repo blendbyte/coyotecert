@@ -47,6 +47,8 @@ class Arr
             return $array[$key];
         }
 
+        // Dot-notation traversal is used by the test suite and kept for backward
+        // compatibility (e.g. 'a.b.c' descends into nested arrays).
         if (!is_string($key) || strpos($key, '.') === false) {
             return $array[$key] ?? value($default);
         }

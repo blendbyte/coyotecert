@@ -4,7 +4,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 
-class LetsEncrypt implements AcmeProviderInterface
+class LetsEncrypt extends AbstractProvider
 {
     public function getDirectoryUrl(): string
     {
@@ -27,11 +27,6 @@ class LetsEncrypt implements AcmeProviderInterface
     }
 
     public function supportsProfiles(): bool
-    {
-        return true;
-    }
-
-    public function verifyTls(): bool
     {
         return true;
     }
