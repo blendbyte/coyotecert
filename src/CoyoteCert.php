@@ -7,6 +7,7 @@ use CoyoteCert\DTO\Dns01ValidationData;
 use CoyoteCert\DTO\Http01ValidationData;
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\DTO\RenewalWindow;
+use CoyoteCert\DTO\TlsAlpn01ValidationData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Enums\RevocationReason;
@@ -18,6 +19,7 @@ use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
 use CoyoteCert\Storage\StorageInterface;
 use CoyoteCert\Storage\StoredCertificate;
+use CoyoteCert\Support\CaaChecker;
 use CoyoteCert\Support\OpenSsl;
 use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
@@ -54,6 +56,12 @@ class CoyoteCert
     private KeyType                    $certKeyType      = KeyType::EC_P256;
     private KeyType                    $accountKeyType   = KeyType::EC_P256;
     private bool                       $localTest        = true;
+    private bool                       $skipCaaCheck     = false;
+    private string                     $preferredChain   = '';
+    /** @var callable[] */
+    private array $onIssuedCallbacks = [];
+    /** @var callable[] */
+    private array $onRenewedCallbacks = [];
 
     private function __construct(private readonly AcmeProviderInterface $provider) {}
 
@@ -167,6 +175,59 @@ class CoyoteCert
     }
 
     /**
+     * Skip the CAA DNS pre-check before submitting the order to the CA.
+     * Useful when DNS is internal or the CAA records are managed outside your control.
+     */
+    public function skipCaaCheck(): self
+    {
+        $this->skipCaaCheck = true;
+
+        return $this;
+    }
+
+    /**
+     * Prefer a specific certificate chain by matching the issuer Common Name or
+     * Organisation of the intermediate certificates (RFC 8555 §7.4.2).
+     *
+     * When the CA offers alternate chains via Link: rel="alternate" headers, the
+     * first chain whose intermediates contain $issuer (case-insensitive substring)
+     * is returned. Falls back to the default chain when no match is found.
+     *
+     * Example: ->preferredChain('ISRG Root X1')
+     */
+    public function preferredChain(string $issuer): self
+    {
+        $this->preferredChain = $issuer;
+
+        return $this;
+    }
+
+    /**
+     * Register a callback invoked after every successful certificate issuance.
+     * The callback receives the issued StoredCertificate as its sole argument.
+     * Multiple callbacks may be registered; they run in registration order.
+     */
+    public function onIssued(callable $callback): self
+    {
+        $this->onIssuedCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Register a callback invoked after a certificate is renewed (i.e. an existing
+     * certificate was replaced). Fires in addition to onIssued callbacks.
+     * The callback receives the new StoredCertificate as its sole argument.
+     * Multiple callbacks may be registered; they run in registration order.
+     */
+    public function onRenewed(callable $callback): self
+    {
+        $this->onRenewedCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    /**
      * Set the HTTP timeout in seconds for the built-in curl client.
      * No-op when a custom PSR-18 client is configured.
      */
@@ -195,7 +256,7 @@ class CoyoteCert
             return true;
         }
 
-        $cert = $this->storage->getCertificate($this->domains[0]);
+        $cert = $this->storage->getCertificate($this->domains[0], $this->certKeyType);
 
         if ($cert === null) {
             return true;
@@ -219,6 +280,17 @@ class CoyoteCert
     {
         $this->validate();
 
+        if (!$this->skipCaaCheck) {
+            $domainIdentifiers = array_values(array_filter(
+                $this->domains,
+                static fn(string $id): bool => !filter_var($id, FILTER_VALIDATE_IP),
+            ));
+
+            if (!empty($domainIdentifiers)) {
+                (new CaaChecker())->check($domainIdentifiers, $this->provider->getCaaIdentifiers());
+            }
+        }
+
         $challengeHandler = $this->challengeHandler;
 
         if ($challengeHandler === null) {
@@ -236,7 +308,7 @@ class CoyoteCert
         $account = $this->getOrCreateAccount($api);
 
         $replacesId   = '';
-        $existingCert = $this->storage?->getCertificate($this->domains[0]);
+        $existingCert = $this->storage?->getCertificate($this->domains[0], $this->certKeyType);
         if ($existingCert !== null && ($issuerPem = $this->extractIssuerPem($existingCert)) !== null) {
             try {
                 $replacesId = $api->renewalInfo()->certId($existingCert->certificate, $issuerPem);
@@ -252,7 +324,10 @@ class CoyoteCert
         // Refresh order — status transitions pending → ready after all challenges pass
         $order = $api->order()->refresh($order);
 
-        return $this->fetchAndStoreCertificate($api, $order);
+        $stored = $this->fetchAndStoreCertificate($api, $order);
+        $this->fireIssuedCallbacks($stored, isRenewal: $existingCert !== null);
+
+        return $stored;
     }
 
     // ── Private issue() helpers ───────────────────────────────────────────────
@@ -310,7 +385,7 @@ class CoyoteCert
         }
 
         $order  = $api->order()->waitUntilValid($order);
-        $bundle = $api->certificate()->getBundle($order);
+        $bundle = $api->certificate()->getBundle($order, $this->preferredChain ?: null);
 
         $parsed    = openssl_x509_parse($bundle->certificate);
         $expiresAt = isset($parsed['validTo_time_t'])
@@ -325,6 +400,7 @@ class CoyoteCert
             issuedAt: new DateTimeImmutable(),
             expiresAt: $expiresAt,
             domains: $this->domains,
+            keyType: $this->certKeyType,
         );
 
         if ($this->storage !== null) {
@@ -332,6 +408,19 @@ class CoyoteCert
         }
 
         return $stored;
+    }
+
+    private function fireIssuedCallbacks(StoredCertificate $cert, bool $isRenewal): void
+    {
+        foreach ($this->onIssuedCallbacks as $cb) {
+            $cb($cert);
+        }
+
+        if ($isRenewal) {
+            foreach ($this->onRenewedCallbacks as $cb) {
+                $cb($cert);
+            }
+        }
     }
 
     /**
@@ -378,7 +467,7 @@ class CoyoteCert
                 throw new AcmeException('Certificate unexpectedly missing from storage.');
             }
 
-            return $this->storage->getCertificate($this->domains[0])
+            return $this->storage->getCertificate($this->domains[0], $this->certKeyType)
                 ?? throw new AcmeException('Certificate unexpectedly missing from storage.');
         }
 
@@ -467,13 +556,17 @@ class CoyoteCert
     /**
      * Returns [token, keyAuthorization] from a typed validation DTO.
      *
-     * @param Http01ValidationData|Dns01ValidationData $item
+     * @param Http01ValidationData|Dns01ValidationData|TlsAlpn01ValidationData $item
      * @return array{0: string, 1: string}
      */
-    private function extractTokenAndKeyAuth(Http01ValidationData|Dns01ValidationData $item): array
+    private function extractTokenAndKeyAuth(Http01ValidationData|Dns01ValidationData|TlsAlpn01ValidationData $item): array
     {
         if ($item instanceof Http01ValidationData) {
             return [$item->filename, $item->content];
+        }
+
+        if ($item instanceof TlsAlpn01ValidationData) {
+            return [$item->token, $item->keyAuthorization];
         }
 
         return [$item->name, $item->value];

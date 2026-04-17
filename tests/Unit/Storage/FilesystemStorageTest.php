@@ -18,7 +18,7 @@ afterEach(function () {
     }
 });
 
-function makeFileCert(): StoredCertificate
+function makeFileCert(KeyType $keyType = KeyType::EC_P256): StoredCertificate
 {
     return new StoredCertificate(
         certificate: '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----',
@@ -28,6 +28,7 @@ function makeFileCert(): StoredCertificate
         issuedAt: new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
         expiresAt: new DateTimeImmutable('2026-04-01T00:00:00+00:00'),
         domains: ['example.com'],
+        keyType: $keyType,
     );
 }
 
@@ -50,17 +51,17 @@ it('creates the storage directory on first write', function () {
 });
 
 it('has no certificate initially', function () {
-    expect($this->storage->hasCertificate('example.com'))->toBeFalse();
-    expect($this->storage->getCertificate('example.com'))->toBeNull();
+    expect($this->storage->hasCertificate('example.com', KeyType::EC_P256))->toBeFalse();
+    expect($this->storage->getCertificate('example.com', KeyType::EC_P256))->toBeNull();
 });
 
 it('saves and loads a certificate', function () {
     $cert = makeFileCert();
     $this->storage->saveCertificate('example.com', $cert);
 
-    expect($this->storage->hasCertificate('example.com'))->toBeTrue();
+    expect($this->storage->hasCertificate('example.com', KeyType::EC_P256))->toBeTrue();
 
-    $loaded = $this->storage->getCertificate('example.com');
+    $loaded = $this->storage->getCertificate('example.com', KeyType::EC_P256);
     expect($loaded->toArray())->toBe($cert->toArray());
 });
 
@@ -68,8 +69,8 @@ it('sanitises the domain for use as a filename', function () {
     $cert = makeFileCert();
     $this->storage->saveCertificate('*.example.com', $cert);
 
-    expect($this->storage->hasCertificate('*.example.com'))->toBeTrue();
-    expect($this->storage->getCertificate('*.example.com')->domains)->toBe(['example.com']);
+    expect($this->storage->hasCertificate('*.example.com', KeyType::EC_P256))->toBeTrue();
+    expect($this->storage->getCertificate('*.example.com', KeyType::EC_P256)->domains)->toBe(['example.com']);
 });
 
 it('overwrites an existing certificate file', function () {
@@ -83,15 +84,42 @@ it('overwrites an existing certificate file', function () {
         issuedAt: new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
         expiresAt: new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
         domains: ['example.com'],
+        keyType: KeyType::EC_P256,
     );
     $this->storage->saveCertificate('example.com', $updated);
 
-    expect($this->storage->getCertificate('example.com')->certificate)->toBe('new-cert');
+    expect($this->storage->getCertificate('example.com', KeyType::EC_P256)->certificate)->toBe('new-cert');
+});
+
+it('stores RSA and ECDSA certificates in separate files', function () {
+    $rsa = makeFileCert(KeyType::RSA_2048);
+    $ec  = makeFileCert(KeyType::EC_P256);
+
+    $this->storage->saveCertificate('example.com', $rsa);
+    $this->storage->saveCertificate('example.com', $ec);
+
+    expect($this->storage->getCertificate('example.com', KeyType::RSA_2048)->keyType)->toBe(KeyType::RSA_2048);
+    expect($this->storage->getCertificate('example.com', KeyType::EC_P256)->keyType)->toBe(KeyType::EC_P256);
+    expect(glob($this->dir . '/example.com.*.cert.json'))->toHaveCount(2);
+});
+
+it('migrates a legacy cert file to the key-type-suffixed path', function () {
+    // Write a legacy file (no key-type suffix, defaults to EC_P256 on read).
+    $cert   = makeFileCert(KeyType::EC_P256);
+    $safe   = 'example.com';
+    $legacy = $this->dir . '/' . $safe . '.cert.json';
+    mkdir($this->dir, 0o700, true);
+    file_put_contents($legacy, json_encode($cert->toArray()));
+
+    $loaded = $this->storage->getCertificate('example.com', KeyType::EC_P256);
+
+    expect($loaded)->not->toBeNull();
+    // Legacy file should be gone; new file should exist.
+    expect(file_exists($legacy))->toBeFalse();
+    expect(file_exists($this->dir . '/example.com.EC_P256.cert.json'))->toBeTrue();
 });
 
 it('getAccountKey throws when account key file does not exist', function () {
-    // readFile() throws when the file path does not exist — verifies the
-    // "Storage file ... does not exist" error path inside readFile().
     expect(fn() => $this->storage->getAccountKey())
         ->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'does not exist');
 });
@@ -108,13 +136,13 @@ it('saveAccountKey throws when the storage directory cannot be created', functio
 
 it('deleteCertificate() removes the stored file', function () {
     $this->storage->saveCertificate('example.com', makeFileCert());
-    $this->storage->deleteCertificate('example.com');
+    $this->storage->deleteCertificate('example.com', KeyType::EC_P256);
 
-    expect($this->storage->hasCertificate('example.com'))->toBeFalse();
+    expect($this->storage->hasCertificate('example.com', KeyType::EC_P256))->toBeFalse();
 });
 
 it('deleteCertificate() is a no-op for unknown domain', function () {
-    $this->storage->deleteCertificate('unknown.com'); // must not throw
+    $this->storage->deleteCertificate('unknown.com', KeyType::EC_P256); // must not throw
     expect(true)->toBeTrue();
 });
 

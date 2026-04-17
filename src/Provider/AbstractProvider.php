@@ -13,4 +13,9 @@ abstract class AbstractProvider implements AcmeProviderInterface
     {
         return true;
     }
+
+    public function getCaaIdentifiers(): array
+    {
+        return [];
+    }
 }

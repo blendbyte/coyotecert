@@ -164,7 +164,16 @@ class Client implements HttpClientInterface
 
             [$name, $value] = explode(':', $header, 2);
 
-            $headersArr[str_replace('_', '-', strtolower($name))] = trim($value);
+            $key          = str_replace('_', '-', strtolower($name));
+            $trimmedValue = trim($value);
+
+            // Accumulate repeated headers (e.g. multiple Link: rel="alternate")
+            // as comma-separated, consistent with PSR-7 multi-value behaviour.
+            if (isset($headersArr[$key])) {
+                $headersArr[$key] .= ', ' . $trimmedValue;
+            } else {
+                $headersArr[$key] = $trimmedValue;
+            }
         }
 
         return $headersArr;

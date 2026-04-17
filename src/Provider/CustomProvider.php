@@ -16,6 +16,8 @@ class CustomProvider extends AbstractProvider
      * @param string|null $eabHmac EAB HMAC key if required by the CA.
      * @param bool $verifyTls Whether to verify the CA's TLS certificate.
      * @param EabAlgorithm $eabAlgorithm HMAC algorithm for EAB signing (default HS256).
+     * @param string[] $caaIdentifiers CAA record values that authorise this CA (e.g. ['myca.com']).
+     *                                 Leave empty to skip the CAA pre-check.
      */
     public function __construct(
         private readonly string       $directoryUrl,
@@ -25,6 +27,7 @@ class CustomProvider extends AbstractProvider
         private readonly bool         $verifyTls = true,
         private readonly bool         $profilesSupported = false,
         private readonly EabAlgorithm $eabAlgorithm = EabAlgorithm::HS256,
+        private readonly array        $caaIdentifiers = [],
     ) {}
 
     public function getDirectoryUrl(): string
@@ -59,5 +62,10 @@ class CustomProvider extends AbstractProvider
     public function verifyTls(): bool
     {
         return $this->verifyTls;
+    }
+
+    public function getCaaIdentifiers(): array
+    {
+        return $this->caaIdentifiers;
     }
 }

@@ -14,7 +14,7 @@ class InMemoryStorage implements StorageInterface
     private ?string  $accountKey     = null;
     private ?KeyType $accountKeyType = null;
 
-    /** @var array<string, StoredCertificate> */
+    /** @var array<string, StoredCertificate> Keyed as "{domain}:{KeyType->value}". */
     private array $certificates = [];
 
     // ── Account key ──────────────────────────────────────────────────────────
@@ -50,23 +50,30 @@ class InMemoryStorage implements StorageInterface
 
     // ── Certificates ─────────────────────────────────────────────────────────
 
-    public function hasCertificate(string $domain): bool
+    public function hasCertificate(string $domain, KeyType $keyType): bool
     {
-        return isset($this->certificates[$domain]);
+        return isset($this->certificates[$this->certKey($domain, $keyType)]);
     }
 
-    public function getCertificate(string $domain): ?StoredCertificate
+    public function getCertificate(string $domain, KeyType $keyType): ?StoredCertificate
     {
-        return $this->certificates[$domain] ?? null;
+        return $this->certificates[$this->certKey($domain, $keyType)] ?? null;
     }
 
     public function saveCertificate(string $domain, StoredCertificate $cert): void
     {
-        $this->certificates[$domain] = $cert;
+        $this->certificates[$this->certKey($domain, $cert->keyType)] = $cert;
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, KeyType $keyType): void
     {
-        unset($this->certificates[$domain]);
+        unset($this->certificates[$this->certKey($domain, $keyType)]);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private function certKey(string $domain, KeyType $keyType): string
+    {
+        return $domain . ':' . $keyType->value;
     }
 }

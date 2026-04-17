@@ -44,18 +44,44 @@ class FilesystemStorage implements StorageInterface
 
     // ── Certificates ─────────────────────────────────────────────────────────
 
-    public function hasCertificate(string $domain): bool
+    public function hasCertificate(string $domain, KeyType $keyType): bool
     {
-        return file_exists($this->certPath($domain));
-    }
-
-    public function getCertificate(string $domain): ?StoredCertificate
-    {
-        if (!$this->hasCertificate($domain)) {
-            return null;
+        if (file_exists($this->certPath($domain, $keyType))) {
+            return true;
         }
 
-        $data = json_decode($this->readFile($this->certPath($domain)), true, 512, JSON_THROW_ON_ERROR);
+        // Legacy path without key-type suffix — treated as present for migration.
+        return file_exists($this->legacyCertPath($domain));
+    }
+
+    public function getCertificate(string $domain, KeyType $keyType): ?StoredCertificate
+    {
+        $path = $this->certPath($domain, $keyType);
+
+        if (!file_exists($path)) {
+            // Attempt transparent migration of a legacy single-cert file.
+            $legacy = $this->legacyCertPath($domain);
+
+            if (!file_exists($legacy)) {
+                return null;
+            }
+
+            $data = json_decode($this->readFile($legacy), true, 512, JSON_THROW_ON_ERROR);
+            $cert = StoredCertificate::fromArray($data);
+
+            // Only migrate when the legacy cert's key type matches what's requested.
+            if ($cert->keyType !== $keyType) {
+                return null;
+            }
+
+            $this->ensureDirectory();
+            $this->writeFile($path, json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+            unlink($legacy);
+
+            return $cert;
+        }
+
+        $data = json_decode($this->readFile($path), true, 512, JSON_THROW_ON_ERROR);
 
         return StoredCertificate::fromArray($data);
     }
@@ -64,17 +90,26 @@ class FilesystemStorage implements StorageInterface
     {
         $this->ensureDirectory();
         $this->writeFile(
-            $this->certPath($domain),
+            $this->certPath($domain, $cert->keyType),
             json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
         );
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, KeyType $keyType): void
     {
-        $path = $this->certPath($domain);
+        $path = $this->certPath($domain, $keyType);
 
         if (file_exists($path)) {
             unlink($path);
+
+            return;
+        }
+
+        // Also remove a legacy file if it exists for this domain.
+        $legacy = $this->legacyCertPath($domain);
+
+        if (file_exists($legacy)) {
+            unlink($legacy);
         }
     }
 
@@ -90,9 +125,16 @@ class FilesystemStorage implements StorageInterface
         return $this->dir() . 'account.json';
     }
 
-    private function certPath(string $domain): string
+    private function certPath(string $domain, KeyType $keyType): string
     {
-        // Sanitise the domain so it is safe to use as a filename.
+        $safe = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $domain);
+
+        return $this->dir() . $safe . '.' . $keyType->value . '.cert.json';
+    }
+
+    /** Pre-v2 path — one cert per domain, no key-type suffix. */
+    private function legacyCertPath(string $domain): string
+    {
         $safe = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $domain);
 
         return $this->dir() . $safe . '.cert.json';

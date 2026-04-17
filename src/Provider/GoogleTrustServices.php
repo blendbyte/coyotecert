@@ -34,4 +34,9 @@ class GoogleTrustServices extends AbstractProvider
     {
         return new EabCredentials($this->eabKid, $this->eabHmac);
     }
+
+    public function getCaaIdentifiers(): array
+    {
+        return ['pki.goog'];
+    }
 }

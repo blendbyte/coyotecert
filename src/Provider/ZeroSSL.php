@@ -46,6 +46,12 @@ class ZeroSSL extends AbstractProvider
         return null;
     }
 
+    public function getCaaIdentifiers(): array
+    {
+        // ZeroSSL issues under Sectigo roots; sectigo.com is the authorised CAA value.
+        return ['sectigo.com', 'comodoca.com'];
+    }
+
     private function provisionEab(string $email): EabCredentials
     {
         $url = 'https://api.zerossl.com/acme/eab-credentials-email?access_key=' . urlencode((string) $this->apiKey);

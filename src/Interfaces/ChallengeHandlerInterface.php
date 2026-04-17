@@ -24,6 +24,11 @@ interface ChallengeHandlerInterface
      *
      *   dns-persist-01 — same as dns-01; the TXT record must remain until cleanup().
      *
+     *   tls-alpn-01 — $token is the ACME token; $keyAuthorization is the full key
+     *                 authorization (token.thumbprint). Use TlsAlpn01Handler::generateAcmeCertificate()
+     *                 to generate the RFC 8737 validation certificate, then serve it on
+     *                 port 443 for the "acme-tls/1" ALPN protocol.
+     *
      * @param string $domain The domain being validated.
      * @param string $token Challenge token (http-01 filename; ignored for dns-01).
      * @param string $keyAuthorization Full key authorization (http-01 file body; dns-01 TXT value).

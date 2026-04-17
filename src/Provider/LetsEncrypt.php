@@ -30,4 +30,9 @@ class LetsEncrypt extends AbstractProvider
     {
         return true;
     }
+
+    public function getCaaIdentifiers(): array
+    {
+        return ['letsencrypt.org'];
+    }
 }

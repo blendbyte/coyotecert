@@ -4,6 +4,8 @@ namespace CoyoteCert\Endpoints;
 
 use CoyoteCert\Api;
 use CoyoteCert\Exceptions\AcmeException;
+use CoyoteCert\Exceptions\AuthException;
+use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Support\KeyId;
 
@@ -70,12 +72,45 @@ abstract class Endpoint
             && ($response->jsonBody()['type'] ?? '') === 'urn:ietf:params:acme:error:badNonce';
     }
 
-    protected function throwError(Response $response, string $defaultMessage): never
+    /** @param array<string, mixed> $additionalContext */
+    protected function throwError(Response $response, string $defaultMessage, array $additionalContext = []): never
     {
-        $message = $response->jsonBody()['detail'] ?? $defaultMessage;
-        $this->logResponse('error', $message, $response);
+        $this->logResponse('error', $response->jsonBody()['detail'] ?? $defaultMessage, $response, $additionalContext);
 
-        throw new AcmeException($message);
+        throw $this->createException($response, $defaultMessage);
+    }
+
+    /**
+     * Build a typed exception from the response without logging.
+     * Dispatches 401/403 → AuthException, 429 → RateLimitException (with Retry-After),
+     * and attaches RFC 8555 §6.7 subproblems to any exception that carries them.
+     */
+    protected function createException(Response $response, string $defaultMessage): AcmeException
+    {
+        $body    = $response->jsonBody();
+        $message = $body['detail'] ?? $defaultMessage;
+
+        /** @var array<int, array<string, mixed>> $subproblems */
+        $subproblems = $body['subproblems'] ?? [];
+
+        return match ($response->getHttpResponseCode()) {
+            401, 403 => new AuthException($message),
+            429      => new RateLimitException($message, $this->parseRetryAfterSeconds($response)),
+            default  => new AcmeException($message, $subproblems),
+        };
+    }
+
+    protected function parseRetryAfterSeconds(Response $response): ?int
+    {
+        $value = $response->getHeader('retry-after', '');
+
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        $seconds = (int) $value;
+
+        return $seconds > 0 ? $seconds : null;
     }
 
     protected function getAccountPrivateKey(): string

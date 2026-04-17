@@ -25,4 +25,9 @@ class BuypassGoStaging extends AbstractProvider
     {
         return null;
     }
+
+    public function getCaaIdentifiers(): array
+    {
+        return ['buypass.com'];
+    }
 }

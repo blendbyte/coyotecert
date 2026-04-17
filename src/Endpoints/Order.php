@@ -6,7 +6,6 @@ use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\OrderNotFoundException;
-use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Support\Base64;
 
 class Order extends Endpoint
@@ -62,15 +61,7 @@ class Order extends Endpoint
             }
         }
 
-        $this->logResponse('error', 'Creating new order failed; bad response code.', $response, ['payload' => $payload]);
-
-        $detail = $response->jsonBody()['detail'] ?? $response->rawBody();
-
-        throw new AcmeException(sprintf(
-            'Creating new order failed (HTTP %d): %s',
-            $response->getHttpResponseCode(),
-            $detail,
-        ));
+        $this->throwError($response, 'Creating new order failed.', ['payload' => $payload]);
     }
 
     public function get(string $id): OrderData
@@ -92,13 +83,11 @@ class Order extends Endpoint
             return OrderData::fromResponse($response, $account->url);
         }
 
-        // Always log the error.
         $this->logResponse('error', 'Getting order failed; bad response code.', $response);
 
-        match ($response->getHttpResponseCode()) {
-            404     => throw new OrderNotFoundException($response->jsonBody()['detail'] ?? 'Order cannot be found.'),
-            429     => throw new RateLimitException($response->jsonBody()['detail'] ?? 'Too many requests.'),
-            default => throw new AcmeException($response->jsonBody()['detail'] ?? 'Unknown error.'),
+        throw match ($response->getHttpResponseCode()) {
+            404     => new OrderNotFoundException($response->jsonBody()['detail'] ?? 'Order cannot be found.'),
+            default => $this->createException($response, 'Getting order failed.'),
         };
     }
 

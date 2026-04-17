@@ -33,6 +33,10 @@ it('LetsEncrypt has a display name', function () {
     expect((new LetsEncrypt())->getDisplayName())->toContain("Let's Encrypt");
 });
 
+it('LetsEncrypt CAA identifier is letsencrypt.org', function () {
+    expect((new LetsEncrypt())->getCaaIdentifiers())->toContain('letsencrypt.org');
+});
+
 // ── LetsEncryptStaging ────────────────────────────────────────────────────────
 
 it('LetsEncryptStaging has a different directory URL from production', function () {
@@ -55,6 +59,10 @@ it('LetsEncryptStaging supports profiles', function () {
 
 it('LetsEncryptStaging verifies TLS', function () {
     expect((new LetsEncryptStaging())->verifyTls())->toBeTrue();
+});
+
+it('LetsEncryptStaging CAA identifier is letsencrypt.org', function () {
+    expect((new LetsEncryptStaging())->getCaaIdentifiers())->toContain('letsencrypt.org');
 });
 
 // ── BuypassGo ────────────────────────────────────────────────────────────────
@@ -80,6 +88,10 @@ it('BuypassGo verifies TLS', function () {
     expect((new BuypassGo())->verifyTls())->toBeTrue();
 });
 
+it('BuypassGo CAA identifier is buypass.com', function () {
+    expect((new BuypassGo())->getCaaIdentifiers())->toContain('buypass.com');
+});
+
 it('BuypassGoStaging has a different directory URL', function () {
     expect((new BuypassGoStaging())->getDirectoryUrl())
         ->not->toBe((new BuypassGo())->getDirectoryUrl());
@@ -100,6 +112,10 @@ it('BuypassGoStaging does not support profiles', function () {
 
 it('BuypassGoStaging verifies TLS', function () {
     expect((new BuypassGoStaging())->verifyTls())->toBeTrue();
+});
+
+it('BuypassGoStaging CAA identifier is buypass.com', function () {
+    expect((new BuypassGoStaging())->getCaaIdentifiers())->toContain('buypass.com');
 });
 
 // ── ZeroSSL ───────────────────────────────────────────────────────────────────
@@ -137,6 +153,10 @@ it('ZeroSSL verifies TLS', function () {
     expect((new ZeroSSL())->verifyTls())->toBeTrue();
 });
 
+it('ZeroSSL CAA identifiers include sectigo.com', function () {
+    expect((new ZeroSSL())->getCaaIdentifiers())->toContain('sectigo.com');
+});
+
 // ── GoogleTrustServices ───────────────────────────────────────────────────────
 
 it('GoogleTrustServices returns EAB credentials', function () {
@@ -165,6 +185,10 @@ it('GoogleTrustServices does not support profiles', function () {
 
 it('GoogleTrustServices verifies TLS', function () {
     expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->verifyTls())->toBeTrue();
+});
+
+it('GoogleTrustServices CAA identifier is pki.goog', function () {
+    expect((new GoogleTrustServices(eabKid: 'k', eabHmac: 'h'))->getCaaIdentifiers())->toContain('pki.goog');
 });
 
 // ── SslCom ────────────────────────────────────────────────────────────────────
@@ -202,6 +226,10 @@ it('SslCom does not support profiles', function () {
 
 it('SslCom verifies TLS', function () {
     expect((new SslCom(eabKid: 'k', eabHmac: 'h'))->verifyTls())->toBeTrue();
+});
+
+it('SslCom CAA identifier is ssl.com', function () {
+    expect((new SslCom(eabKid: 'k', eabHmac: 'h'))->getCaaIdentifiers())->toContain('ssl.com');
 });
 
 // ── CustomProvider ────────────────────────────────────────────────────────────
@@ -255,6 +283,15 @@ it('CustomProvider profiles disabled by default', function () {
     expect((new CustomProvider(directoryUrl: 'https://host/dir'))->supportsProfiles())->toBeFalse();
 });
 
+it('CustomProvider returns empty CAA identifiers by default (skips check)', function () {
+    expect((new CustomProvider(directoryUrl: 'https://host/dir'))->getCaaIdentifiers())->toBe([]);
+});
+
+it('CustomProvider returns configured CAA identifiers', function () {
+    $p = new CustomProvider(directoryUrl: 'https://host/dir', caaIdentifiers: ['myca.com']);
+    expect($p->getCaaIdentifiers())->toContain('myca.com');
+});
+
 // ── Pebble ────────────────────────────────────────────────────────────────────
 
 it('Pebble has the correct default directory URL', function () {
@@ -302,4 +339,8 @@ it('Pebble skips TLS verification when explicitly disabled', function () {
 
 it('Pebble supports profiles', function () {
     expect((new \CoyoteCert\Provider\Pebble())->supportsProfiles())->toBeTrue();
+});
+
+it('Pebble returns empty CAA identifiers (skips check for local test CA)', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->getCaaIdentifiers())->toBe([]);
 });

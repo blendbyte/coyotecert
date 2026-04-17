@@ -30,4 +30,9 @@ class LetsEncryptStaging extends AbstractProvider
     {
         return true;
     }
+
+    public function getCaaIdentifiers(): array
+    {
+        return ['letsencrypt.org'];
+    }
 }

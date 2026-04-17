@@ -41,4 +41,15 @@ interface AcmeProviderInterface
      * Should only be false for local Pebble test instances.
      */
     public function verifyTls(): bool;
+
+    /**
+     * CAA DNS record identifiers that authorise this CA to issue certificates
+     * (e.g. ['letsencrypt.org'] for Let's Encrypt).
+     *
+     * Return an empty array to skip the CAA pre-check — appropriate for local
+     * test CAs (Pebble) or custom CAs whose CAA identifier is unknown.
+     *
+     * @return string[]
+     */
+    public function getCaaIdentifiers(): array;
 }

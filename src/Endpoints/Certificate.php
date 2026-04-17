@@ -9,7 +9,7 @@ use CoyoteCert\Support\Base64;
 
 class Certificate extends Endpoint
 {
-    public function getBundle(OrderData $orderData): CertificateBundleData
+    public function getBundle(OrderData $orderData, ?string $preferredChain = null): CertificateBundleData
     {
         if ($orderData->certificateUrl === null) {
             throw new AcmeException('Order does not have a certificate URL yet.');
@@ -23,7 +23,71 @@ class Certificate extends Endpoint
             throw new AcmeException('Failed to fetch certificate.');
         }
 
-        return CertificateBundleData::fromResponse($response);
+        $primary = CertificateBundleData::fromResponse($response);
+
+        if ($preferredChain === null) {
+            return $primary;
+        }
+
+        $linkHeader = $response->getHeader('link', '');
+        $linkHeader = is_string($linkHeader) ? $linkHeader : '';
+
+        foreach ($this->parseAlternateLinks($linkHeader) as $url) {
+            $altResponse = $this->postSigned($url, $orderData->accountUrl);
+
+            if ($altResponse->getHttpResponseCode() !== 200) {
+                continue;
+            }
+
+            $candidate = CertificateBundleData::fromResponse($altResponse);
+
+            if ($this->chainMatchesIssuer($candidate, $preferredChain)) {
+                return $candidate;
+            }
+        }
+
+        return $primary;
+    }
+
+    /** @return string[] */
+    private function parseAlternateLinks(string $linkHeader): array
+    {
+        if ($linkHeader === '') {
+            return [];
+        }
+
+        $urls = [];
+
+        foreach (explode(',', $linkHeader) as $entry) {
+            if (preg_match('~<([^>]+)>\s*;\s*rel\s*=\s*["\']?alternate["\']?~i', trim($entry), $m)) {
+                $urls[] = $m[1];
+            }
+        }
+
+        return $urls;
+    }
+
+    private function chainMatchesIssuer(CertificateBundleData $bundle, string $preferredChain): bool
+    {
+        if ($bundle->caBundle === '') {
+            return false;
+        }
+
+        if (!preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $matches)) {
+            return false;
+        }
+
+        foreach ($matches[1] as $certPem) {
+            $parsed = openssl_x509_parse($certPem);
+            $cn     = $parsed['subject']['CN'] ?? '';
+            $o      = $parsed['subject']['O']  ?? '';
+
+            if (stripos($cn, $preferredChain) !== false || stripos($o, $preferredChain) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function revoke(string $pem, int $reason = 0): bool

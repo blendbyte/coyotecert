@@ -2,6 +2,8 @@
 
 namespace CoyoteCert\Storage;
 
+use CoyoteCert\Enums\KeyType;
+
 readonly class StoredCertificate
 {
     /**
@@ -15,6 +17,7 @@ readonly class StoredCertificate
         public \DateTimeImmutable $issuedAt,
         public \DateTimeImmutable $expiresAt,
         public array              $domains,
+        public KeyType            $keyType = KeyType::EC_P256,
     ) {}
 
     /** @return array<string, mixed> */
@@ -28,6 +31,7 @@ readonly class StoredCertificate
             'issued_at'   => $this->issuedAt->format(\DateTimeInterface::ATOM),
             'expires_at'  => $this->expiresAt->format(\DateTimeInterface::ATOM),
             'domains'     => $this->domains,
+            'key_type'    => $this->keyType->value,
         ];
     }
 
@@ -42,6 +46,7 @@ readonly class StoredCertificate
             issuedAt: new \DateTimeImmutable($data['issued_at']),
             expiresAt: new \DateTimeImmutable($data['expires_at']),
             domains: $data['domains'],
+            keyType: isset($data['key_type']) ? KeyType::from($data['key_type']) : KeyType::EC_P256,
         );
     }
 

@@ -11,7 +11,6 @@ enum RevocationReason: int
     case Superseded           = 4;
     case CessationOfOperation = 5;
     case CertificateHold      = 6;
-    case RemoveFromCrl        = 8;
     case PrivilegeWithdrawn   = 9;
     case AaCompromise         = 10;
 }

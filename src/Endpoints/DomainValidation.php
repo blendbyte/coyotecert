@@ -7,6 +7,7 @@ use CoyoteCert\DTO\Dns01ValidationData;
 use CoyoteCert\DTO\DomainValidationData;
 use CoyoteCert\DTO\Http01ValidationData;
 use CoyoteCert\DTO\OrderData;
+use CoyoteCert\DTO\TlsAlpn01ValidationData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Exceptions\DomainValidationException;
 use CoyoteCert\Http\Response;
@@ -54,7 +55,7 @@ class DomainValidation extends Endpoint
 
     /**
      * @param DomainValidationData[] $challenges
-     * @return array<int, Http01ValidationData|Dns01ValidationData>
+     * @return array<int, Http01ValidationData|Dns01ValidationData|TlsAlpn01ValidationData>
      */
     public function getValidationData(array $challenges, ?AuthorizationChallengeEnum $authChallenge = null): array
     {
@@ -103,6 +104,19 @@ class DomainValidation extends Endpoint
                     keyAuthorization: $keyAuth,
                 );
             }
+
+            if (
+                (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::TLS_ALPN)
+                && !empty($domainValidationData->tlsAlpn)
+            ) {
+                $token            = $domainValidationData->tlsAlpn['token'];
+                $keyAuth          = $token . '.' . $thumbprint;
+                $authorizations[] = new TlsAlpn01ValidationData(
+                    identifier: $domainValidationData->identifier['value'],
+                    token: $token,
+                    keyAuthorization: $keyAuth,
+                );
+            }
         }
 
         return $authorizations;
@@ -145,7 +159,8 @@ class DomainValidation extends Endpoint
                 );
             }
 
-            if ($authChallenge === AuthorizationChallengeEnum::DNS || $authChallenge === AuthorizationChallengeEnum::DNS_PERSIST) {
+            if ($authChallenge    === AuthorizationChallengeEnum::DNS
+                || $authChallenge === AuthorizationChallengeEnum::DNS_PERSIST) {
                 LocalChallengeTest::dns(
                     $domainValidation->identifier['value'],
                     '_acme-challenge',
