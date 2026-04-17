@@ -11,7 +11,7 @@
 
 **A PHP 8.3+ ACME v2 client for issuing, renewing, and revoking TLS certificates.** Works with Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, Buypass, and any RFC 8555-compliant CA. Fluent API, no framework dependencies, and solid test coverage.
 
-ACME (Automatic Certificate Management Environment) is the protocol behind free, automated TLS certificates. CoyoteCert covers the full thing: account management, order lifecycle, HTTP-01, DNS-01, and TLS-ALPN-01 challenges, certificate issuance, smart renewal with ARI, and revocation. One `composer require` and you're set.
+ACME (Automatic Certificate Management Environment) is the protocol behind free, automated TLS certificates. Yes, same name as the cartoon supply company. CoyoteCert covers the full thing: account management, order lifecycle, HTTP-01, DNS-01, and TLS-ALPN-01 challenges, certificate issuance, smart renewal with ARI, and revocation. One `composer require` and you're set.
 
 ---
 
@@ -51,23 +51,23 @@ Filesystem with file locking, PDO (MySQL, PostgreSQL, SQLite) with dialect-aware
 
 ### Typed exceptions for every failure mode
 
-`RateLimitException` carries the CA's `Retry-After` seconds so your retry logic is precise. `AuthException` tells you credentials failed — not a transient error. `AcmeException::getSubproblems()` surfaces RFC 8555 §6.7 per-identifier errors so a multi-domain order can report exactly which domains were rejected and why. All exceptions share a common base so a single `catch` still works when you don't need the detail.
+`RateLimitException` carries the CA's `Retry-After` seconds so your retry logic is precise. `AuthException` tells you credentials failed, not a transient error. `AcmeException::getSubproblems()` surfaces RFC 8555 §6.7 per-identifier errors so a multi-domain order can report exactly which domains were rejected and why. All exceptions share a common base so a single `catch` still works when you don't need the detail.
 
 ### CAA pre-check
 
-Before submitting an order, CoyoteCert queries CAA DNS records for every requested domain. If a record exists and excludes the chosen CA, you get an immediate `CaaException` naming the blocking domain — no wasted rate-limit attempt, no waiting for an ACME order to fail minutes later. The check follows RFC 8659 tree-walking, handles `issuewild` tags for wildcard domains, and respects parameter extensions (e.g. `letsencrypt.org; validationmethods=http-01`). CAA identifiers are built into every provider; `->skipCaaCheck()` opts out when DNS is internal or split-horizon.
+Before submitting an order, CoyoteCert queries CAA DNS records for every requested domain. If a record exists and excludes the chosen CA, you get an immediate `CaaException` naming the blocking domain. No wasted rate-limit attempt, no waiting for an ACME order to fail minutes later. The check follows RFC 8659 tree-walking, handles `issuewild` tags for wildcard domains, and respects parameter extensions (e.g. `letsencrypt.org; validationmethods=http-01`). CAA identifiers are built into every provider; `->skipCaaCheck()` opts out when DNS is internal or split-horizon.
 
 ### Pre-flight self-test
 
-Before asking the CA to validate, CoyoteCert does its own check first: it fetches the HTTP token or looks up the DNS TXT record itself. Misconfigured servers and propagation delays get caught before burning a rate-limit attempt.
+Before asking the CA to validate, CoyoteCert does its own check first: it fetches the HTTP token or looks up the DNS TXT record itself. Misconfigured servers and propagation delays get caught before they cost you a rate-limit attempt. Look before you leap.
 
 ### 94 %+ test coverage with real CA integration tests
 
 Every code path has unit tests with mocked responses. The integration suite runs against a live [Pebble](https://github.com/letsencrypt/pebble) server in CI across PHP 8.3, 8.4, and 8.5. No mock-only false confidence.
 
-### CA-independent — no hidden defaults
+### CA-independent: no hidden defaults
 
-CoyoteCert has no default CA. Every issuance call requires you to pass a provider explicitly. Choosing a CA involves real trade-offs — trust store coverage, rate limits, certificate lifetime, EAB requirements, data residency — and that decision belongs to you, not the library.
+CoyoteCert has no default CA. Every issuance call requires you to pass a provider explicitly. Choosing a CA involves real trade-offs (trust store coverage, rate limits, certificate lifetime, EAB requirements, data residency) and that decision belongs to you, not the library.
 
 ### Modern, idiomatic PHP
 
@@ -165,10 +165,10 @@ CoyoteCert ships with built-in providers for every major public ACME CA.
 use CoyoteCert\Provider\LetsEncrypt;
 use CoyoteCert\Provider\LetsEncryptStaging;
 
-// Production — issues browser-trusted certificates
+// Production: issues browser-trusted certificates
 CoyoteCert::with(new LetsEncrypt())
 
-// Staging — rate-limit-free, not browser-trusted; use during development
+// Staging: rate-limit-free, not browser-trusted; use during development
 CoyoteCert::with(new LetsEncryptStaging())
 ```
 
@@ -179,11 +179,11 @@ ZeroSSL requires EAB credentials. CoyoteCert can provision them automatically fr
 ```php
 use CoyoteCert\Provider\ZeroSSL;
 
-// Automatic provisioning — CoyoteCert fetches EAB credentials from the ZeroSSL API
+// Automatic provisioning: CoyoteCert fetches EAB credentials from the ZeroSSL API
 CoyoteCert::with(new ZeroSSL(apiKey: 'your-zerossl-api-key'))
     ->email('admin@example.com') // required for auto-provisioning
 
-// Manual credentials — skip the API call
+// Manual credentials: skip the API call
 CoyoteCert::with(new ZeroSSL(eabKid: 'kid', eabHmac: 'hmac'))
 ```
 
@@ -323,7 +323,7 @@ class Route53DnsPersist01Handler extends DnsPersist01Handler
 
 Defined in [RFC 8737](https://datatracker.ietf.org/doc/html/rfc8737). The CA opens a TLS connection to port 443 of the domain and negotiates the `acme-tls/1` ALPN protocol. The server must present a self-signed certificate that contains a critical `id-pe-acmeIdentifier` extension (OID `1.3.6.1.5.5.7.1.31`) whose value is the SHA-256 digest of the key authorization. No port 80 access required.
 
-Extend `TlsAlpn01Handler` and implement `deploy()` and `cleanup()`. Call `generateAcmeCertificate()` inside `deploy()` to obtain the certificate and key — it handles all the RFC 8737 encoding automatically.
+Extend `TlsAlpn01Handler` and implement `deploy()` and `cleanup()`. Call `generateAcmeCertificate()` inside `deploy()` to obtain the certificate and key; it handles all the RFC 8737 encoding automatically.
 
 ```php
 use CoyoteCert\Challenge\TlsAlpn01Handler;
@@ -351,7 +351,7 @@ class MyTlsAlpn01Handler extends TlsAlpn01Handler
 ->challenge(new MyTlsAlpn01Handler())
 ```
 
-> **Note:** TLS-ALPN-01 validates on port 443 only and does not require port 80. It is supported by Caddy, nginx (with the ACME plugin), and HAProxy. Wildcard certificates are not supported — use DNS-01 for those.
+> **Note:** TLS-ALPN-01 validates on port 443 only and does not require port 80. It is supported by Caddy, nginx (with the ACME plugin), and HAProxy. Wildcard certificates are not supported; use DNS-01 for those.
 
 ---
 
@@ -549,7 +549,7 @@ Register callbacks on the builder to react to certificate lifecycle events witho
 
 ### onIssued
 
-Fires after every successful certificate issuance — whether first-time or a renewal.
+Fires after every successful certificate issuance, first-time or renewal.
 
 ```php
 CoyoteCert::with(new LetsEncrypt())
@@ -568,7 +568,7 @@ CoyoteCert::with(new LetsEncrypt())
 
 ### onRenewed
 
-Fires only when an existing certificate is replaced — i.e. storage already held a cert before the new one was issued. Fires _after_ `onIssued` callbacks.
+Fires only when an existing certificate is replaced (i.e. storage already held a cert before the new one was issued). Fires after `onIssued` callbacks.
 
 ```php
 CoyoteCert::with(new LetsEncrypt())
@@ -586,7 +586,7 @@ Both methods accept any `callable` and can be called multiple times. Callbacks r
 
 ## CAA pre-check
 
-[CAA (Certification Authority Authorization)](https://en.wikipedia.org/wiki/DNS_Certification_Authority_Authorization) is a DNS record type that restricts which CAs are allowed to issue certificates for a domain. If `example.com` has `CAA 0 issue "digicert.com"`, Let's Encrypt will refuse the order — but only after you have consumed a rate-limit attempt and waited for the ACME workflow to fail.
+[CAA (Certification Authority Authorization)](https://en.wikipedia.org/wiki/DNS_Certification_Authority_Authorization) is a DNS record type that restricts which CAs are allowed to issue certificates for a domain. If `example.com` has `CAA 0 issue "digicert.com"`, Let's Encrypt will refuse the order, but only after you have consumed a rate-limit attempt and waited for the ACME workflow to fail.
 
 CoyoteCert runs the CAA check itself before submitting anything to the CA. If the records block the chosen CA, you get a `CaaException` immediately:
 
@@ -615,7 +615,7 @@ try {
 
 `CaaException` extends `AcmeException`, so existing catch blocks for the base type continue to work.
 
-IP address identifiers are excluded from the CAA check — CAA records apply to domain names only.
+IP address identifiers are excluded from the CAA check; CAA records apply to domain names only.
 
 ### Opting out
 
@@ -637,7 +637,7 @@ CoyoteCert::with(new LetsEncrypt())
 
 All exceptions extend `AcmeException`, so a single `catch (AcmeException $e)` covers everything. Catch the narrower types when you need to react differently to specific failure modes.
 
-### Rate limits — with Retry-After
+### Rate limits: Retry-After included
 
 ```php
 use CoyoteCert\Exceptions\RateLimitException;
@@ -663,7 +663,7 @@ use CoyoteCert\Exceptions\AuthException;
 try {
     $api->account()->get();
 } catch (AuthException $e) {
-    // 401 / 403 — account key rejected or credentials revoked
+    // 401 / 403: account key rejected or credentials revoked
     echo $e->getMessage();
 }
 ```
@@ -695,15 +695,15 @@ try {
 ### Exception hierarchy
 
 ```
-AcmeException          — base; always safe to catch
-├── AuthException      — 401/403 (bad credentials, revoked account)
-├── RateLimitException — 429 (too many requests); carries getRetryAfter()
-├── CaaException       — CAA DNS record blocks issuance
-├── ChallengeException — challenge validation failed
-├── CryptoException    — local key or certificate operation failed
-├── DomainValidationException — pre-flight HTTP/DNS self-check failed
-├── OrderNotFoundException   — order ID not found on the CA
-└── StorageException   — storage backend error
+AcmeException          - base; always safe to catch
+├── AuthException      - 401/403 (bad credentials, revoked account)
+├── RateLimitException - 429 (too many requests); carries getRetryAfter()
+├── CaaException       - CAA DNS record blocks issuance
+├── ChallengeException - challenge validation failed
+├── CryptoException    - local key or certificate operation failed
+├── DomainValidationException - pre-flight HTTP/DNS self-check failed
+├── OrderNotFoundException   - order ID not found on the CA
+└── StorageException   - storage backend error
 ```
 
 ---
@@ -734,7 +734,7 @@ CoyoteCert::with(new LetsEncrypt())
 
 ## IP address certificates (RFC 8738)
 
-`->identifiers()` accepts IPv4 and IPv6 addresses alongside hostnames. CoyoteCert automatically sets `type: ip` on ACME identifiers and `IP:` SAN entries in the CSR — no extra API calls required.
+`->identifiers()` accepts IPv4 and IPv6 addresses alongside hostnames. CoyoteCert automatically sets `type: ip` on ACME identifiers and `IP:` SAN entries in the CSR. No extra API calls required.
 
 ```php
 // IPv4-only certificate (e.g. with Let's Encrypt shortlived profile)
@@ -753,7 +753,7 @@ CoyoteCert::with(new LetsEncrypt())
 
 IP SANs are validated via HTTP-01 (the CA connects to the IP directly). Wildcards cannot be combined with IP identifiers.
 
-Not all CAs support IP SANs — check your CA's documentation. Let's Encrypt supports them on both the `classic` and `shortlived` profiles.
+Not all CAs support IP SANs; check your CA's documentation. Let's Encrypt supports them on both the `classic` and `shortlived` profiles.
 
 ---
 
@@ -811,11 +811,11 @@ No configuration is required. CoyoteCert handles this transparently.
 Profiles let you request a specific certificate type from the CA. Let's Encrypt currently supports two:
 
 ```php
-->profile('shortlived') // 6-day certificate — no OCSP/CRL infrastructure needed
+->profile('shortlived') // 6-day certificate, no OCSP/CRL infrastructure needed
 ->profile('classic')    // 90-day certificate (default if no profile specified)
 ```
 
-Short-lived certificates are renewed more frequently but eliminate the need for OCSP stapling, CRL checks, and revocation infrastructure. A significant operational simplification.
+Short-lived certificates are renewed more frequently but eliminate the need for OCSP stapling, CRL checks, and revocation infrastructure. Much simpler to operate.
 
 Profiles are forwarded to the CA only if the provider reports `supportsProfiles() === true`. For CAs that don't support profiles (ZeroSSL, Buypass, etc.) the setting is silently ignored, so you can call `->profile()` unconditionally.
 
@@ -836,7 +836,7 @@ CoyoteCert::with(new LetsEncrypt())
     ->issueOrRenew();
 ```
 
-If no alternate chain matches, CoyoteCert falls back to the default chain returned by the CA — so this call is always safe to include even when the CA offers only one chain.
+If no alternate chain matches, CoyoteCert falls back to the default chain returned by the CA, so this call is always safe to include even when the CA offers only one chain.
 
 When using the low-level API directly, pass the preference as a second argument to `getBundle()`:
 
@@ -852,10 +852,10 @@ $bundle = $api->certificate()->getBundle($order, 'ISRG Root X1');
 use CoyoteCert\Enums\KeyType;
 
 // Certificate key type (default: EC_P256)
-->keyType(KeyType::EC_P256)   // ECDSA P-256 — fast, compact, widely supported
-->keyType(KeyType::EC_P384)   // ECDSA P-384 — higher security margin
+->keyType(KeyType::EC_P256)   // ECDSA P-256: fast, compact, widely supported
+->keyType(KeyType::EC_P384)   // ECDSA P-384: higher security margin
 ->keyType(KeyType::RSA_2048)  // RSA 2048-bit
-->keyType(KeyType::RSA_4096)  // RSA 4096-bit — maximum compatibility
+->keyType(KeyType::RSA_4096)  // RSA 4096-bit: maximum compatibility
 
 // ACME account key type (default: EC_P256)
 ->accountKeyType(KeyType::RSA_2048)
@@ -907,17 +907,17 @@ $storage->deleteCertificate('example.com', KeyType::EC_P256);
 CoyoteCert ships with a built-in curl client that requires no extra dependencies. To use a custom HTTP client, pass any PSR-18 `ClientInterface`:
 
 ```php
-// Symfony HttpClient — implements all three interfaces itself
+// Symfony HttpClient: implements all three interfaces itself
 ->httpClient(new \Symfony\Component\HttpClient\Psr18Client())
 
-// Guzzle — pass request and stream factories separately
+// Guzzle: pass request and stream factories separately
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
 
 ->httpClient(
     new Client(),
     new HttpFactory(), // RequestFactoryInterface
-    new HttpFactory(), // StreamFactoryInterface — same object works for both
+    new HttpFactory(), // StreamFactoryInterface: same object works for both
 )
 
 // Nyholm PSR-7 + any client
@@ -970,26 +970,26 @@ Log messages cover directory fetches, nonce acquisition, challenge deployment, v
 ### Properties
 
 ```php
-$cert->certificate  // string — PEM leaf certificate
-$cert->privateKey   // string — PEM private key
-$cert->fullchain    // string — PEM leaf + intermediate chain
-$cert->caBundle     // string — PEM intermediate chain only
+$cert->certificate  // string: PEM leaf certificate
+$cert->privateKey   // string: PEM private key
+$cert->fullchain    // string: PEM leaf + intermediate chain
+$cert->caBundle     // string: PEM intermediate chain only
 $cert->issuedAt     // DateTimeImmutable
 $cert->expiresAt    // DateTimeImmutable
-$cert->domains      // string[] — domains as recorded at issuance time
+$cert->domains      // string[]: domains as recorded at issuance time
 ```
 
 ### Methods
 
 ```php
 // Quick expiry checks
-$cert->isExpired();              // bool — true if the cert is past its expiry
-$cert->expiresWithin(30);        // bool — true if expiry is ≤ 30 days away
+$cert->isExpired();              // bool: true if the cert is past its expiry
+$cert->expiresWithin(30);        // bool: true if expiry is ≤ 30 days away
 
-// Days until expiry — 0 if already expired
+// Days until expiry (0 if already expired)
 $cert->remainingDays();
 
-// Ceiling of days until expiry — negative if expired
+// Ceiling of days until expiry (negative if expired)
 $cert->daysUntilExpiry();
 
 // Whether the certificate covers all the given domains (wildcard-aware)
@@ -1022,14 +1022,14 @@ $cert  = StoredCertificate::fromArray($array);
 ## Builder reference
 
 ```php
-CoyoteCert::with(AcmeProviderInterface $provider)  // factory — select the CA
+CoyoteCert::with(AcmeProviderInterface $provider)  // factory: select the CA
 ```
 
 | Method | Type | Default | Description |
 |---|---|---|---|
 | `->email(string)` | fluent | `''` | Contact email; required for ZeroSSL auto-provisioning |
-| `->identifiers(string\|array)` | fluent | — | Domain(s) and/or IP(s) to certify; first entry is the primary |
-| `->challenge(ChallengeHandlerInterface)` | fluent | — | Challenge handler |
+| `->identifiers(string\|array)` | fluent | - | Domain(s) and/or IP(s) to certify; first entry is the primary |
+| `->challenge(ChallengeHandlerInterface)` | fluent | - | Challenge handler |
 | `->storage(StorageInterface)` | fluent | none | Storage backend |
 | `->keyType(KeyType)` | fluent | `EC_P256` | Certificate key algorithm |
 | `->accountKeyType(KeyType)` | fluent | `EC_P256` | ACME account key algorithm |
@@ -1042,11 +1042,11 @@ CoyoteCert::with(AcmeProviderInterface $provider)  // factory — select the CA
 | `->skipCaaCheck()` | fluent | off | Disable CAA DNS pre-check (internal CAs, split-horizon DNS) |
 | `->onIssued(callable)` | fluent | none | Callback fired after every successful issuance; receives `StoredCertificate` |
 | `->onRenewed(callable)` | fluent | none | Callback fired when an existing cert is replaced; receives `StoredCertificate` |
-| `->issue()` | terminal | — | Issue unconditionally; returns `StoredCertificate` |
-| `->renew()` | terminal | — | Alias for `issue()` |
-| `->issueOrRenew(int $days = 30)` | terminal | — | Issue only when needed; returns `StoredCertificate` |
-| `->needsRenewal(int $days = 30)` | query | — | `true` if renewal is needed |
-| `->revoke(StoredCertificate, RevocationReason)` | terminal | — | Revoke a certificate |
+| `->issue()` | terminal | - | Issue unconditionally; returns `StoredCertificate` |
+| `->renew()` | terminal | - | Alias for `issue()` |
+| `->issueOrRenew(int $days = 30)` | terminal | - | Issue only when needed; returns `StoredCertificate` |
+| `->needsRenewal(int $days = 30)` | query | - | `true` if renewal is needed |
+| `->revoke(StoredCertificate, RevocationReason)` | terminal | - | Revoke a certificate |
 
 ---
 
@@ -1107,7 +1107,7 @@ $ariUrl = $api->directory()->renewalInfo(); // null if not supported
 ```php
 use CoyoteCert\Provider\Pebble;
 
-// Default — connects to localhost:14000, TLS verification enabled
+// Default: connects to localhost:14000, TLS verification enabled
 CoyoteCert::with(new Pebble())
 
 // Pebble uses a self-signed CA, so disable TLS verification explicitly
