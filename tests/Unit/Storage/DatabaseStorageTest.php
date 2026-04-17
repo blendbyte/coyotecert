@@ -111,6 +111,13 @@ it('createTableSql uses the provided table name', function () {
     expect($sql)->toContain('my_table');
 });
 
+it('constructor throws InvalidArgumentException for a table name with invalid characters', function () {
+    $pdo = new PDO('sqlite::memory:');
+
+    expect(fn () => new DatabaseStorage($pdo, 'invalid-name!'))
+        ->toThrow(\InvalidArgumentException::class, 'Invalid SQL identifier');
+});
+
 it('set() uses ON DUPLICATE KEY UPDATE syntax for non-sqlite/non-pgsql drivers', function () {
     // Mock PDO that reports 'mysql' as driver but records prepared SQL
     $mockPdo = new class extends \PDO {

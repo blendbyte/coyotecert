@@ -97,6 +97,11 @@ it('produces a verifiable ES384 signature', function () {
     expect(openssl_verify($signingInput, $derSig, $pubKey, 'SHA384'))->toBe(1);
 });
 
+it('throws CryptoException when the private key PEM is invalid', function () {
+    expect(fn () => JsonWebSignature::generate([], 'https://example.com', 'nonce', 'not-a-pem'))
+        ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Cannot load private key');
+});
+
 it('ecParams throws CryptoException for unsupported EC curve', function () {
     // secp521r1 is not in the match — triggers the default RuntimeException branch
     $pem = ecKeyPem('secp521r1');

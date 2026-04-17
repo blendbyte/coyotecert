@@ -215,6 +215,29 @@ it('issuer() returns an empty array for an unparseable certificate', function ()
     expect($cert->issuer())->toBe([]);
 });
 
+// ── authorityKeyId() ──────────────────────────────────────────────────────────
+
+it('authorityKeyId() returns a colon-separated hex key ID for a cert with AKI extension', function () {
+    $pem  = makeStoredCertPem(withAki: true);
+    $cert = makeCert(['certificate' => $pem]);
+
+    $aki = $cert->authorityKeyId();
+
+    // keyid:always extension → should produce a "XX:XX:XX..." string
+    expect($aki)->not->toBeNull();
+    expect($aki)->toBeString();
+    expect($aki)->toMatch('/^[0-9A-F]{2}(:[0-9A-F]{2})*$/');
+});
+
+it('authorityKeyId() returns null for a cert without AKI extension', function () {
+    $pem  = makeStoredCertPem(withAki: false); // no authorityKeyIdentifier
+    $cert = makeCert(['certificate' => $pem]);
+
+    // Not all self-signed certs include AKI — expect null when the ext is absent
+    $aki = $cert->authorityKeyId();
+    expect($aki)->toBeNull();
+});
+
 // ── daysUntilExpiry() ─────────────────────────────────────────────────────────
 
 it('daysUntilExpiry() returns a positive integer for a future certificate', function () {

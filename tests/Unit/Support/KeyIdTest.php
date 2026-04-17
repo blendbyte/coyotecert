@@ -101,3 +101,8 @@ it('ecParams throws CryptoException for unsupported EC curve', function () {
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Unsupported EC curve: secp521r1');
 });
 
+it('throws CryptoException when the private key PEM is invalid', function () {
+    expect(fn () => KeyId::generate('not-a-pem', 'https://acme.example/account/1', 'https://acme.example/order/1', 'nonce'))
+        ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Cannot load private key');
+});
+

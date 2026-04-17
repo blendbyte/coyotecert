@@ -163,6 +163,14 @@ class FilesystemStorage implements StorageInterface
 
     private function writeFile(string $path, string $contents): void
     {
+        // Pre-check writability to avoid a PHP E_WARNING from file_put_contents.
+        $checkTarget = file_exists($path) ? $path : dirname($path);
+        if (!is_writable($checkTarget)) {
+            throw new StorageException(
+                sprintf('Could not write storage file "%s".', $path)
+            );
+        }
+
         if (file_put_contents($path, $contents, LOCK_EX) === false) {
             throw new StorageException(
                 sprintf('Could not write storage file "%s".', $path)

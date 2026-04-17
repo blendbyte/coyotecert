@@ -304,3 +304,44 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
     // ARI window is far in the future → isOpen() returns false → no renewal needed
     expect($result)->toBeFalse();
 });
+
+// ── withHttpTimeout() ─────────────────────────────────────────────────────────
+
+it('withHttpTimeout() creates an HttpClient when no HTTP client is configured', function () {
+    $coyote = makeCoyote()->withHttpTimeout(30);
+
+    $ref    = new \ReflectionProperty(CoyoteCert::class, 'httpClient');
+    $client = $ref->getValue($coyote);
+
+    expect($client)->toBeInstanceOf(\CoyoteCert\Http\Client::class);
+});
+
+it('withHttpTimeout() calls setTimeout on an already-configured HttpClient', function () {
+    $coyote = makeCoyote()->withHttpTimeout(5); // creates an HttpClient (null branch)
+    $coyote->withHttpTimeout(30);              // updates it (instanceof branch)
+
+    $clientRef  = new \ReflectionProperty(CoyoteCert::class, 'httpClient');
+    $timeoutRef = new \ReflectionProperty(\CoyoteCert\Http\Client::class, 'timeout');
+
+    $client = $clientRef->getValue($coyote);
+    expect($timeoutRef->getValue($client))->toBe(30);
+});
+
+// ── extractTokenAndKeyAuth() ──────────────────────────────────────────────────
+
+it('extractTokenAndKeyAuth() returns [name, value] for Dns01ValidationData', function () {
+    $coyote = makeCoyote();
+    $method = new \ReflectionMethod(CoyoteCert::class, 'extractTokenAndKeyAuth');
+
+    $dns = new \CoyoteCert\DTO\Dns01ValidationData(
+        identifier:       'example.com',
+        name:             '_acme-challenge',
+        value:            'expected-digest',
+        keyAuthorization: 'expected-digest',
+    );
+
+    [$token, $auth] = $method->invoke($coyote, $dns);
+
+    expect($token)->toBe('_acme-challenge');
+    expect($auth)->toBe('expected-digest');
+});

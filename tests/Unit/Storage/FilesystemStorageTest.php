@@ -105,3 +105,16 @@ it('saveAccountKey throws when the storage directory cannot be created', functio
 
     @unlink($this->dir);
 });
+
+it('writeFile throws StorageException when the file cannot be written', function () {
+    // Create the directory first so ensureDirectory() passes, then remove write permission.
+    mkdir($this->dir, 0755, true);
+    chmod($this->dir, 0555); // read+execute only
+
+    try {
+        expect(fn () => $this->storage->saveAccountKey('pem', KeyType::EC_P256))
+            ->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'Could not write');
+    } finally {
+        chmod($this->dir, 0755); // restore so afterEach cleanup can remove the dir
+    }
+})->skip(fn () => function_exists('posix_getuid') && posix_getuid() === 0, 'root can write to any directory');
