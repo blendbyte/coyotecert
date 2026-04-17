@@ -57,6 +57,7 @@ class CoyoteCert
     private KeyType                    $accountKeyType   = KeyType::EC_P256;
     private bool                       $localTest        = true;
     private bool                       $skipCaaCheck     = false;
+    private string                     $preferredChain   = '';
     /** @var callable[] */
     private array $onIssuedCallbacks = [];
     /** @var callable[] */
@@ -180,6 +181,23 @@ class CoyoteCert
     public function skipCaaCheck(): self
     {
         $this->skipCaaCheck = true;
+
+        return $this;
+    }
+
+    /**
+     * Prefer a specific certificate chain by matching the issuer Common Name or
+     * Organisation of the intermediate certificates (RFC 8555 §7.4.2).
+     *
+     * When the CA offers alternate chains via Link: rel="alternate" headers, the
+     * first chain whose intermediates contain $issuer (case-insensitive substring)
+     * is returned. Falls back to the default chain when no match is found.
+     *
+     * Example: ->preferredChain('ISRG Root X1')
+     */
+    public function preferredChain(string $issuer): self
+    {
+        $this->preferredChain = $issuer;
 
         return $this;
     }
@@ -367,7 +385,7 @@ class CoyoteCert
         }
 
         $order  = $api->order()->waitUntilValid($order);
-        $bundle = $api->certificate()->getBundle($order);
+        $bundle = $api->certificate()->getBundle($order, $this->preferredChain ?: null);
 
         $parsed    = openssl_x509_parse($bundle->certificate);
         $expiresAt = isset($parsed['validTo_time_t'])

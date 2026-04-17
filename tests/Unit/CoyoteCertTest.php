@@ -80,6 +80,11 @@ it('skipCaaCheck() returns self (fluent)', function () {
     expect($c->skipCaaCheck())->toBe($c);
 });
 
+it('preferredChain() returns self (fluent)', function () {
+    $c = makeCoyote();
+    expect($c->preferredChain('ISRG Root X1'))->toBe($c);
+});
+
 it('profile() returns self (fluent)', function () {
     $c = makeCoyote();
     expect($c->profile('shortlived'))->toBe($c);

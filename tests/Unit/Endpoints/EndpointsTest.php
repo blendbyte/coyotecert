@@ -1448,6 +1448,212 @@ it('DomainValidation::allChallengesPassed() respects the Retry-After header', fu
     expect($callCount)->toBe(2); // pending → valid after one retry
 });
 
+// ── Certificate::getBundle() preferred chain selection ────────────────────────
+
+function makeCertBundle(string $issuerCN = 'Test Issuer CA'): string
+{
+    $issuerKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+    $issuerCsr  = openssl_csr_new(['commonName' => $issuerCN], $issuerKey);
+    $issuerCert = openssl_csr_sign($issuerCsr, null, $issuerKey, 3650, serial: 2);
+    openssl_x509_export($issuerCert, $issuerPem);
+
+    $leafKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+    $leafCsr  = openssl_csr_new(['commonName' => 'leaf.example.com'], $leafKey);
+    $leafCert = openssl_csr_sign($leafCsr, $issuerCert, $issuerKey, 365, serial: 3);
+    openssl_x509_export($leafCert, $leafPem);
+
+    return $leafPem . "\n" . $issuerPem;
+}
+
+function certOrderData(): OrderData
+{
+    return new OrderData(
+        id: '1',
+        url: 'https://acme.example/order/1',
+        status: 'valid',
+        expires: '2099-01-01T00:00:00Z',
+        identifiers: [],
+        domainValidationUrls: [],
+        finalizeUrl: 'https://acme.example/finalize/1',
+        accountUrl: 'https://acme.example/account/1',
+        certificateUrl: 'https://acme.example/cert/1',
+        finalized: true,
+    );
+}
+
+it('Certificate::getBundle() returns preferred alternate chain when issuer CN matches', function () {
+    $storage         = withKeyStorage();
+    $primaryBundle   = makeCertBundle('Default Root CA');
+    $alternateBundle = makeCertBundle('ISRG Root X1');
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use ($primaryBundle, $alternateBundle) {
+            if (str_contains($url, '/alt')) {
+                return new Response([], $url, 200, $alternateBundle);
+            }
+
+            return new Response(
+                ['link' => '<https://acme.example/cert/1/alt>;rel="alternate"'],
+                $url,
+                200,
+                $primaryBundle,
+            );
+        },
+    );
+
+    $bundle = makeEndpointApi($mock, $storage)->certificate()->getBundle(certOrderData(), 'ISRG Root X1');
+
+    preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $m);
+    $parsed = openssl_x509_parse($m[1][0]);
+    expect($parsed['subject']['CN'])->toBe('ISRG Root X1');
+});
+
+it('Certificate::getBundle() falls back to primary when no alternate chain matches preferred issuer', function () {
+    $storage         = withKeyStorage();
+    $primaryBundle   = makeCertBundle('Default Root CA');
+    $alternateBundle = makeCertBundle('Some Other CA');
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use ($primaryBundle, $alternateBundle) {
+            if (str_contains($url, '/alt')) {
+                return new Response([], $url, 200, $alternateBundle);
+            }
+
+            return new Response(
+                ['link' => '<https://acme.example/cert/1/alt>;rel="alternate"'],
+                $url,
+                200,
+                $primaryBundle,
+            );
+        },
+    );
+
+    $bundle = makeEndpointApi($mock, $storage)->certificate()->getBundle(certOrderData(), 'ISRG Root X1');
+
+    preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $m);
+    $parsed = openssl_x509_parse($m[1][0]);
+    expect($parsed['subject']['CN'])->toBe('Default Root CA');
+});
+
+it('Certificate::getBundle() returns primary chain when no Link header is present with preferredChain set', function () {
+    $storage       = withKeyStorage();
+    $primaryBundle = makeCertBundle('Default Root CA');
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn($url) => new Response([], $url, 200, $primaryBundle),
+    );
+
+    $bundle = makeEndpointApi($mock, $storage)->certificate()->getBundle(certOrderData(), 'ISRG Root X1');
+
+    preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $m);
+    $parsed = openssl_x509_parse($m[1][0]);
+    expect($parsed['subject']['CN'])->toBe('Default Root CA');
+});
+
+it('Certificate::getBundle() skips alternate chains that return non-200 and falls back to primary', function () {
+    $storage       = withKeyStorage();
+    $primaryBundle = makeCertBundle('Default Root CA');
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use ($primaryBundle) {
+            if (str_contains($url, '/alt')) {
+                return new Response([], $url, 503, 'Service Unavailable');
+            }
+
+            return new Response(
+                ['link' => '<https://acme.example/cert/1/alt>;rel="alternate"'],
+                $url,
+                200,
+                $primaryBundle,
+            );
+        },
+    );
+
+    $bundle = makeEndpointApi($mock, $storage)->certificate()->getBundle(certOrderData(), 'ISRG Root X1');
+
+    preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $m);
+    $parsed = openssl_x509_parse($m[1][0]);
+    expect($parsed['subject']['CN'])->toBe('Default Root CA');
+});
+
+it('Certificate::getBundle() skips alternate chains whose caBundle is empty', function () {
+    $storage        = withKeyStorage();
+    $primaryBundle  = makeCertBundle('Default Root CA');
+    $leafOnlyBundle = "-----BEGIN CERTIFICATE-----\nMIIBtest==\n-----END CERTIFICATE-----\n";
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use ($primaryBundle, $leafOnlyBundle) {
+            if (str_contains($url, '/alt')) {
+                return new Response([], $url, 200, $leafOnlyBundle);
+            }
+
+            return new Response(
+                ['link' => '<https://acme.example/cert/1/alt>;rel="alternate"'],
+                $url,
+                200,
+                $primaryBundle,
+            );
+        },
+    );
+
+    $bundle = makeEndpointApi($mock, $storage)->certificate()->getBundle(certOrderData(), 'ISRG Root X1');
+
+    preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $m);
+    $parsed = openssl_x509_parse($m[1][0]);
+    expect($parsed['subject']['CN'])->toBe('Default Root CA');
+});
+
+it('chainMatchesIssuer() returns false when caBundle has no PEM certificate blocks', function () {
+    $cert   = makeEndpointApi(endpointMock(), withKeyStorage())->certificate();
+    $method = new \ReflectionMethod($cert, 'chainMatchesIssuer');
+
+    $bundle = new \CoyoteCert\DTO\CertificateBundleData(
+        certificate: '',
+        fullchain: '',
+        caBundle: 'not-a-pem-block',
+    );
+
+    expect($method->invoke($cert, $bundle, 'ISRG Root X1'))->toBeFalse();
+});
+
+it('Certificate::getBundle() handles multiple Link headers (comma-separated) and selects matching chain', function () {
+    $storage          = withKeyStorage();
+    $primaryBundle    = makeCertBundle('Default Root CA');
+    $alternate1Bundle = makeCertBundle('Other CA');
+    $alternate2Bundle = makeCertBundle('ISRG Root X1');
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use ($primaryBundle, $alternate1Bundle, $alternate2Bundle) {
+            if (str_contains($url, '/alt2')) {
+                return new Response([], $url, 200, $alternate2Bundle);
+            }
+
+            if (str_contains($url, '/alt1')) {
+                return new Response([], $url, 200, $alternate1Bundle);
+            }
+
+            return new Response(
+                ['link' => '<https://acme.example/cert/1/alt1>;rel="alternate", <https://acme.example/cert/1/alt2>;rel="alternate"'],
+                $url,
+                200,
+                $primaryBundle,
+            );
+        },
+    );
+
+    $bundle = makeEndpointApi($mock, $storage)->certificate()->getBundle(certOrderData(), 'ISRG Root X1');
+
+    preg_match_all('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~i', $bundle->caBundle, $m);
+    $parsed = openssl_x509_parse($m[1][0]);
+    expect($parsed['subject']['CN'])->toBe('ISRG Root X1');
+});
+
 // ── Certificate::getBundle() null certificateUrl path (line 15) ──────────────
 
 it('Certificate::getBundle() throws AcmeException when certificateUrl is null', function () {

@@ -131,6 +131,7 @@ echo $cert->caBundle;    // PEM intermediate chain
 - [Automatic renewal](#automatic-renewal)
 - [ARI: CA-guided renewal windows](#ari-ca-guided-renewal-windows)
 - [ACME profiles](#acme-profiles)
+- [Preferred chain selection](#preferred-chain-selection)
 - [Key types](#key-types)
 - [Certificate revocation](#certificate-revocation)
 - [PSR-18 HTTP client](#psr-18-http-client)
@@ -820,6 +821,31 @@ Profiles are forwarded to the CA only if the provider reports `supportsProfiles(
 
 ---
 
+## Preferred chain selection
+
+Some CAs offer multiple certificate chains via `Link: rel="alternate"` headers (RFC 8555 §7.4.2). Let's Encrypt uses this to serve both the ISRG Root X1 chain and older cross-signed chains.
+
+Use `->preferredChain()` to request a specific chain by matching against the Common Name or Organisation of the intermediate certificates. The match is a case-insensitive substring, so partial names work fine.
+
+```php
+// Prefer the ISRG Root X1 chain (shorter, no DST cross-signature)
+CoyoteCert::with(new LetsEncrypt())
+    ->identifiers('example.com')
+    ->challenge(new Http01Handler('/var/www/html'))
+    ->preferredChain('ISRG Root X1')
+    ->issueOrRenew();
+```
+
+If no alternate chain matches, CoyoteCert falls back to the default chain returned by the CA — so this call is always safe to include even when the CA offers only one chain.
+
+When using the low-level API directly, pass the preference as a second argument to `getBundle()`:
+
+```php
+$bundle = $api->certificate()->getBundle($order, 'ISRG Root X1');
+```
+
+---
+
 ## Key types
 
 ```php
@@ -1011,6 +1037,7 @@ CoyoteCert::with(AcmeProviderInterface $provider)  // factory — select the CA
 | `->httpClient(ClientInterface, ...)` | fluent | built-in curl | PSR-18 HTTP client |
 | `->withHttpTimeout(int)` | fluent | `10` | Curl timeout in seconds |
 | `->logger(LoggerInterface)` | fluent | none | PSR-3 logger |
+| `->preferredChain(string)` | fluent | `''` | Preferred chain issuer CN/O (RFC 8555 §7.4.2); falls back to default chain if no match |
 | `->skipLocalTest()` | fluent | off | Disable pre-flight HTTP/DNS self-check |
 | `->skipCaaCheck()` | fluent | off | Disable CAA DNS pre-check (internal CAs, split-horizon DNS) |
 | `->onIssued(callable)` | fluent | none | Callback fired after every successful issuance; receives `StoredCertificate` |
