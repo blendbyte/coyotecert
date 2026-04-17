@@ -174,13 +174,15 @@ class DomainValidation extends Endpoint
             }
 
             if ($attempt === 3) {
-                return false;
+                break;
             }
 
             $delay = $retryAfter ?? min(5 * (2 ** $attempt), 64);
             $this->client->logger('info', "Challenge is not valid yet. Another attempt in {$delay} seconds.");
             sleep($delay);
         }
+
+        return false;
     }
 
     /** @param DomainValidationData[] $domainValidation */
