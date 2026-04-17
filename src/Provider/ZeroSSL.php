@@ -8,16 +8,15 @@ use CoyoteCert\Exceptions\AcmeException;
 class ZeroSSL extends AbstractProvider
 {
     /**
-     * @param string|null $apiKey   ZeroSSL API key for automatic EAB provisioning.
-     * @param string|null $eabKid   Pre-provisioned EAB key ID (alternative to apiKey).
-     * @param string|null $eabHmac  Pre-provisioned EAB HMAC key (alternative to apiKey).
+     * @param string|null $apiKey ZeroSSL API key for automatic EAB provisioning.
+     * @param string|null $eabKid Pre-provisioned EAB key ID (alternative to apiKey).
+     * @param string|null $eabHmac Pre-provisioned EAB HMAC key (alternative to apiKey).
      */
     public function __construct(
-        private readonly ?string $apiKey  = null,
-        private readonly ?string $eabKid  = null,
+        private readonly ?string $apiKey = null,
+        private readonly ?string $eabKid = null,
         private readonly ?string $eabHmac = null,
-    ) {
-    }
+    ) {}
 
     public function getDirectoryUrl(): string
     {
@@ -53,10 +52,10 @@ class ZeroSSL extends AbstractProvider
 
         $context = stream_context_create([
             'http' => [
-                'method'  => 'POST',
-                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
-                'content' => http_build_query(['email' => $email]),
-                'timeout' => 15,
+                'method'        => 'POST',
+                'header'        => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content'       => http_build_query(['email' => $email]),
+                'timeout'       => 15,
                 'ignore_errors' => true,
             ],
             'ssl' => [
@@ -76,7 +75,7 @@ class ZeroSSL extends AbstractProvider
 
         if ($body === false || $httpCode !== 200) {
             throw new AcmeException(
-                sprintf('ZeroSSL EAB provisioning failed (HTTP %d).', $httpCode)
+                sprintf('ZeroSSL EAB provisioning failed (HTTP %d).', $httpCode),
             );
         }
 
@@ -84,7 +83,7 @@ class ZeroSSL extends AbstractProvider
 
         if (empty($data['success']) || empty($data['eab_kid']) || empty($data['eab_hmac_key'])) {
             throw new AcmeException(
-                'ZeroSSL EAB provisioning returned an unexpected response.'
+                'ZeroSSL EAB provisioning returned an unexpected response.',
             );
         }
 

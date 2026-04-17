@@ -16,13 +16,12 @@ function makeClient(int $status = 200, string $body = '{"ok":true}', array $head
     $client = new class ($psrResponse) implements ClientInterface {
         public ?RequestInterface $lastRequest = null;
 
-        public function __construct(private readonly \Psr\Http\Message\ResponseInterface $response)
-        {
-        }
+        public function __construct(private readonly \Psr\Http\Message\ResponseInterface $response) {}
 
         public function sendRequest(RequestInterface $request): \Psr\Http\Message\ResponseInterface
         {
             $this->lastRequest = $request;
+
             return $this->response;
         }
     };
@@ -33,6 +32,7 @@ function makeClient(int $status = 200, string $body = '{"ok":true}', array $head
 function makeAdapter(int $status = 200, string $body = '{"ok":true}', array $headers = []): Psr18Adapter
 {
     $factory = new Psr17Factory();
+
     return new Psr18Adapter(makeClient($status, $body, $headers), $factory, $factory);
 }
 
@@ -48,6 +48,7 @@ it('constructs when client implements both factory interfaces', function () {
         public function sendRequest(RequestInterface $request): \Psr\Http\Message\ResponseInterface
         {
             $factory = new Psr17Factory();
+
             return $factory->createResponse(200)->withBody($factory->createStream('{}'));
         }
 
@@ -84,7 +85,7 @@ it('throws when no request factory is available', function () {
         }
     };
 
-    expect(fn () => new Psr18Adapter($clientOnly))
+    expect(fn() => new Psr18Adapter($clientOnly))
         ->toThrow(\InvalidArgumentException::class, 'RequestFactoryInterface');
 });
 
@@ -102,7 +103,7 @@ it('throws when no stream factory is available', function () {
     };
 
     $factory = new Psr17Factory();
-    expect(fn () => new Psr18Adapter($noStream, $factory))
+    expect(fn() => new Psr18Adapter($noStream, $factory))
         ->toThrow(\InvalidArgumentException::class, 'StreamFactoryInterface');
 });
 

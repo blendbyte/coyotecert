@@ -4,7 +4,7 @@ use CoyoteCert\Support\Base64;
 use CoyoteCert\Support\JsonWebKey;
 
 it('throws when given an invalid private key string', function () {
-    expect(fn () => JsonWebKey::compute('not-a-pem'))
+    expect(fn() => JsonWebKey::compute('not-a-pem'))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Can not create private key');
 });
 
@@ -55,7 +55,7 @@ it('EC JWK keys are in lexicographic order for correct thumbprint', function () 
 });
 
 it('thumbprint returns a non-empty base64url string', function () {
-    $jwk       = JsonWebKey::compute(rsaKeyPem());
+    $jwk        = JsonWebKey::compute(rsaKeyPem());
     $thumbprint = JsonWebKey::thumbprint($jwk);
 
     expect($thumbprint)->toBeString()->not->toBeEmpty();
@@ -65,6 +65,6 @@ it('thumbprint returns a non-empty base64url string', function () {
 });
 
 it('throws for an unsupported EC curve', function () {
-    expect(fn () => JsonWebKey::compute(ecKeyPem('secp521r1')))
+    expect(fn() => JsonWebKey::compute(ecKeyPem('secp521r1')))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class);
 });

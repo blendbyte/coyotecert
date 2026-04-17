@@ -5,8 +5,8 @@ namespace CoyoteCert\Endpoints;
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\EabCredentials;
 use CoyoteCert\Enums\KeyType;
-use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Exceptions\AcmeException;
+use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Support\Base64;
 use CoyoteCert\Support\JsonWebKey;
@@ -33,7 +33,7 @@ class Account extends Endpoint
             if ($eab === null) {
                 throw new AcmeException(sprintf(
                     '%s requires EAB credentials. Pass your EAB key ID and HMAC key when constructing the provider.',
-                    $this->client->getProvider()->getDisplayName()
+                    $this->client->getProvider()->getDisplayName(),
                 ));
             }
 
@@ -43,7 +43,7 @@ class Account extends Endpoint
             $payload['externalAccountBinding'] = $this->buildEab(
                 json_encode(JsonWebKey::compute($accountKey), JSON_THROW_ON_ERROR),
                 $newAccountUrl,
-                $eab
+                $eab,
             );
         }
 
@@ -147,13 +147,13 @@ class Account extends Endpoint
         // Both outer and inner must be rebuilt if we get a badNonce.
         $response = $this->client->getHttpClient()->post(
             $keyChangeUrl,
-            $this->buildKeyChangeOuterJws($oldKeyPem, $newKeyPem, $oldJwk, $account->url, $keyChangeUrl)
+            $this->buildKeyChangeOuterJws($oldKeyPem, $newKeyPem, $oldJwk, $account->url, $keyChangeUrl),
         );
 
         if ($this->isBadNonce($response)) {
             $response = $this->client->getHttpClient()->post(
                 $keyChangeUrl,
-                $this->buildKeyChangeOuterJws($oldKeyPem, $newKeyPem, $oldJwk, $account->url, $keyChangeUrl)
+                $this->buildKeyChangeOuterJws($oldKeyPem, $newKeyPem, $oldJwk, $account->url, $keyChangeUrl),
             );
         }
 
@@ -182,7 +182,7 @@ class Account extends Endpoint
         string $newKeyPem,
         array  $oldJwk,
         string $accountUrl,
-        string $keyChangeUrl
+        string $keyChangeUrl,
     ): array {
         $innerJws = $this->buildKeyChangeInnerJws($newKeyPem, $oldJwk, $accountUrl, $keyChangeUrl);
 
@@ -191,7 +191,7 @@ class Account extends Endpoint
             $accountUrl,
             $keyChangeUrl,
             $this->client->nonce()->getNew(),
-            $innerJws
+            $innerJws,
         );
     }
 
@@ -210,7 +210,7 @@ class Account extends Endpoint
         return [
             'protected' => $protected64,
             'payload'   => $payload64,
-            'signature' => Base64::urlSafeEncode(hash_hmac('sha256', $protected64.'.'.$payload64, $hmacKey, true)),
+            'signature' => Base64::urlSafeEncode(hash_hmac('sha256', $protected64 . '.' . $payload64, $hmacKey, true)),
         ];
     }
 
@@ -227,7 +227,7 @@ class Account extends Endpoint
         string $newKeyPem,
         array  $oldJwk,
         string $accountUrl,
-        string $keyChangeUrl
+        string $keyChangeUrl,
     ): array {
         $privateKey = openssl_pkey_get_private($newKeyPem);
 
@@ -266,7 +266,7 @@ class Account extends Endpoint
             'oldKey'  => $oldJwk,
         ], JSON_THROW_ON_ERROR));
 
-        if (!openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest)) {
+        if (!openssl_sign($protected64 . '.' . $payload64, $signed, $privateKey, $digest)) {
             throw new CryptoException('Failed to sign key-change payload.');
         }
 
@@ -299,7 +299,7 @@ class Account extends Endpoint
     private function postToAccountUrl(array $payload): Response
     {
         $url  = $this->client->directory()->newAccount();
-        $send = fn () => $this->client->getHttpClient()->post($url, $this->signPayload($payload));
+        $send = fn() => $this->client->getHttpClient()->post($url, $this->signPayload($payload));
 
         $response = $send();
 

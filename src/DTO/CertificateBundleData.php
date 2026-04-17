@@ -10,28 +10,27 @@ readonly class CertificateBundleData
         public string $certificate,
         public string $fullchain,
         public string $caBundle,
-    ) {
-    }
+    ) {}
 
     public static function fromResponse(Response $response): CertificateBundleData
     {
         $certificate = '';
-        $fullchain = '';
-        $caBundle = '';
+        $fullchain   = '';
+        $caBundle    = '';
 
         if (preg_match_all(
             '~(-----BEGIN\sCERTIFICATE-----[\s\S]+?-----END\sCERTIFICATE-----)~i',
             $response->rawBody(),
-            $matches
+            $matches,
         )) {
-            $certificate = $matches[0][0];
+            $certificate  = $matches[0][0];
             $matchesCount = count($matches[0]);
 
             if ($matchesCount > 1) {
                 $fullchain = $matches[0][0] . "\n";
 
                 for ($i = 1; $i < $matchesCount; $i++) {
-                    $caBundle .= $matches[0][$i] . "\n";
+                    $caBundle  .= $matches[0][$i] . "\n";
                     $fullchain .= $matches[0][$i] . "\n";
                 }
             }

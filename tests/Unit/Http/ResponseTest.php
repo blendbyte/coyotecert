@@ -9,10 +9,10 @@ function makeResponse(
     array|string $body = [],
 ): Response {
     return new Response(
-        headers:      $headers,
+        headers: $headers,
         requestedUrl: $url,
-        statusCode:   $status,
-        body:         $body,
+        statusCode: $status,
+        body: $body,
     );
 }
 
@@ -29,7 +29,7 @@ it('getHeader returns default when header is missing', function () {
 
 it('getHeaders returns all headers', function () {
     $headers = ['a' => '1', 'b' => '2'];
-    $r = makeResponse(headers: $headers);
+    $r       = makeResponse(headers: $headers);
     expect($r->getHeaders())->toBe($headers);
 });
 

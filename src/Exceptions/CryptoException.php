@@ -2,6 +2,4 @@
 
 namespace CoyoteCert\Exceptions;
 
-class CryptoException extends AcmeException
-{
-}
+class CryptoException extends AcmeException {}

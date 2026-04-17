@@ -34,28 +34,28 @@ function makeHttpClient(int $code, string|array $body): HttpClientInterface
 it('http passes when body matches keyAuthorization', function () {
     $client = makeHttpClient(200, 'tokenABC.thumbprint');
 
-    expect(fn () => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
+    expect(fn() => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
         ->not->toThrow(DomainValidationException::class);
 });
 
 it('http passes when body has surrounding whitespace', function () {
     $client = makeHttpClient(200, "  tokenABC.thumbprint\n");
 
-    expect(fn () => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
+    expect(fn() => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
         ->not->toThrow(\Throwable::class);
 });
 
 it('http throws when body does not match keyAuthorization', function () {
     $client = makeHttpClient(200, 'wrong-content');
 
-    expect(fn () => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
+    expect(fn() => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
         ->toThrow(DomainValidationException::class);
 });
 
 it('http throws when server returns a non-200 response', function () {
     $client = makeHttpClient(404, 'Not Found');
 
-    expect(fn () => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
+    expect(fn() => LocalChallengeTest::http('example.com', 'tokenABC', 'tokenABC.thumbprint', $client))
         ->toThrow(DomainValidationException::class);
 });
 
@@ -64,7 +64,7 @@ it('http encodes array body to JSON before comparing', function () {
     // Simulate a case where it would fail (array body != keyAuth string).
     $client = makeHttpClient(200, ['some' => 'json']);
 
-    expect(fn () => LocalChallengeTest::http('example.com', 'token', 'token.thumbprint', $client))
+    expect(fn() => LocalChallengeTest::http('example.com', 'token', 'token.thumbprint', $client))
         ->toThrow(DomainValidationException::class);
 });
 
@@ -90,10 +90,16 @@ it('localDnsChallengeTestFailed includes domain in message', function () {
 it('validateTxtRecords returns true when a record txt() matches the expected value', function () {
     // A duck-typed record with txt() is all that validateTxtRecords() needs
     $matchingRecord = new class {
-        public function txt(): string { return 'expected-digest'; }
+        public function txt(): string
+        {
+            return 'expected-digest';
+        }
     };
     $nonMatchingRecord = new class {
-        public function txt(): string { return 'wrong-digest'; }
+        public function txt(): string
+        {
+            return 'wrong-digest';
+        }
     };
 
     $method = new \ReflectionMethod(LocalChallengeTest::class, 'validateTxtRecords');
@@ -109,7 +115,7 @@ it('dns() throws DomainValidationException when no DNS record matches', function
     // Calling LocalChallengeTest::dns() without a real TXT record will either
     // fail DNS resolution (RuntimeException swallowed) or find no matching value,
     // and must throw DomainValidationException.
-    expect(fn () => LocalChallengeTest::dns('invalid.example.test', '_acme-challenge', 'somevalue'))
+    expect(fn() => LocalChallengeTest::dns('invalid.example.test', '_acme-challenge', 'somevalue'))
         ->toThrow(DomainValidationException::class);
 });
 
@@ -120,7 +126,10 @@ it('validateCnameRecords returns false when the CNAME chain produces no matching
     // validateCnameRecords() calls getRecords() internally which will throw/return []
     // so the method ultimately returns false.
     $cnameRecord = new class {
-        public function target(): string { return 'invalid.example.test'; }
+        public function target(): string
+        {
+            return 'invalid.example.test';
+        }
     };
 
     $method = new \ReflectionMethod(LocalChallengeTest::class, 'validateCnameRecords');

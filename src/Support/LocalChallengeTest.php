@@ -15,7 +15,7 @@ class LocalChallengeTest
         string $domain,
         string $token,
         string $keyAuthorization,
-        HttpClientInterface $httpClient
+        HttpClientInterface $httpClient,
     ): void {
         $response = $httpClient->get('http://' . $domain . '/.well-known/acme-challenge/' . $token, maxRedirects: 1);
 
@@ -25,7 +25,7 @@ class LocalChallengeTest
 
         throw DomainValidationException::localHttpChallengeTestFailed(
             $domain,
-            (string) $response->getHttpResponseCode()
+            (string) $response->getHttpResponseCode(),
         );
     }
 

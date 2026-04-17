@@ -2,9 +2,9 @@
 
 namespace CoyoteCert\Support;
 
-use OpenSSLAsymmetricKey;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\CryptoException;
+use OpenSSLAsymmetricKey;
 
 class OpenSsl
 {
@@ -28,7 +28,7 @@ class OpenSsl
 
         if ($key === false) {
             throw new CryptoException(
-                sprintf('Failed to generate %s key.', $type->value)
+                sprintf('Failed to generate %s key.', $type->value),
             );
         }
 
@@ -75,7 +75,7 @@ class OpenSsl
 			[ v3_req ]
 			basicConstraints = CA:FALSE
 			subjectAltName = ' . $san . '
-			keyUsage = nonRepudiation, digitalSignature, keyEncipherment'
+			keyUsage = nonRepudiation, digitalSignature, keyEncipherment',
         );
 
         $meta = stream_get_meta_data($tempFile);
@@ -83,12 +83,13 @@ class OpenSsl
 
         if ($uri === null) {
             fclose($tempFile);
+
             throw new CryptoException('Failed to obtain temporary file URI for CSR config.');
         }
 
         $csr = openssl_csr_new($dn, $privateKey, [
             'digest_alg' => 'sha256',
-            'config' => $uri,
+            'config'     => $uri,
         ]);
 
         fclose($tempFile);

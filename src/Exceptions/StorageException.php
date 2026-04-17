@@ -2,6 +2,4 @@
 
 namespace CoyoteCert\Exceptions;
 
-class StorageException extends AcmeException
-{
-}
+class StorageException extends AcmeException {}

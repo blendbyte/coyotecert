@@ -26,7 +26,7 @@ function rawSigToDer(string $raw, int $componentLen): string
 it('generates an RS256 JWS with the correct protected header', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $result    = JsonWebSignature::generate(['foo' => 'bar'], 'https://acme.example/new-account', 'nonce123', $pem);
@@ -41,7 +41,7 @@ it('generates an RS256 JWS with the correct protected header', function () {
 it('produces a verifiable RS256 signature', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $result       = JsonWebSignature::generate(['test' => 1], 'https://example.com', 'nonce', $pem);
@@ -98,7 +98,7 @@ it('produces a verifiable ES384 signature', function () {
 });
 
 it('throws CryptoException when the private key PEM is invalid', function () {
-    expect(fn () => JsonWebSignature::generate([], 'https://example.com', 'nonce', 'not-a-pem'))
+    expect(fn() => JsonWebSignature::generate([], 'https://example.com', 'nonce', 'not-a-pem'))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Cannot load private key');
 });
 
@@ -106,7 +106,7 @@ it('ecParams throws CryptoException for unsupported EC curve', function () {
     // secp521r1 is not in the match — triggers the default RuntimeException branch
     $pem = ecKeyPem('secp521r1');
 
-    expect(fn () => JsonWebSignature::generate([], 'https://example.com', 'nonce', $pem))
+    expect(fn() => JsonWebSignature::generate([], 'https://example.com', 'nonce', $pem))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Unsupported EC curve: secp521r1');
 });
 
@@ -131,18 +131,18 @@ it('EcSigning::ecParamsFromKey() returns crv/x/y for a P-384 key', function () {
 it('EcSigning::ecParamsFromKey() throws CryptoException for a non-EC key', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $rsaPem
+        $rsaPem,
     );
     $rsaKey = openssl_pkey_get_private($rsaPem);
 
-    expect(fn () => \CoyoteCert\Support\EcSigning::ecParamsFromKey($rsaKey))
+    expect(fn() => \CoyoteCert\Support\EcSigning::ecParamsFromKey($rsaKey))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Key is not an EC key.');
 });
 
 it('EcSigning::ecParamsFromKey() throws CryptoException for an unsupported EC curve', function () {
     $key = openssl_pkey_get_private(ecKeyPem('secp521r1'));
 
-    expect(fn () => \CoyoteCert\Support\EcSigning::ecParamsFromKey($key))
+    expect(fn() => \CoyoteCert\Support\EcSigning::ecParamsFromKey($key))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Unsupported EC curve');
 });
 

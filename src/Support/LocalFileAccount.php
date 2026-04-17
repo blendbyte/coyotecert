@@ -6,7 +6,6 @@ use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Exceptions\StorageException;
 use CoyoteCert\Interfaces\AcmeAccountInterface;
-use CoyoteCert\Support\OpenSsl;
 
 class LocalFileAccount implements AcmeAccountInterface
 {
@@ -15,8 +14,8 @@ class LocalFileAccount implements AcmeAccountInterface
     public function __construct(private string $accountKeysPath)
     {
         // Make sure the path ends with a slash.
-        $this->accountKeysPath = rtrim($this->accountKeysPath, '/').'/';
-        $this->accountName = 'account_'.substr(hash('sha256', $this->accountKeysPath), 0, 16);
+        $this->accountKeysPath = rtrim($this->accountKeysPath, '/') . '/';
+        $this->accountName     = 'account_' . substr(hash('sha256', $this->accountKeysPath), 0, 16);
     }
 
     public function getPrivateKey(): string
@@ -32,8 +31,8 @@ class LocalFileAccount implements AcmeAccountInterface
     public function exists(): bool
     {
         if (is_dir($this->accountKeysPath)) {
-            return is_file($this->accountKeysPath.$this->getKeyName('private'))
-                && is_file($this->accountKeysPath.$this->getKeyName('public'));
+            return is_file($this->accountKeysPath . $this->getKeyName('private'))
+                && is_file($this->accountKeysPath . $this->getKeyName('public'));
         }
 
         return false;
@@ -42,13 +41,13 @@ class LocalFileAccount implements AcmeAccountInterface
     public function generateNewKeys(?KeyType $keyTypeOverride = null): bool
     {
         $keyType = $keyTypeOverride ?? KeyType::EC_P256;
-        $dir     = rtrim($this->accountKeysPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+        $dir     = rtrim($this->accountKeysPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
         if (file_exists(rtrim($dir, DIRECTORY_SEPARATOR)) && !is_dir($dir)) {
             throw new StorageException(sprintf('Directory "%s" was not created: path exists as a file', $dir));
         }
 
-        if (!is_dir($dir) && !mkdir($dir, 0700) && !is_dir($dir)) {
+        if (!is_dir($dir) && !mkdir($dir, 0o700) && !is_dir($dir)) {
             throw new StorageException(sprintf('Directory "%s" was not created', $dir));
         }
 
@@ -62,28 +61,28 @@ class LocalFileAccount implements AcmeAccountInterface
 
         $publicKey = $keyDetails['key'];
 
-        $privateKeyPath = $dir.$this->getKeyName('private');
-        $publicKeyPath  = $dir.$this->getKeyName('public');
+        $privateKeyPath = $dir . $this->getKeyName('private');
+        $publicKeyPath  = $dir . $this->getKeyName('public');
 
-        if (file_put_contents($privateKeyPath, $privateKey) === false ||
-            file_put_contents($publicKeyPath, $publicKey) === false) {
+        if (file_put_contents($privateKeyPath, $privateKey)  === false
+            || file_put_contents($publicKeyPath, $publicKey) === false) {
             throw new StorageException('Failed to write keys to files.');
         }
 
-        chmod($privateKeyPath, 0600);
+        chmod($privateKeyPath, 0o600);
 
         return true;
     }
 
     public function savePrivateKey(string $pem, KeyType $keyType): void
     {
-        $privateKeyPath = $this->accountKeysPath.$this->getKeyName('private');
+        $privateKeyPath = $this->accountKeysPath . $this->getKeyName('private');
 
         if (file_put_contents($privateKeyPath, $pem) === false) {
             throw new StorageException('Failed to write private key to file.');
         }
 
-        chmod($privateKeyPath, 0600);
+        chmod($privateKeyPath, 0o600);
 
         // Derive and persist the new public key
         $privateKeyResource = openssl_pkey_get_private($pem);
@@ -98,7 +97,7 @@ class LocalFileAccount implements AcmeAccountInterface
             throw new CryptoException('Failed to get key details.');
         }
 
-        $publicKeyPath = $this->accountKeysPath.$this->getKeyName('public');
+        $publicKeyPath = $this->accountKeysPath . $this->getKeyName('public');
 
         if (file_put_contents($publicKeyPath, $details['key']) === false) {
             throw new StorageException('Failed to write public key to file.');
@@ -107,7 +106,7 @@ class LocalFileAccount implements AcmeAccountInterface
 
     protected function getKey(string $type): string
     {
-        $filePath = $this->accountKeysPath.$this->getKeyName($type);
+        $filePath = $this->accountKeysPath . $this->getKeyName($type);
 
         if (!file_exists($filePath)) {
             throw new StorageException(sprintf('[%s] File does not exist', $filePath));

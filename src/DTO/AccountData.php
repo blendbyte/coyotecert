@@ -19,8 +19,7 @@ readonly class AccountData
         public string  $agreement,
         public ?string $createdAt,
         public array   $contact = [],
-    ) {
-    }
+    ) {}
 
     public static function fromResponse(Response $response): AccountData
     {
@@ -37,13 +36,13 @@ readonly class AccountData
     public static function fromBody(string $url, array $body): AccountData
     {
         return new self(
-            id:        Url::extractId($url),
-            url:       $url,
-            key:       $body['key'],
-            status:    $body['status'],
+            id: Url::extractId($url),
+            url: $url,
+            key: $body['key'],
+            status: $body['status'],
             agreement: $body['agreement'] ?? '',
             createdAt: $body['createdAt'] ?? null,
-            contact:   $body['contact'] ?? [],
+            contact: $body['contact']     ?? [],
         );
     }
 }

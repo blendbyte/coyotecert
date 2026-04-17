@@ -8,8 +8,8 @@ it('value returns scalars unchanged', function () {
 });
 
 it('value invokes a Closure and returns its result', function () {
-    expect(value(fn () => 'computed'))->toBe('computed');
-    expect(value(fn () => 99))->toBe(99);
+    expect(value(fn() => 'computed'))->toBe('computed');
+    expect(value(fn() => 99))->toBe(99);
 });
 
 it('value does not invoke non-Closure callables', function () {

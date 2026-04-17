@@ -9,6 +9,5 @@ readonly class Dns01ValidationData
         public string $name,
         public string $value,
         public string $keyAuthorization,
-    ) {
-    }
+    ) {}
 }

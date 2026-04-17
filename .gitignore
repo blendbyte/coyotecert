@@ -4,3 +4,4 @@ docs
 vendor
 __account
 test.php
+.php-cs-fixer.cache

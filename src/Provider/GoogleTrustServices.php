@@ -13,8 +13,7 @@ class GoogleTrustServices extends AbstractProvider
     public function __construct(
         private readonly string $eabKid,
         private readonly string $eabHmac,
-    ) {
-    }
+    ) {}
 
     public function getDirectoryUrl(): string
     {

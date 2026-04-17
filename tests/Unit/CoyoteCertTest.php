@@ -5,7 +5,6 @@ use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
-use CoyoteCert\Provider\LetsEncryptStaging;
 use CoyoteCert\Provider\Pebble;
 use CoyoteCert\Storage\InMemoryStorage;
 use CoyoteCert\Storage\StoredCertificate;
@@ -22,12 +21,12 @@ function makeCoyoteCert(string $caBundle = '', int $expiresInDays = 90): StoredC
 {
     return new StoredCertificate(
         certificate: 'cert-pem',
-        privateKey:  'key-pem',
-        fullchain:   'fullchain-pem',
-        caBundle:    $caBundle,
-        issuedAt:    new DateTimeImmutable(),
-        expiresAt:   new DateTimeImmutable("+{$expiresInDays} days"),
-        domains:     ['example.com'],
+        privateKey: 'key-pem',
+        fullchain: 'fullchain-pem',
+        caBundle: $caBundle,
+        issuedAt: new DateTimeImmutable(),
+        expiresAt: new DateTimeImmutable("+{$expiresInDays} days"),
+        domains: ['example.com'],
     );
 }
 
@@ -35,7 +34,10 @@ function makeNoOpHandler(AuthorizationChallengeEnum $supports = AuthorizationCha
 {
     return new class ($supports) implements ChallengeHandlerInterface {
         public function __construct(private AuthorizationChallengeEnum $type) {}
-        public function supports(AuthorizationChallengeEnum $t): bool { return $t === $this->type; }
+        public function supports(AuthorizationChallengeEnum $t): bool
+        {
+            return $t === $this->type;
+        }
         public function deploy(string $d, string $tok, string $auth): void {}
         public function cleanup(string $d, string $tok): void {}
     };
@@ -146,7 +148,10 @@ it('domains() throws AcmeException for a double wildcard', function () {
 
 it('detectChallengeType() throws when the handler supports no known challenge type', function () {
     $noneHandler = new class implements ChallengeHandlerInterface {
-        public function supports(AuthorizationChallengeEnum $t): bool { return false; }
+        public function supports(AuthorizationChallengeEnum $t): bool
+        {
+            return false;
+        }
         public function deploy(string $d, string $tok, string $auth): void {}
         public function cleanup(string $d, string $tok): void {}
     };
@@ -154,26 +159,26 @@ it('detectChallengeType() throws when the handler supports no known challenge ty
     $coyote = makeCoyote()->challenge($noneHandler);
     $method = new \ReflectionMethod(CoyoteCert::class, 'detectChallengeType');
 
-    expect(fn () => $method->invoke($coyote))
+    expect(fn() => $method->invoke($coyote))
         ->toThrow(AcmeException::class, 'does not support any known challenge type');
 });
 
 // ── validate() / issue() guard ────────────────────────────────────────────────
 
 it('issue() throws when no domains are configured', function () {
-    expect(fn () => makeCoyote()->challenge(makeNoOpHandler())->issue())
+    expect(fn() => makeCoyote()->challenge(makeNoOpHandler())->issue())
         ->toThrow(AcmeException::class, 'No domains');
 });
 
 it('issue() throws when no challenge handler is configured', function () {
-    expect(fn () => makeCoyote()->domains('example.com')->issue())
+    expect(fn() => makeCoyote()->domains('example.com')->issue())
         ->toThrow(AcmeException::class, 'No challenge handler');
 });
 
 // ── revoke() guard ────────────────────────────────────────────────────────────
 
 it('revoke() throws when no storage is configured', function () {
-    expect(fn () => makeCoyote()->revoke(makeCoyoteCert()))
+    expect(fn() => makeCoyote()->revoke(makeCoyoteCert()))
         ->toThrow(AcmeException::class, 'No storage');
 });
 
@@ -187,7 +192,7 @@ it('needsRenewal() returns true when no certificate is stored', function () {
     $storage = new InMemoryStorage();
 
     expect(
-        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal()
+        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(),
     )->toBeTrue();
 });
 
@@ -196,7 +201,7 @@ it('needsRenewal() returns false when certificate has plenty of time remaining',
     $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 90));
 
     expect(
-        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30)
+        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30),
     )->toBeFalse();
 });
 
@@ -205,7 +210,7 @@ it('needsRenewal() returns true when certificate expires within the threshold', 
     $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 10));
 
     expect(
-        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30)
+        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30),
     )->toBeTrue();
 });
 
@@ -228,7 +233,7 @@ it('issueOrRenew() returns existing cert when renewal is not needed', function (
 it('issueOrRenew() calls issue() when renewal is needed', function () {
     // needsRenewal() returns true (no storage) → line 380 `return $this->issue()` is hit
     // → issue() throws at the "No domains" guard
-    expect(fn () => makeCoyote()->challenge(makeNoOpHandler())->issueOrRenew())
+    expect(fn() => makeCoyote()->challenge(makeNoOpHandler())->issueOrRenew())
         ->toThrow(AcmeException::class, 'No domains');
 });
 
@@ -236,7 +241,7 @@ it('issueOrRenew() calls issue() when renewal is needed', function () {
 
 it('renew() is an alias for issue() and throws when no domains are configured', function () {
     // renew() delegates to issue() → validate() → throws "No domains"
-    expect(fn () => makeCoyote()->challenge(makeNoOpHandler())->renew())
+    expect(fn() => makeCoyote()->challenge(makeNoOpHandler())->renew())
         ->toThrow(AcmeException::class, 'No domains');
 });
 
@@ -249,7 +254,7 @@ it('needsRenewal() falls back to remainingDays when caBundle has no PEM cert hea
     $storage->saveCertificate('example.com', makeCoyoteCert(caBundle: 'not-a-pem', expiresInDays: 90));
 
     expect(
-        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30)
+        makeCoyote()->domains('example.com')->storage($storage)->needsRenewal(30),
     )->toBeFalse();
 });
 
@@ -262,9 +267,10 @@ it('needsRenewal() returns null from ariWindow when API call throws (catch block
     $storage->saveCertificate('example.com', makeCoyoteCert(caBundle: $fakeCaBundle, expiresInDays: 90));
 
     // PSR-18 client that always throws — forces the try/catch in ariWindow().
-    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $factory      = new \Nyholm\Psr7\Factory\Psr17Factory();
     $failingPsr18 = new class implements \Psr\Http\Client\ClientInterface {
-        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface {
+        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
+        {
             throw new \RuntimeException('Connection refused');
         }
     };
@@ -291,12 +297,12 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
     $storage = new InMemoryStorage();
     $storage->saveCertificate('example.com', new StoredCertificate(
         certificate: $certPem,
-        privateKey:  'key-pem',
-        fullchain:   'fullchain',
-        caBundle:    $certPem, // self-signed: issuer == leaf
-        issuedAt:    new DateTimeImmutable(),
-        expiresAt:   new DateTimeImmutable('+90 days'),
-        domains:     ['example.com'],
+        privateKey: 'key-pem',
+        fullchain: 'fullchain',
+        caBundle: $certPem, // self-signed: issuer == leaf
+        issuedAt: new DateTimeImmutable(),
+        expiresAt: new DateTimeImmutable('+90 days'),
+        domains: ['example.com'],
     ));
 
     $factory   = new \Nyholm\Psr7\Factory\Psr17Factory();
@@ -307,7 +313,8 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
 
         public function __construct(private \Nyholm\Psr7\Factory\Psr17Factory $factory, int $_) {}
 
-        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface {
+        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
+        {
             $this->calls++;
             $body = match ($this->calls) {
                 // First call: directory with renewalInfo URL
@@ -373,9 +380,9 @@ it('extractTokenAndKeyAuth() returns [name, value] for Dns01ValidationData', fun
     $method = new \ReflectionMethod(CoyoteCert::class, 'extractTokenAndKeyAuth');
 
     $dns = new \CoyoteCert\DTO\Dns01ValidationData(
-        identifier:       'example.com',
-        name:             '_acme-challenge',
-        value:            'expected-digest',
+        identifier: 'example.com',
+        name: '_acme-challenge',
+        value: 'expected-digest',
         keyAuthorization: 'expected-digest',
     );
 

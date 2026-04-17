@@ -6,7 +6,7 @@ use CoyoteCert\Support\KeyId;
 it('generates an RS256 KID JWS with kid, alg, nonce, url', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $result    = KeyId::generate($pem, 'https://acme.example/account/1', 'https://acme.example/order/1', 'nonce1');
@@ -21,7 +21,7 @@ it('generates an RS256 KID JWS with kid, alg, nonce, url', function () {
 it('produces a verifiable RS256 KID signature', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $result       = KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce', ['csr' => 'abc']);
@@ -51,8 +51,12 @@ it('produces a verifiable ES256 KID signature', function () {
     // Convert raw r||s back to DER for openssl_verify
     $r = ltrim(substr($rawSig, 0, 32), "\x00") ?: "\x00";
     $s = ltrim(substr($rawSig, 32), "\x00") ?: "\x00";
-    if (ord($r[0]) > 0x7F) $r = "\x00" . $r;
-    if (ord($s[0]) > 0x7F) $s = "\x00" . $s;
+    if (ord($r[0]) > 0x7F) {
+        $r = "\x00" . $r;
+    }
+    if (ord($s[0]) > 0x7F) {
+        $s = "\x00" . $s;
+    }
     $inner  = "\x02" . chr(strlen($r)) . $r . "\x02" . chr(strlen($s)) . $s;
     $derSig = "\x30" . chr(strlen($inner)) . $inner;
 
@@ -64,7 +68,7 @@ it('produces a verifiable ES256 KID signature', function () {
 it('uses an empty payload string for POST-as-GET (null payload)', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $result = KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce');
@@ -85,7 +89,7 @@ it('generates an ES384 KID JWS for secp384r1 keys', function () {
 it('encodes an empty array payload as {} (RFC 8555 §7.5.1 challenge response)', function () {
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $result  = KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce', []);
@@ -97,12 +101,11 @@ it('encodes an empty array payload as {} (RFC 8555 §7.5.1 challenge response)',
 it('ecParams throws CryptoException for unsupported EC curve', function () {
     $pem = ecKeyPem('secp521r1');
 
-    expect(fn () => \CoyoteCert\Support\KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce'))
+    expect(fn() => \CoyoteCert\Support\KeyId::generate($pem, 'https://example.com/account/1', 'https://example.com/order/1', 'nonce'))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Unsupported EC curve: secp521r1');
 });
 
 it('throws CryptoException when the private key PEM is invalid', function () {
-    expect(fn () => KeyId::generate('not-a-pem', 'https://acme.example/account/1', 'https://acme.example/order/1', 'nonce'))
+    expect(fn() => KeyId::generate('not-a-pem', 'https://acme.example/account/1', 'https://acme.example/order/1', 'nonce'))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Cannot load private key');
 });
-

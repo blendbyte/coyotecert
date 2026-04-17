@@ -17,8 +17,8 @@ function makeProvider(): CustomProvider
 function makeApi(?InMemoryStorage $storage = null, ?HttpClientInterface $httpClient = null): Api
 {
     return new Api(
-        provider:   makeProvider(),
-        storage:    $storage,
+        provider: makeProvider(),
+        storage: $storage,
         httpClient: $httpClient,
     );
 }
@@ -28,7 +28,7 @@ function makeApi(?InMemoryStorage $storage = null, ?HttpClientInterface $httpCli
 it('accountAdapter() throws when no storage is configured', function () {
     $api = makeApi(storage: null);
 
-    expect(fn () => $api->accountAdapter())
+    expect(fn() => $api->accountAdapter())
         ->toThrow(AcmeException::class, 'No storage configured');
 });
 
@@ -51,9 +51,18 @@ it('getHttpClient() returns the same instance on repeated calls', function () {
 it('setHttpClient() returns self (fluent)', function () {
     $api  = makeApi();
     $mock = new class implements HttpClientInterface {
-        public function head(string $url): Response { return new Response([], $url, 200, ''); }
-        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response { return new Response([], $url, 200, []); }
-        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response { return new Response([], $url, 200, []); }
+        public function head(string $url): Response
+        {
+            return new Response([], $url, 200, '');
+        }
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, []);
+        }
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, []);
+        }
     };
 
     expect($api->setHttpClient($mock))->toBe($api);
@@ -62,9 +71,18 @@ it('setHttpClient() returns self (fluent)', function () {
 it('setHttpClient() replaces the http client', function () {
     $api  = makeApi();
     $mock = new class implements HttpClientInterface {
-        public function head(string $url): Response { return new Response([], $url, 200, ''); }
-        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response { return new Response([], $url, 200, []); }
-        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response { return new Response([], $url, 200, []); }
+        public function head(string $url): Response
+        {
+            return new Response([], $url, 200, '');
+        }
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, []);
+        }
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, []);
+        }
     };
 
     $api->setHttpClient($mock);
@@ -87,11 +105,11 @@ it('logger() dispatches to a configured logger without throwing', function () {
     $api->setLogger(new NullLogger());
 
     // NullLogger silently discards the message; we just assert no exception is thrown.
-    expect(fn () => $api->logger('info', 'test message', ['key' => 'value']))->not->toThrow(\Throwable::class);
+    expect(fn() => $api->logger('info', 'test message', ['key' => 'value']))->not->toThrow(\Throwable::class);
 });
 
 it('logger() is a no-op when no logger is configured', function () {
     $api = makeApi();
 
-    expect(fn () => $api->logger('error', 'no logger set'))->not->toThrow(\Throwable::class);
+    expect(fn() => $api->logger('error', 'no logger set'))->not->toThrow(\Throwable::class);
 });

@@ -9,7 +9,7 @@ class DomainValidationException extends AcmeException
         return new self(sprintf(
             'The local HTTP challenge test for %s received an invalid response with a %s status code.',
             $domain,
-            $code
+            $code,
         ));
     }
 
@@ -17,7 +17,7 @@ class DomainValidationException extends AcmeException
     {
         return new self(sprintf(
             "Couldn't fetch the correct DNS records for %s.",
-            $domain
+            $domain,
         ));
     }
 }

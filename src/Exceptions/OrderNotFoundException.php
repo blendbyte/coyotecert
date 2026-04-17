@@ -2,6 +2,4 @@
 
 namespace CoyoteCert\Exceptions;
 
-class OrderNotFoundException extends AcmeException
-{
-}
+class OrderNotFoundException extends AcmeException {}

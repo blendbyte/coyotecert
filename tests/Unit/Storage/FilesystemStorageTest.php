@@ -22,12 +22,12 @@ function makeFileCert(): StoredCertificate
 {
     return new StoredCertificate(
         certificate: '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----',
-        privateKey:  '-----BEGIN EC PRIVATE KEY-----\nMIIB\n-----END EC PRIVATE KEY-----',
-        fullchain:   'fullchain-data',
-        caBundle:    'ca-bundle-data',
-        issuedAt:    new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-        expiresAt:   new DateTimeImmutable('2026-04-01T00:00:00+00:00'),
-        domains:     ['example.com'],
+        privateKey: '-----BEGIN EC PRIVATE KEY-----\nMIIB\n-----END EC PRIVATE KEY-----',
+        fullchain: 'fullchain-data',
+        caBundle: 'ca-bundle-data',
+        issuedAt: new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+        expiresAt: new DateTimeImmutable('2026-04-01T00:00:00+00:00'),
+        domains: ['example.com'],
     );
 }
 
@@ -77,12 +77,12 @@ it('overwrites an existing certificate file', function () {
 
     $updated = new StoredCertificate(
         certificate: 'new-cert',
-        privateKey:  'new-key',
-        fullchain:   'new-fullchain',
-        caBundle:    'new-ca',
-        issuedAt:    new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
-        expiresAt:   new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
-        domains:     ['example.com'],
+        privateKey: 'new-key',
+        fullchain: 'new-fullchain',
+        caBundle: 'new-ca',
+        issuedAt: new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
+        expiresAt: new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
+        domains: ['example.com'],
     );
     $this->storage->saveCertificate('example.com', $updated);
 
@@ -92,7 +92,7 @@ it('overwrites an existing certificate file', function () {
 it('getAccountKey throws when account key file does not exist', function () {
     // readFile() throws when the file path does not exist — verifies the
     // "Storage file ... does not exist" error path inside readFile().
-    expect(fn () => $this->storage->getAccountKey())
+    expect(fn() => $this->storage->getAccountKey())
         ->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'does not exist');
 });
 
@@ -100,7 +100,7 @@ it('saveAccountKey throws when the storage directory cannot be created', functio
     // Create a FILE at the directory path so mkdir inside ensureDirectory() fails
     file_put_contents($this->dir, 'not-a-dir');
 
-    expect(fn () => $this->storage->saveAccountKey('pem', KeyType::RSA_2048))
+    expect(fn() => $this->storage->saveAccountKey('pem', KeyType::RSA_2048))
         ->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'could not be created');
 
     @unlink($this->dir);
@@ -122,7 +122,10 @@ it('deleteCertificate() is a no-op for unknown domain', function () {
 
 it('isExpired() returns false for a future certificate', function () {
     $cert = new StoredCertificate(
-        certificate: '', privateKey: '', fullchain: '', caBundle: '',
+        certificate: '',
+        privateKey: '',
+        fullchain: '',
+        caBundle: '',
         issuedAt: new DateTimeImmutable('-1 day'),
         expiresAt: new DateTimeImmutable('+90 days'),
         domains: ['example.com'],
@@ -132,7 +135,10 @@ it('isExpired() returns false for a future certificate', function () {
 
 it('isExpired() returns true for a past certificate', function () {
     $cert = new StoredCertificate(
-        certificate: '', privateKey: '', fullchain: '', caBundle: '',
+        certificate: '',
+        privateKey: '',
+        fullchain: '',
+        caBundle: '',
         issuedAt: new DateTimeImmutable('-100 days'),
         expiresAt: new DateTimeImmutable('-1 day'),
         domains: ['example.com'],
@@ -142,7 +148,10 @@ it('isExpired() returns true for a past certificate', function () {
 
 it('expiresWithin() returns true when expiry is within the window', function () {
     $cert = new StoredCertificate(
-        certificate: '', privateKey: '', fullchain: '', caBundle: '',
+        certificate: '',
+        privateKey: '',
+        fullchain: '',
+        caBundle: '',
         issuedAt: new DateTimeImmutable('-60 days'),
         expiresAt: new DateTimeImmutable('+10 days'),
         domains: ['example.com'],
@@ -152,7 +161,10 @@ it('expiresWithin() returns true when expiry is within the window', function () 
 
 it('expiresWithin() returns false when expiry is beyond the window', function () {
     $cert = new StoredCertificate(
-        certificate: '', privateKey: '', fullchain: '', caBundle: '',
+        certificate: '',
+        privateKey: '',
+        fullchain: '',
+        caBundle: '',
         issuedAt: new DateTimeImmutable('-1 day'),
         expiresAt: new DateTimeImmutable('+60 days'),
         domains: ['example.com'],
@@ -162,13 +174,13 @@ it('expiresWithin() returns false when expiry is beyond the window', function ()
 
 it('writeFile throws StorageException when the file cannot be written', function () {
     // Create the directory first so ensureDirectory() passes, then remove write permission.
-    mkdir($this->dir, 0755, true);
-    chmod($this->dir, 0555); // read+execute only
+    mkdir($this->dir, 0o755, true);
+    chmod($this->dir, 0o555); // read+execute only
 
     try {
-        expect(fn () => $this->storage->saveAccountKey('pem', KeyType::EC_P256))
+        expect(fn() => $this->storage->saveAccountKey('pem', KeyType::EC_P256))
             ->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'Could not write');
     } finally {
-        chmod($this->dir, 0755); // restore so afterEach cleanup can remove the dir
+        chmod($this->dir, 0o755); // restore so afterEach cleanup can remove the dir
     }
-})->skip(fn () => function_exists('posix_getuid') && posix_getuid() === 0, 'root can write to any directory');
+})->skip(fn() => function_exists('posix_getuid') && posix_getuid() === 0, 'root can write to any directory');

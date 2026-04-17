@@ -9,7 +9,7 @@ class DnsDigest
         return hash(
             'sha256',
             sprintf('%s.%s', $token, $thumbprint),
-            true
+            true,
         );
     }
 

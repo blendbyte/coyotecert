@@ -54,7 +54,7 @@ it('getPublicKey() throws CryptoException when the stored key PEM is not a valid
     $storage->saveAccountKey('this-is-not-a-valid-pem', KeyType::RSA_2048);
     $adapter = new StorageAccountAdapter($storage);
 
-    expect(fn () => $adapter->getPublicKey())
+    expect(fn() => $adapter->getPublicKey())
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Cannot load private key.');
 });
 
@@ -64,7 +64,7 @@ it('savePrivateKey() delegates to storage->saveAccountKey()', function () {
 
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $pem
+        $pem,
     );
 
     $adapter->savePrivateKey($pem, KeyType::RSA_2048);

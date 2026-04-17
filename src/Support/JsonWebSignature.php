@@ -14,7 +14,8 @@ class JsonWebSignature
         array $payload,
         string $url,
         string $nonce,
-        #[\SensitiveParameter] string $accountPrivateKey
+        #[\SensitiveParameter]
+        string $accountPrivateKey,
     ): array {
         $privateKey = openssl_pkey_get_private($accountPrivateKey);
 
@@ -48,7 +49,7 @@ class JsonWebSignature
         $payload64   = Base64::urlSafeEncode(str_replace('\\/', '/', json_encode($payload, JSON_THROW_ON_ERROR)));
         $protected64 = Base64::urlSafeEncode(json_encode($protected, JSON_THROW_ON_ERROR));
 
-        if (!openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest)) {
+        if (!openssl_sign($protected64 . '.' . $payload64, $signed, $privateKey, $digest)) {
             throw new CryptoException('Failed to sign payload.');
         }
 

@@ -23,12 +23,12 @@ function makeDatabaseCert(): StoredCertificate
 {
     return new StoredCertificate(
         certificate: '-----BEGIN CERTIFICATE-----\nMIIBtest\n-----END CERTIFICATE-----',
-        privateKey:  '-----BEGIN EC PRIVATE KEY-----\nMIIBtest\n-----END EC PRIVATE KEY-----',
-        fullchain:   'fullchain-db',
-        caBundle:    'cabundle-db',
-        issuedAt:    new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-        expiresAt:   new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
-        domains:     ['db.example.com'],
+        privateKey: '-----BEGIN EC PRIVATE KEY-----\nMIIBtest\n-----END EC PRIVATE KEY-----',
+        fullchain: 'fullchain-db',
+        caBundle: 'cabundle-db',
+        issuedAt: new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+        expiresAt: new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
+        domains: ['db.example.com'],
     );
 }
 
@@ -57,12 +57,12 @@ it('overwrites an existing account key', function () {
 
 it('throws when getAccountKey is called with no key stored', function () {
     $storage = makeSqliteStorage();
-    expect(fn () => $storage->getAccountKey())->toThrow(StorageException::class);
+    expect(fn() => $storage->getAccountKey())->toThrow(StorageException::class);
 });
 
 it('throws when getAccountKeyType is called with no key type stored', function () {
     $storage = makeSqliteStorage();
-    expect(fn () => $storage->getAccountKeyType())->toThrow(StorageException::class);
+    expect(fn() => $storage->getAccountKeyType())->toThrow(StorageException::class);
 });
 
 it('has no certificate initially', function () {
@@ -88,12 +88,12 @@ it('overwrites an existing certificate', function () {
 
     $updated = new StoredCertificate(
         certificate: 'new-cert',
-        privateKey:  'new-key',
-        fullchain:   'new-full',
-        caBundle:    'new-ca',
-        issuedAt:    new DateTimeImmutable('2026-03-01T00:00:00+00:00'),
-        expiresAt:   new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
-        domains:     ['example.com'],
+        privateKey: 'new-key',
+        fullchain: 'new-full',
+        caBundle: 'new-ca',
+        issuedAt: new DateTimeImmutable('2026-03-01T00:00:00+00:00'),
+        expiresAt: new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
+        domains: ['example.com'],
     );
     $storage->saveCertificate('example.com', $updated);
 
@@ -114,7 +114,7 @@ it('createTableSql uses the provided table name', function () {
 it('constructor throws InvalidArgumentException for a table name with invalid characters', function () {
     $pdo = new PDO('sqlite::memory:');
 
-    expect(fn () => new DatabaseStorage($pdo, 'invalid-name!'))
+    expect(fn() => new DatabaseStorage($pdo, 'invalid-name!'))
         ->toThrow(\InvalidArgumentException::class, 'Invalid SQL identifier');
 });
 
@@ -122,11 +122,19 @@ it('set() uses ON CONFLICT syntax for pgsql driver', function () {
     $mockPdo = new class extends \PDO {
         public array $capturedSql = [];
         public function __construct() {}
-        public function getAttribute(int $attribute): mixed { return 'pgsql'; }
-        public function prepare(string $query, array $options = []): \PDOStatement|false {
+        public function getAttribute(int $attribute): mixed
+        {
+            return 'pgsql';
+        }
+        public function prepare(string $query, array $options = []): \PDOStatement|false
+        {
             $this->capturedSql[] = $query;
+
             return new class extends \PDOStatement {
-                public function execute(?array $params = null): bool { return true; }
+                public function execute(?array $params = null): bool
+                {
+                    return true;
+                }
             };
         }
     };
@@ -136,7 +144,7 @@ it('set() uses ON CONFLICT syntax for pgsql driver', function () {
 
     $pgsqlSqls = array_filter(
         $mockPdo->capturedSql,
-        fn ($sql) => str_contains($sql, 'ON CONFLICT')
+        fn($sql) => str_contains($sql, 'ON CONFLICT'),
     );
     expect($pgsqlSqls)->not->toBeEmpty();
 });
@@ -156,8 +164,12 @@ it('set() uses ON DUPLICATE KEY UPDATE syntax for non-sqlite/non-pgsql drivers',
         public function prepare(string $query, array $options = []): \PDOStatement|false
         {
             $this->capturedSql[] = $query;
+
             return new class extends \PDOStatement {
-                public function execute(?array $params = null): bool { return true; }
+                public function execute(?array $params = null): bool
+                {
+                    return true;
+                }
             };
         }
     };
@@ -167,7 +179,7 @@ it('set() uses ON DUPLICATE KEY UPDATE syntax for non-sqlite/non-pgsql drivers',
 
     $mysqlSqls = array_filter(
         $mockPdo->capturedSql,
-        fn ($sql) => str_contains($sql, 'ON DUPLICATE KEY UPDATE')
+        fn($sql) => str_contains($sql, 'ON DUPLICATE KEY UPDATE'),
     );
     expect($mysqlSqls)->not->toBeEmpty();
 });

@@ -44,12 +44,12 @@ it('getPublicKey returns a PEM string after key generation', function () {
 });
 
 it('getPrivateKey throws when no key has been generated', function () {
-    expect(fn () => $this->account->getPrivateKey())
+    expect(fn() => $this->account->getPrivateKey())
         ->toThrow(StorageException::class);
 });
 
 it('getPublicKey throws when no key has been generated', function () {
-    expect(fn () => $this->account->getPublicKey())
+    expect(fn() => $this->account->getPublicKey())
         ->toThrow(StorageException::class);
 });
 
@@ -60,7 +60,7 @@ it('trailing slash is normalised in the path', function () {
 });
 
 it('exists returns false when the directory exists but key files are absent', function () {
-    mkdir($this->dir, 0755, true);
+    mkdir($this->dir, 0o755, true);
     expect($this->account->exists())->toBeFalse();
 });
 
@@ -68,7 +68,7 @@ it('generateNewKeys throws when the directory cannot be created', function () {
     // Create a FILE at the path so mkdir inside it fails
     file_put_contents($this->dir, 'not-a-dir');
 
-    expect(fn () => $this->account->generateNewKeys())
+    expect(fn() => $this->account->generateNewKeys())
         ->toThrow(StorageException::class, 'was not created');
 
     @unlink($this->dir);
@@ -81,7 +81,7 @@ it('savePrivateKey() stores the key and getPrivateKey() returns the same PEM', f
     // Generate a fresh RSA key PEM to save
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $newPem
+        $newPem,
     );
 
     $this->account->savePrivateKey($newPem, \CoyoteCert\Enums\KeyType::RSA_2048);
@@ -94,7 +94,7 @@ it('savePrivateKey() also derives and persists the public key', function () {
 
     openssl_pkey_export(
         openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $newPem
+        $newPem,
     );
 
     $this->account->savePrivateKey($newPem, \CoyoteCert\Enums\KeyType::RSA_2048);
@@ -104,30 +104,30 @@ it('savePrivateKey() also derives and persists the public key', function () {
 
 it('generateNewKeys() throws StorageException when file write fails (read-only dir)', function () {
     // Create the directory first, then make it read-only so file_put_contents fails
-    mkdir($this->dir, 0555, true);
+    mkdir($this->dir, 0o555, true);
 
     // Skip this test when running as root (root can write to 0555 dirs)
     if (posix_geteuid() === 0) {
-        chmod($this->dir, 0755);
+        chmod($this->dir, 0o755);
         $this->markTestSkipped('Running as root — chmod restriction does not apply.');
     }
 
     // Suppress the PHP E_WARNING emitted by file_put_contents on permission failure
     // so Pest does not show this test as WARN.
-    set_error_handler(static fn () => true);
+    set_error_handler(static fn() => true);
     try {
-        expect(fn () => $this->account->generateNewKeys())
+        expect(fn() => $this->account->generateNewKeys())
             ->toThrow(StorageException::class, 'Failed to write keys');
     } finally {
         restore_error_handler();
-        chmod($this->dir, 0755);
+        chmod($this->dir, 0o755);
     }
 });
 
 it('savePrivateKey() throws CryptoException when the PEM is not a valid private key', function () {
     $this->account->generateNewKeys(); // ensure directory exists
 
-    expect(fn () => $this->account->savePrivateKey('not-a-pem', KeyType::RSA_2048))
+    expect(fn() => $this->account->savePrivateKey('not-a-pem', KeyType::RSA_2048))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Cannot load private key');
 });
 
@@ -139,21 +139,21 @@ it('getKey() throws StorageException when file exists but cannot be read (mode 0
     expect($files)->not->toBeEmpty();
 
     $keyFile = $files[0];
-    chmod($keyFile, 0000);
+    chmod($keyFile, 0o000);
 
     // Skip when running as root
     if (posix_geteuid() === 0) {
-        chmod($keyFile, 0644);
+        chmod($keyFile, 0o644);
         $this->markTestSkipped('Running as root — chmod restriction does not apply.');
     }
 
     // Suppress the PHP E_WARNING from file_get_contents on permission failure.
-    set_error_handler(static fn () => true);
+    set_error_handler(static fn() => true);
     try {
-        expect(fn () => $this->account->getPrivateKey())
+        expect(fn() => $this->account->getPrivateKey())
             ->toThrow(StorageException::class);
     } finally {
         restore_error_handler();
-        chmod($keyFile, 0644);
+        chmod($keyFile, 0o644);
     }
 });

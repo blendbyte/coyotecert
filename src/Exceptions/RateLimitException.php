@@ -2,6 +2,4 @@
 
 namespace CoyoteCert\Exceptions;
 
-class RateLimitException extends AcmeException
-{
-}
+class RateLimitException extends AcmeException {}

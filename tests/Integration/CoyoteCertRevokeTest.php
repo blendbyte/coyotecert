@@ -20,7 +20,7 @@ it('revokes a previously issued certificate', function () {
         ->revoke($cert);
 
     expect($result)->toBeTrue();
-})->skip(fn () => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
 
 it('revokes with a specific reason code', function () {
     $storage = new InMemoryStorage();
@@ -37,7 +37,7 @@ it('revokes with a specific reason code', function () {
         ->revoke($cert, RevocationReason::KeyCompromise);
 
     expect($result)->toBeTrue();
-})->skip(fn () => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
 
 it('throws when revoke is called without storage', function () {
     $storage = new InMemoryStorage();
@@ -49,6 +49,6 @@ it('throws when revoke is called without storage', function () {
         ->skipLocalTest()
         ->issue();
 
-    expect(fn () => CoyoteCert::with(pebble())->revoke($cert))
+    expect(fn() => CoyoteCert::with(pebble())->revoke($cert))
         ->toThrow(\CoyoteCert\Exceptions\AcmeException::class);
-})->skip(fn () => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');

@@ -19,9 +19,7 @@ use CoyoteCert\Interfaces\ChallengeHandlerInterface;
  */
 class Http01Handler implements ChallengeHandlerInterface
 {
-    public function __construct(private readonly string $webroot)
-    {
-    }
+    public function __construct(private readonly string $webroot) {}
 
     public function supports(AuthorizationChallengeEnum $type): bool
     {
@@ -32,7 +30,7 @@ class Http01Handler implements ChallengeHandlerInterface
     {
         if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $token)) {
             throw new ChallengeException(
-                sprintf('Invalid ACME token "%s": must match [a-zA-Z0-9_-]+.', $token)
+                sprintf('Invalid ACME token "%s": must match [a-zA-Z0-9_-]+.', $token),
             );
         }
 
@@ -40,13 +38,13 @@ class Http01Handler implements ChallengeHandlerInterface
 
         if ($this->ancestorBlocksMkdir($dir)) {
             throw new ChallengeException(
-                sprintf('Could not create challenge directory "%s".', $dir)
+                sprintf('Could not create challenge directory "%s".', $dir),
             );
         }
 
-        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+        if (!is_dir($dir) && !mkdir($dir, 0o755, true) && !is_dir($dir)) {
             throw new ChallengeException(
-                sprintf('Could not create challenge directory "%s".', $dir)
+                sprintf('Could not create challenge directory "%s".', $dir),
             );
         }
 
@@ -54,13 +52,13 @@ class Http01Handler implements ChallengeHandlerInterface
 
         if (is_dir($path)) {
             throw new ChallengeException(
-                sprintf('Could not write challenge file "%s": path is a directory.', $path)
+                sprintf('Could not write challenge file "%s": path is a directory.', $path),
             );
         }
 
         if (file_put_contents($path, $keyAuthorization) === false) {
             throw new ChallengeException(
-                sprintf('Could not write challenge file "%s".', $path)
+                sprintf('Could not write challenge file "%s".', $path),
             );
         }
     }
@@ -92,6 +90,7 @@ class Http01Handler implements ChallengeHandlerInterface
             }
             $path = dirname($path);
         }
+
         return false;
     }
 }

@@ -7,10 +7,10 @@ use CoyoteCert\DTO\EabCredentials;
 class Pebble extends AbstractProvider
 {
     /**
-     * @param string $url       Full directory URL of your Pebble instance.
-     * @param bool   $verifyTls Set to false to skip TLS verification (needed for self-signed Pebble certs).
-     * @param bool   $eab       Enable if your Pebble instance is configured with EAB.
-     * @param string|null $eabKid  EAB key ID if EAB is enabled.
+     * @param string $url Full directory URL of your Pebble instance.
+     * @param bool $verifyTls Set to false to skip TLS verification (needed for self-signed Pebble certs).
+     * @param bool $eab Enable if your Pebble instance is configured with EAB.
+     * @param string|null $eabKid EAB key ID if EAB is enabled.
      * @param string|null $eabHmac EAB HMAC key if EAB is enabled.
      */
     public function __construct(
@@ -19,8 +19,7 @@ class Pebble extends AbstractProvider
         private readonly bool    $eab       = false,
         private readonly ?string $eabKid    = null,
         private readonly ?string $eabHmac   = null,
-    ) {
-    }
+    ) {}
 
     public function getDirectoryUrl(): string
     {

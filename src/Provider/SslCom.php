@@ -7,16 +7,15 @@ use CoyoteCert\DTO\EabCredentials;
 class SslCom extends AbstractProvider
 {
     /**
-     * @param string $eabKid  EAB key ID from your SSL.com account.
+     * @param string $eabKid EAB key ID from your SSL.com account.
      * @param string $eabHmac EAB HMAC key from your SSL.com account.
-     * @param bool   $ecc     Use the ECC endpoint instead of RSA.
+     * @param bool $ecc Use the ECC endpoint instead of RSA.
      */
     public function __construct(
         private readonly string $eabKid,
         private readonly string $eabHmac,
         private readonly bool   $ecc = false,
-    ) {
-    }
+    ) {}
 
     public function getDirectoryUrl(): string
     {

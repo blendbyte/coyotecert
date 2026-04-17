@@ -11,11 +11,12 @@ class KeyId
      * @return array<string, string>
      */
     public static function generate(
-        #[\SensitiveParameter] string $accountPrivateKey,
+        #[\SensitiveParameter]
+        string $accountPrivateKey,
         string $kid,
         string $url,
         string $nonce,
-        ?array $payload = null
+        ?array $payload = null,
     ): array {
         $privateKey = openssl_pkey_get_private($accountPrivateKey);
 
@@ -52,7 +53,7 @@ class KeyId
         $payload64   = Base64::urlSafeEncode($payloadStr);
         $protected64 = Base64::urlSafeEncode((string) json_encode($data));
 
-        if (!openssl_sign($protected64.'.'.$payload64, $signed, $privateKey, $digest)) {
+        if (!openssl_sign($protected64 . '.' . $payload64, $signed, $privateKey, $digest)) {
             throw new CryptoException('Failed to sign payload.');
         }
 

@@ -2,6 +2,4 @@
 
 namespace CoyoteCert\Exceptions;
 
-class ChallengeException extends AcmeException
-{
-}
+class ChallengeException extends AcmeException {}

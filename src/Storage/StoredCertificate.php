@@ -15,8 +15,7 @@ readonly class StoredCertificate
         public \DateTimeImmutable $issuedAt,
         public \DateTimeImmutable $expiresAt,
         public array              $domains,
-    ) {
-    }
+    ) {}
 
     /** @return array<string, mixed> */
     public function toArray(): array
@@ -37,12 +36,12 @@ readonly class StoredCertificate
     {
         return new self(
             certificate: $data['certificate'],
-            privateKey:  $data['private_key'],
-            fullchain:   $data['fullchain'],
-            caBundle:    $data['ca_bundle'],
-            issuedAt:    new \DateTimeImmutable($data['issued_at']),
-            expiresAt:   new \DateTimeImmutable($data['expires_at']),
-            domains:     $data['domains'],
+            privateKey: $data['private_key'],
+            fullchain: $data['fullchain'],
+            caBundle: $data['ca_bundle'],
+            issuedAt: new \DateTimeImmutable($data['issued_at']),
+            expiresAt: new \DateTimeImmutable($data['expires_at']),
+            domains: $data['domains'],
         );
     }
 

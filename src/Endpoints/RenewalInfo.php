@@ -2,10 +2,10 @@
 
 namespace CoyoteCert\Endpoints;
 
-use DateTimeImmutable;
 use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Support\Base64;
+use DateTimeImmutable;
 
 class RenewalInfo extends Endpoint
 {
@@ -27,8 +27,8 @@ class RenewalInfo extends Endpoint
         $body = $response->jsonBody();
 
         return new RenewalWindow(
-            start:          new DateTimeImmutable($body['suggestedWindow']['start']),
-            end:            new DateTimeImmutable($body['suggestedWindow']['end']),
+            start: new DateTimeImmutable($body['suggestedWindow']['start']),
+            end: new DateTimeImmutable($body['suggestedWindow']['end']),
             explanationUrl: $body['explanationURL'] ?? null,
         );
     }
@@ -68,7 +68,7 @@ class RenewalInfo extends Endpoint
 
         return base64_decode(implode('', array_map(
             'trim',
-            array_filter(explode("\n", $pem), static fn (string $l): bool => !str_starts_with($l, '-----'))
+            array_filter(explode("\n", $pem), static fn(string $l): bool => !str_starts_with($l, '-----')),
         )));
     }
 }

@@ -42,5 +42,5 @@ it('is readonly — properties cannot be changed', function () use ($certA) {
     $r      = new Response([], '', 200, $certA);
     $bundle = CertificateBundleData::fromResponse($r);
 
-    expect(fn () => $bundle->certificate = 'modified')->toThrow(\Error::class);
+    expect(fn() => $bundle->certificate = 'modified')->toThrow(\Error::class);
 });

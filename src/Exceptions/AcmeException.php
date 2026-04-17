@@ -4,6 +4,4 @@ namespace CoyoteCert\Exceptions;
 
 use RuntimeException;
 
-class AcmeException extends RuntimeException
-{
-}
+class AcmeException extends RuntimeException {}

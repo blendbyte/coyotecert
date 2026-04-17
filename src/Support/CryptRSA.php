@@ -32,7 +32,7 @@ class CryptRSA
 
         return [
             'privateKey' => $privateKey,
-            'publicKey' => $details['key'],
+            'publicKey'  => $details['key'],
         ];
     }
 }

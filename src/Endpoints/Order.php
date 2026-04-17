@@ -27,7 +27,7 @@ class Order extends Endpoint
             }
 
             $identifiers[] = [
-                'type' => 'dns',
+                'type'  => 'dns',
                 'value' => $domain,
             ];
         }
@@ -63,6 +63,7 @@ class Order extends Endpoint
         $this->logResponse('error', 'Creating new order failed; bad response code.', $response, ['payload' => $payload]);
 
         $detail = $response->jsonBody()['detail'] ?? $response->rawBody();
+
         throw new AcmeException(sprintf(
             'Creating new order failed (HTTP %d): %s',
             $response->getHttpResponseCode(),
@@ -93,8 +94,8 @@ class Order extends Endpoint
         $this->logResponse('error', 'Getting order failed; bad response code.', $response);
 
         match ($response->getHttpResponseCode()) {
-            404 => throw new OrderNotFoundException($response->jsonBody()['detail'] ?? 'Order cannot be found.'),
-            429 => throw new RateLimitException($response->jsonBody()['detail'] ?? 'Too many requests.'),
+            404     => throw new OrderNotFoundException($response->jsonBody()['detail'] ?? 'Order cannot be found.'),
+            429     => throw new RateLimitException($response->jsonBody()['detail'] ?? 'Too many requests.'),
             default => throw new AcmeException($response->jsonBody()['detail'] ?? 'Unknown error.'),
         };
     }
@@ -131,7 +132,7 @@ class Order extends Endpoint
         if (!$orderData->isReady()) {
             $this->client->logger(
                 'error',
-                "Order status for {$orderData->id} is {$orderData->status}. Cannot finalize order."
+                "Order status for {$orderData->id} is {$orderData->status}. Cannot finalize order.",
             );
 
             return false;
@@ -149,7 +150,7 @@ class Order extends Endpoint
             return true;
         }
 
-        $this->logResponse('error', 'Cannot finalize order '.$orderData->id, $response, ['orderData' => $orderData]);
+        $this->logResponse('error', 'Cannot finalize order ' . $orderData->id, $response, ['orderData' => $orderData]);
 
         return false;
     }

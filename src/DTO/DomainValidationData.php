@@ -23,8 +23,7 @@ readonly class DomainValidationData
         public array $dns,
         public array $dnsPersist,
         public array $validationRecord,
-    ) {
-    }
+    ) {}
 
     public static function fromResponse(Response $response): DomainValidationData
     {
@@ -32,12 +31,12 @@ readonly class DomainValidationData
         $challenges = $body['challenges'];
 
         return new self(
-            identifier:       $body['identifier'],
-            status:           $body['status'],
-            expires:          $body['expires'],
-            file:             self::getValidationByType($challenges, AuthorizationChallengeEnum::HTTP),
-            dns:              self::getValidationByType($challenges, AuthorizationChallengeEnum::DNS),
-            dnsPersist:       self::getValidationByType($challenges, AuthorizationChallengeEnum::DNS_PERSIST),
+            identifier: $body['identifier'],
+            status: $body['status'],
+            expires: $body['expires'],
+            file: self::getValidationByType($challenges, AuthorizationChallengeEnum::HTTP),
+            dns: self::getValidationByType($challenges, AuthorizationChallengeEnum::DNS),
+            dnsPersist: self::getValidationByType($challenges, AuthorizationChallengeEnum::DNS_PERSIST),
             validationRecord: Arr::get($body, 'validationRecord', []),
         );
     }
@@ -50,7 +49,7 @@ readonly class DomainValidationData
     {
         $matches = array_values(array_filter(
             $haystack,
-            static fn (array $entry) => ($entry['type'] ?? '') === $authChallenge->value
+            static fn(array $entry) => ($entry['type'] ?? '') === $authChallenge->value,
         ));
 
         return $matches[0] ?? [];

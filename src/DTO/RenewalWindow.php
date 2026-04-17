@@ -10,8 +10,7 @@ readonly class RenewalWindow
         public DateTimeImmutable $start,
         public DateTimeImmutable $end,
         public ?string           $explanationUrl = null,
-    ) {
-    }
+    ) {}
 
     public function isOpen(): bool
     {

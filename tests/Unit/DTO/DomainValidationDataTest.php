@@ -11,19 +11,19 @@ function makeDvResponse(
 ): Response {
     $challenges = array_merge([
         ['type' => 'http-01',  'token' => 'tok-http',  'url' => 'https://acme.example.com/chall/1'],
-        ['type' => 'dns-01',   'token' => 'tok-dns',   'url' => 'https://acme.example.com/chall/2',
+        ['type'                => 'dns-01',   'token' => 'tok-dns',   'url' => 'https://acme.example.com/chall/2',
             'keyAuthorization' => 'tok-dns.thumb'],
     ], $extraChallenges);
 
     return new Response(
-        headers:      [],
+        headers: [],
         requestedUrl: 'https://acme.example.com/authz/1',
-        statusCode:   200,
-        body:         array_merge([
-            'identifier'  => ['type' => 'dns', 'value' => 'example.com'],
-            'status'      => $status,
-            'expires'     => '2026-04-20T00:00:00Z',
-            'challenges'  => $challenges,
+        statusCode: 200,
+        body: array_merge([
+            'identifier' => ['type' => 'dns', 'value' => 'example.com'],
+            'status'     => $status,
+            'expires'    => '2026-04-20T00:00:00Z',
+            'challenges' => $challenges,
         ], $extraBody),
     );
 }
@@ -82,15 +82,15 @@ it('hasErrors returns false when no errors present', function () {
 it('hasErrors returns true when a challenge has an error', function () {
     // Override the http-01 challenge with one that carries an error (dns-01 type so no duplicate)
     $dv = DomainValidationData::fromResponse(new Response(
-        headers:      [],
+        headers: [],
         requestedUrl: 'https://acme.example.com/authz/1',
-        statusCode:   200,
-        body:         [
+        statusCode: 200,
+        body: [
             'identifier' => ['type' => 'dns', 'value' => 'example.com'],
             'status'     => 'invalid',
             'expires'    => '2026-04-20T00:00:00Z',
             'challenges' => [
-                ['type' => 'http-01', 'token' => 'tok-http',
+                ['type'     => 'http-01', 'token' => 'tok-http',
                     'error' => ['type' => 'urn:ietf:params:acme:error:connection', 'detail' => 'refused']],
             ],
         ],
@@ -105,15 +105,15 @@ it('getErrors returns empty array when no errors', function () {
 
 it('getErrors includes error entries', function () {
     $dv = DomainValidationData::fromResponse(new Response(
-        headers:      [],
+        headers: [],
         requestedUrl: 'https://acme.example.com/authz/1',
-        statusCode:   200,
-        body:         [
+        statusCode: 200,
+        body: [
             'identifier' => ['type' => 'dns', 'value' => 'example.com'],
             'status'     => 'invalid',
             'expires'    => '2026-04-20T00:00:00Z',
             'challenges' => [
-                ['type' => 'http-01', 'token' => 'tok',
+                ['type'     => 'http-01', 'token' => 'tok',
                     'error' => ['type' => 'urn:ietf:params:acme:error:connection', 'detail' => 'refused']],
             ],
         ],

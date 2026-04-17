@@ -29,8 +29,8 @@ enum KeyType: string
     public function bits(): ?int
     {
         return match ($this) {
-            self::RSA_2048 => 2048,
-            self::RSA_4096 => 4096,
+            self::RSA_2048               => 2048,
+            self::RSA_4096               => 4096,
             self::EC_P256, self::EC_P384 => null,
         };
     }
@@ -38,9 +38,9 @@ enum KeyType: string
     public function curveName(): ?string
     {
         return match ($this) {
-            self::EC_P256  => 'prime256v1',
-            self::EC_P384  => 'secp384r1',
-            default        => null,
+            self::EC_P256 => 'prime256v1',
+            self::EC_P384 => 'secp384r1',
+            default       => null,
         };
     }
 

@@ -27,7 +27,7 @@ class DomainValidation extends Endpoint
     /**
      * Fetch all authz statuses and capture the first Retry-After hint.
      *
-     * @return array{0: DomainValidationData[], 1: ?int}  [statuses, retryAfterSeconds|null]
+     * @return array{0: DomainValidationData[], 1: ?int} [statuses, retryAfterSeconds|null]
      */
     private function statusWithRetryHint(OrderData $orderData): array
     {
@@ -66,12 +66,12 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::HTTP)
                 && !empty($domainValidationData->file)
             ) {
-                $token = $domainValidationData->file['token'];
-                $keyAuth = $token . '.' . $thumbprint;
+                $token            = $domainValidationData->file['token'];
+                $keyAuth          = $token . '.' . $thumbprint;
                 $authorizations[] = new Http01ValidationData(
-                    identifier:       $domainValidationData->identifier['value'],
-                    filename:         $token,
-                    content:          $keyAuth,
+                    identifier: $domainValidationData->identifier['value'],
+                    filename: $token,
+                    content: $keyAuth,
                     keyAuthorization: $keyAuth,
                 );
             }
@@ -80,12 +80,12 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::DNS)
                 && !empty($domainValidationData->dns)
             ) {
-                $token   = $domainValidationData->dns['token'];
-                $keyAuth = $token . '.' . $thumbprint;
+                $token            = $domainValidationData->dns['token'];
+                $keyAuth          = $token . '.' . $thumbprint;
                 $authorizations[] = new Dns01ValidationData(
-                    identifier:       $domainValidationData->identifier['value'],
-                    name:             '_acme-challenge',
-                    value:            DnsDigest::make($token, $thumbprint),
+                    identifier: $domainValidationData->identifier['value'],
+                    name: '_acme-challenge',
+                    value: DnsDigest::make($token, $thumbprint),
                     keyAuthorization: $keyAuth,
                 );
             }
@@ -94,12 +94,12 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::DNS_PERSIST)
                 && !empty($domainValidationData->dnsPersist)
             ) {
-                $token   = $domainValidationData->dnsPersist['token'];
-                $keyAuth = $token . '.' . $thumbprint;
+                $token            = $domainValidationData->dnsPersist['token'];
+                $keyAuth          = $token . '.' . $thumbprint;
                 $authorizations[] = new Dns01ValidationData(
-                    identifier:       $domainValidationData->identifier['value'],
-                    name:             '_acme-challenge',
-                    value:            DnsDigest::make($token, $thumbprint),
+                    identifier: $domainValidationData->identifier['value'],
+                    name: '_acme-challenge',
+                    value: DnsDigest::make($token, $thumbprint),
                     keyAuthorization: $keyAuth,
                 );
             }
@@ -113,12 +113,12 @@ class DomainValidation extends Endpoint
         AccountData $accountData,
         DomainValidationData $domainValidation,
         AuthorizationChallengeEnum $authChallenge,
-        bool $localTest = true
+        bool $localTest = true,
     ): Response {
         $this->client->logger('info', sprintf(
             'Start %s challenge for %s',
             $authChallenge->value,
-            Arr::get($domainValidation->identifier, 'value', '')
+            Arr::get($domainValidation->identifier, 'value', ''),
         ));
 
         $thumbprint = JsonWebKey::thumbprint(JsonWebKey::compute($this->getAccountPrivateKey()));
@@ -129,11 +129,11 @@ class DomainValidation extends Endpoint
             throw new DomainValidationException(sprintf(
                 'No %s challenge found for %s',
                 $authChallenge->value,
-                $domainValidation->identifier['value']
+                $domainValidation->identifier['value'],
             ));
         }
 
-        $keyAuthorization = $challengeData['token'].'.'.$thumbprint;
+        $keyAuthorization = $challengeData['token'] . '.' . $thumbprint;
 
         if ($localTest) {
             if ($authChallenge === AuthorizationChallengeEnum::HTTP) {
@@ -141,7 +141,7 @@ class DomainValidation extends Endpoint
                     $domainValidation->identifier['value'],
                     $challengeData['token'],
                     $keyAuthorization,
-                    $this->client->getHttpClient()
+                    $this->client->getHttpClient(),
                 );
             }
 
@@ -192,7 +192,7 @@ class DomainValidation extends Endpoint
         foreach ($domainValidation as $status) {
             $this->client->logger(
                 'info',
-                "Check {$status->identifier['type']} challenge of {$status->identifier['value']}."
+                "Check {$status->identifier['type']} challenge of {$status->identifier['value']}.",
             );
 
             if (!$status->isValid()) {

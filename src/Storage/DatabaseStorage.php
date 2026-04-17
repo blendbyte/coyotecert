@@ -31,7 +31,7 @@ class DatabaseStorage implements StorageInterface
     {
         if (!preg_match('/^[a-zA-Z0-9_]+$/', $name)) {
             throw new \InvalidArgumentException(
-                sprintf('Invalid SQL identifier "%s": only [a-zA-Z0-9_] are allowed.', $name)
+                sprintf('Invalid SQL identifier "%s": only [a-zA-Z0-9_] are allowed.', $name),
             );
         }
     }
@@ -113,7 +113,7 @@ class DatabaseStorage implements StorageInterface
         }
 
         return StoredCertificate::fromArray(
-            json_decode($json, true, 512, JSON_THROW_ON_ERROR)
+            json_decode($json, true, 512, JSON_THROW_ON_ERROR),
         );
     }
 
@@ -121,14 +121,14 @@ class DatabaseStorage implements StorageInterface
     {
         $this->set(
             $this->certKey($domain),
-            json_encode($cert->toArray(), JSON_THROW_ON_ERROR)
+            json_encode($cert->toArray(), JSON_THROW_ON_ERROR),
         );
     }
 
     public function deleteCertificate(string $domain): void
     {
         $stmt = $this->pdo->prepare(
-            "DELETE FROM `{$this->table}` WHERE `store_key` = :key"
+            "DELETE FROM `{$this->table}` WHERE `store_key` = :key",
         );
         $stmt->execute([':key' => $this->certKey($domain)]);
     }
@@ -143,7 +143,7 @@ class DatabaseStorage implements StorageInterface
     private function get(string $key): ?string
     {
         $stmt = $this->pdo->prepare(
-            "SELECT `value` FROM `{$this->table}` WHERE `store_key` = :key LIMIT 1"
+            "SELECT `value` FROM `{$this->table}` WHERE `store_key` = :key LIMIT 1",
         );
         $stmt->execute([':key' => $key]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);

@@ -6,10 +6,10 @@ use CoyoteCert\Http\Response;
 function makeAccountResponse(string $locationUrl = 'https://acme.example.com/acct/42'): Response
 {
     return new Response(
-        headers:      ['location' => $locationUrl],
+        headers: ['location' => $locationUrl],
         requestedUrl: 'https://acme.example.com/new-acct',
-        statusCode:   201,
-        body:         [
+        statusCode: 201,
+        body: [
             'key'       => ['kty' => 'RSA', 'n' => 'abc', 'e' => 'AQAB'],
             'status'    => 'valid',
             'agreement' => 'https://letsencrypt.org/tos',
@@ -31,10 +31,10 @@ it('parses an account from a response', function () {
 
 it('trims whitespace from the location header', function () {
     $response = new Response(
-        headers:      ['location' => '  https://acme.example.com/acct/99  '],
+        headers: ['location' => '  https://acme.example.com/acct/99  '],
         requestedUrl: 'https://acme.example.com/new-acct',
-        statusCode:   201,
-        body:         [
+        statusCode: 201,
+        body: [
             'key'       => [],
             'status'    => 'valid',
             'agreement' => '',
@@ -49,10 +49,10 @@ it('trims whitespace from the location header', function () {
 
 it('uses empty string for missing agreement', function () {
     $response = new Response(
-        headers:      ['location' => 'https://acme.example.com/acct/1'],
+        headers: ['location' => 'https://acme.example.com/acct/1'],
         requestedUrl: 'https://acme.example.com/new-acct',
-        statusCode:   201,
-        body:         [
+        statusCode: 201,
+        body: [
             'key'       => [],
             'status'    => 'valid',
             'createdAt' => '2026-01-01T00:00:00Z',
@@ -70,10 +70,10 @@ it('defaults contact to an empty array when the field is absent', function () {
 
 it('parses the contact array when present in the response', function () {
     $response = new Response(
-        headers:      ['location' => 'https://acme.example.com/acct/42'],
+        headers: ['location' => 'https://acme.example.com/acct/42'],
         requestedUrl: 'https://acme.example.com/new-acct',
-        statusCode:   201,
-        body:         [
+        statusCode: 201,
+        body: [
             'key'       => [],
             'status'    => 'valid',
             'agreement' => '',

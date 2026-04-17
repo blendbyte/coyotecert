@@ -7,6 +7,5 @@ readonly class EabCredentials
     public function __construct(
         public string $kid,
         public string $hmacKey,
-    ) {
-    }
+    ) {}
 }

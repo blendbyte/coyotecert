@@ -61,7 +61,7 @@ it('get returns default for non-accessible value', function () {
 });
 
 it('get invokes closure default', function () {
-    expect(Arr::get([], 'missing', fn () => 'lazy'))->toBe('lazy');
+    expect(Arr::get([], 'missing', fn() => 'lazy'))->toBe('lazy');
 });
 
 it('first returns the first element without callback', function () {
@@ -73,11 +73,11 @@ it('first returns default for empty array without callback', function () {
 });
 
 it('first returns matching element with callback', function () {
-    $result = Arr::first([1, 2, 3, 4], fn ($v) => $v > 2);
+    $result = Arr::first([1, 2, 3, 4], fn($v) => $v > 2);
     expect($result)->toBe(3);
 });
 
 it('first returns default when no element matches callback', function () {
-    $result = Arr::first([1, 2, 3], fn ($v) => $v > 10, 'none');
+    $result = Arr::first([1, 2, 3], fn($v) => $v > 10, 'none');
     expect($result)->toBe('none');
 });

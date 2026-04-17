@@ -10,9 +10,7 @@ class FilesystemStorage implements StorageInterface
     /**
      * @param string $directory Path where account keys and certificates are stored.
      */
-    public function __construct(private readonly string $directory)
-    {
-    }
+    public function __construct(private readonly string $directory) {}
 
     // ── Account key ──────────────────────────────────────────────────────────
 
@@ -40,7 +38,7 @@ class FilesystemStorage implements StorageInterface
         $this->writeFile($this->accountKeyPath(), $pem);
         $this->writeFile(
             $this->accountMetaPath(),
-            json_encode(['key_type' => $type->value], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)
+            json_encode(['key_type' => $type->value], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
         );
     }
 
@@ -67,7 +65,7 @@ class FilesystemStorage implements StorageInterface
         $this->ensureDirectory();
         $this->writeFile(
             $this->certPath($domain),
-            json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)
+            json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
         );
     }
 
@@ -113,13 +111,13 @@ class FilesystemStorage implements StorageInterface
 
         if (file_exists(rtrim($dir, '/')) && !is_dir($dir)) {
             throw new StorageException(
-                sprintf('Storage directory "%s" could not be created: path exists as a file.', $dir)
+                sprintf('Storage directory "%s" could not be created: path exists as a file.', $dir),
             );
         }
 
-        if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+        if (!is_dir($dir) && !mkdir($dir, 0o700, true) && !is_dir($dir)) {
             throw new StorageException(
-                sprintf('Storage directory "%s" could not be created.', $dir)
+                sprintf('Storage directory "%s" could not be created.', $dir),
             );
         }
     }
@@ -128,7 +126,7 @@ class FilesystemStorage implements StorageInterface
     {
         if (!file_exists($path)) {
             throw new StorageException(
-                sprintf('Storage file "%s" does not exist.', $path)
+                sprintf('Storage file "%s" does not exist.', $path),
             );
         }
 
@@ -136,7 +134,7 @@ class FilesystemStorage implements StorageInterface
 
         if ($contents === false) {
             throw new StorageException(
-                sprintf('Could not read storage file "%s".', $path)
+                sprintf('Could not read storage file "%s".', $path),
             );
         }
 
@@ -176,7 +174,7 @@ class FilesystemStorage implements StorageInterface
         $checkTarget = file_exists($path) ? $path : dirname($path);
         if (!is_writable($checkTarget)) {
             throw new StorageException(
-                sprintf('Could not write storage file "%s".', $path)
+                sprintf('Could not write storage file "%s".', $path),
             );
         }
 
@@ -184,7 +182,7 @@ class FilesystemStorage implements StorageInterface
 
         // Restrict private key files to owner-read-only.
         if (str_ends_with($path, '.pem')) {
-            chmod($path, 0600);
+            chmod($path, 0o600);
         }
     }
 }

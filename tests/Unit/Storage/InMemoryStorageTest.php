@@ -8,12 +8,12 @@ function makeStoredCert(): StoredCertificate
 {
     return new StoredCertificate(
         certificate: '-----BEGIN CERTIFICATE-----',
-        privateKey:  '-----BEGIN PRIVATE KEY-----',
-        fullchain:   'fullchain',
-        caBundle:    'ca',
-        issuedAt:    new DateTimeImmutable(),
-        expiresAt:   new DateTimeImmutable('+90 days'),
-        domains:     ['example.com'],
+        privateKey: '-----BEGIN PRIVATE KEY-----',
+        fullchain: 'fullchain',
+        caBundle: 'ca',
+        issuedAt: new DateTimeImmutable(),
+        expiresAt: new DateTimeImmutable('+90 days'),
+        domains: ['example.com'],
     );
 }
 
@@ -31,12 +31,12 @@ it('saves and retrieves an account key', function () {
 });
 
 it('throws when getting account key before saving', function () {
-    expect(fn () => (new InMemoryStorage())->getAccountKey())
+    expect(fn() => (new InMemoryStorage())->getAccountKey())
         ->toThrow(\CoyoteCert\Exceptions\StorageException::class);
 });
 
 it('throws when getting account key type before saving', function () {
-    expect(fn () => (new InMemoryStorage())->getAccountKeyType())
+    expect(fn() => (new InMemoryStorage())->getAccountKeyType())
         ->toThrow(\CoyoteCert\Exceptions\StorageException::class);
 });
 
@@ -85,12 +85,12 @@ it('overwrites an existing certificate', function () {
 
     $second = new StoredCertificate(
         certificate: 'new-cert',
-        privateKey:  'new-key',
-        fullchain:   'new-fullchain',
-        caBundle:    'new-ca',
-        issuedAt:    new DateTimeImmutable(),
-        expiresAt:   new DateTimeImmutable('+90 days'),
-        domains:     ['example.com'],
+        privateKey: 'new-key',
+        fullchain: 'new-fullchain',
+        caBundle: 'new-ca',
+        issuedAt: new DateTimeImmutable(),
+        expiresAt: new DateTimeImmutable('+90 days'),
+        domains: ['example.com'],
     );
     $storage->saveCertificate('example.com', $second);
 

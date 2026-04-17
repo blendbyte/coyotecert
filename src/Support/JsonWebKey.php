@@ -10,7 +10,8 @@ class JsonWebKey
      * @return array<string, string>
      */
     public static function compute(
-        #[\SensitiveParameter] string $accountKey
+        #[\SensitiveParameter]
+        string $accountKey,
     ): array {
         $privateKey = openssl_pkey_get_private($accountKey);
 

@@ -9,6 +9,5 @@ readonly class Http01ValidationData
         public string $filename,
         public string $content,
         public string $keyAuthorization,
-    ) {
-    }
+    ) {}
 }

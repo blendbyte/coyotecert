@@ -21,10 +21,10 @@ function makeOrderResponse(
     }
 
     return new Response(
-        headers:      $location ? ['location' => $location] : [],
+        headers: $location ? ['location' => $location] : [],
         requestedUrl: 'https://acme.example.com/new-order',
-        statusCode:   201,
-        body:         $body,
+        statusCode: 201,
+        body: $body,
     );
 }
 

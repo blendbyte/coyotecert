@@ -2,25 +2,25 @@
 
 namespace CoyoteCert;
 
-use DateTimeImmutable;
-use Psr\Log\LoggerInterface;
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\Dns01ValidationData;
 use CoyoteCert\DTO\Http01ValidationData;
 use CoyoteCert\DTO\OrderData;
+use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Enums\RevocationReason;
-use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Http\Client as HttpClient;
 use CoyoteCert\Http\Psr18Adapter;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
-use CoyoteCert\Storage\StoredCertificate;
 use CoyoteCert\Storage\StorageInterface;
+use CoyoteCert\Storage\StoredCertificate;
 use CoyoteCert\Support\OpenSsl;
+use DateTimeImmutable;
+use Psr\Log\LoggerInterface;
 
 /**
  * High-level fluent entry point for certificate issuance and renewal.
@@ -43,11 +43,11 @@ use CoyoteCert\Support\OpenSsl;
  */
 class CoyoteCert
 {
-    private ?StorageInterface          $storage          = null;
-    private ?LoggerInterface           $logger           = null;
-    private ?HttpClientInterface       $httpClient       = null;
-    private string                     $email            = '';
-    private string                     $profile          = '';
+    private ?StorageInterface          $storage    = null;
+    private ?LoggerInterface           $logger     = null;
+    private ?HttpClientInterface       $httpClient = null;
+    private string                     $email      = '';
+    private string                     $profile    = '';
     /** @var string[] */
     private array                      $domains          = [];
     private ?ChallengeHandlerInterface $challengeHandler = null;
@@ -55,9 +55,7 @@ class CoyoteCert
     private KeyType                    $accountKeyType   = KeyType::EC_P256;
     private bool                       $localTest        = true;
 
-    private function __construct(private readonly AcmeProviderInterface $provider)
-    {
-    }
+    private function __construct(private readonly AcmeProviderInterface $provider) {}
 
     // ── Builder ───────────────────────────────────────────────────────────────
 
@@ -179,7 +177,7 @@ class CoyoteCert
         } elseif ($this->httpClient === null) {
             // Client is lazily created; store for later application.
             // We create a Client now with the desired timeout so it's ready.
-            $client = new HttpClient(timeout: $seconds);
+            $client           = new HttpClient(timeout: $seconds);
             $this->httpClient = $client;
         }
 
@@ -228,10 +226,10 @@ class CoyoteCert
         }
 
         $api = new Api(
-            provider:       $this->provider,
-            storage:        $this->storage,
-            logger:         $this->logger,
-            httpClient:     $this->httpClient,
+            provider: $this->provider,
+            storage: $this->storage,
+            logger: $this->logger,
+            httpClient: $this->httpClient,
             accountKeyType: $this->accountKeyType,
         );
 
@@ -270,7 +268,7 @@ class CoyoteCert
         Api $api,
         OrderData $order,
         AccountData $account,
-        ChallengeHandlerInterface $challengeHandler
+        ChallengeHandlerInterface $challengeHandler,
     ): void {
         $challenges     = $api->domainValidation()->status($order);
         $challengeType  = $this->detectChallengeType();
@@ -294,14 +292,14 @@ class CoyoteCert
 
         if (!$allPassed) {
             throw new AcmeException(
-                'Domain validation failed — one or more challenges did not pass.'
+                'Domain validation failed — one or more challenges did not pass.',
             );
         }
     }
 
     private function fetchAndStoreCertificate(
         Api $api,
-        OrderData $order
+        OrderData $order,
     ): StoredCertificate {
         $certKey    = OpenSsl::generateKey($this->certKeyType);
         $certKeyPem = OpenSsl::openSslKeyToString($certKey);
@@ -321,12 +319,12 @@ class CoyoteCert
 
         $stored = new StoredCertificate(
             certificate: $bundle->certificate,
-            privateKey:  $certKeyPem,
-            fullchain:   $bundle->fullchain,
-            caBundle:    $bundle->caBundle,
-            issuedAt:    new DateTimeImmutable(),
-            expiresAt:   $expiresAt,
-            domains:     $this->domains,
+            privateKey: $certKeyPem,
+            fullchain: $bundle->fullchain,
+            caBundle: $bundle->caBundle,
+            issuedAt: new DateTimeImmutable(),
+            expiresAt: $expiresAt,
+            domains: $this->domains,
         );
 
         if ($this->storage !== null) {
@@ -348,21 +346,20 @@ class CoyoteCert
      * Revoke a previously issued certificate.
      *
      * Requires storage to be configured (the account key is used to sign the request).
-     *
      */
     public function revoke(StoredCertificate $cert, RevocationReason $reason = RevocationReason::Unspecified): bool
     {
         if ($this->storage === null) {
             throw new AcmeException(
-                'No storage configured. Call ->storage() before revoking.'
+                'No storage configured. Call ->storage() before revoking.',
             );
         }
 
         $api = new Api(
-            provider:       $this->provider,
-            storage:        $this->storage,
-            logger:         $this->logger,
-            httpClient:     $this->httpClient,
+            provider: $this->provider,
+            storage: $this->storage,
+            logger: $this->logger,
+            httpClient: $this->httpClient,
             accountKeyType: $this->accountKeyType,
         );
 
@@ -437,13 +434,13 @@ class CoyoteCert
     {
         if (empty($this->domains)) {
             throw new AcmeException(
-                'No domains configured. Call ->domains() before issuing a certificate.'
+                'No domains configured. Call ->domains() before issuing a certificate.',
             );
         }
 
         if ($this->challengeHandler === null) {
             throw new AcmeException(
-                'No challenge handler configured. Call ->challenge() before issuing a certificate.'
+                'No challenge handler configured. Call ->challenge() before issuing a certificate.',
             );
         }
     }
@@ -452,7 +449,7 @@ class CoyoteCert
     {
         if ($this->challengeHandler === null) {
             throw new AcmeException(
-                'No challenge handler configured. Call ->challenge() before issuing a certificate.'
+                'No challenge handler configured. Call ->challenge() before issuing a certificate.',
             );
         }
 
@@ -463,7 +460,7 @@ class CoyoteCert
         }
 
         throw new AcmeException(
-            'The configured challenge handler does not support any known challenge type.'
+            'The configured challenge handler does not support any known challenge type.',
         );
     }
 

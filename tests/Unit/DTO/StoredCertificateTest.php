@@ -6,12 +6,12 @@ function makeCert(array $overrides = []): StoredCertificate
 {
     return new StoredCertificate(
         certificate: $overrides['certificate'] ?? 'cert-pem',
-        privateKey:  $overrides['privateKey']  ?? 'key-pem',
-        fullchain:   $overrides['fullchain']   ?? 'fullchain-pem',
-        caBundle:    $overrides['caBundle']    ?? 'ca-bundle-pem',
-        issuedAt:    $overrides['issuedAt']    ?? new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-        expiresAt:   $overrides['expiresAt']   ?? new DateTimeImmutable('2026-04-01T00:00:00+00:00'),
-        domains:     $overrides['domains']     ?? ['example.com'],
+        privateKey: $overrides['privateKey']   ?? 'key-pem',
+        fullchain: $overrides['fullchain']     ?? 'fullchain-pem',
+        caBundle: $overrides['caBundle']       ?? 'ca-bundle-pem',
+        issuedAt: $overrides['issuedAt']       ?? new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+        expiresAt: $overrides['expiresAt']     ?? new DateTimeImmutable('2026-04-01T00:00:00+00:00'),
+        domains: $overrides['domains']         ?? ['example.com'],
     );
 }
 
@@ -19,20 +19,20 @@ function makeCert(array $overrides = []): StoredCertificate
  * Generate a self-signed certificate whose v3 extensions are set via a
  * temporary openssl config file.  Returns the PEM string.
  *
- * @param string[] $sans         DNS names to include in subjectAltName
- * @param bool     $withAki      Whether to add authorityKeyIdentifier
- * @param int      $serial       Certificate serial (use odd-length-safe values)
+ * @param string[] $sans DNS names to include in subjectAltName
+ * @param bool $withAki Whether to add authorityKeyIdentifier
+ * @param int $serial Certificate serial (use odd-length-safe values)
  */
 function makeStoredCertPem(
-    array  $sans   = ['example.com'],
+    array  $sans = ['example.com'],
     bool   $withAki = false,
-    int    $serial  = 1,
-    string $cn      = 'example.com',
+    int    $serial = 1,
+    string $cn = 'example.com',
 ): string {
     $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
     $csr = openssl_csr_new(['commonName' => $cn], $key);
 
-    $sanList    = implode(', ', array_map(fn ($d) => 'DNS:' . $d, $sans));
+    $sanList    = implode(', ', array_map(fn($d) => 'DNS:' . $d, $sans));
     $akiSection = $withAki ? "authorityKeyIdentifier = keyid:always\n" : '';
 
     $configContent = <<<CFG
@@ -181,7 +181,7 @@ it('authorityKeyId() returns null when the extension is absent', function () {
 
 it('authorityKeyId() returns an uppercase colon-separated hex string when present', function () {
     [$leafPem] = makeStoredCertWithAki();
-    $cert = makeCert(['certificate' => $leafPem]);
+    $cert      = makeCert(['certificate' => $leafPem]);
 
     $aki = $cert->authorityKeyId();
 

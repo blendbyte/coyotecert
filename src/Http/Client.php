@@ -2,16 +2,15 @@
 
 namespace CoyoteCert\Http;
 
-use CurlHandle;
 use CoyoteCert\Interfaces\HttpClientInterface;
+use CurlHandle;
 
 class Client implements HttpClientInterface
 {
     public function __construct(
-        private int  $timeout   = 10,
+        private int  $timeout = 10,
         private readonly bool $verifyTls = true,
-    ) {
-    }
+    ) {}
 
     public function setTimeout(int $seconds): void
     {
@@ -53,7 +52,7 @@ class Client implements HttpClientInterface
         array $headers = [],
         array $payload = [],
         int $maxRedirects = 0,
-        int $retries = 3
+        int $retries = 3,
     ): Response {
         $allHeaders = array_merge([
             'Content-Type: ' . (($httpVerb === 'post') ? 'application/jose+json' : 'application/json'),
@@ -84,7 +83,7 @@ class Client implements HttpClientInterface
         $rawResponse = is_string($curlResult) ? $curlResult : '';
         $rawHeaders  = mb_substr($rawResponse, 0, $headerSize);
         $rawBody     = mb_substr($rawResponse, $headerSize);
-        $body = $rawBody;
+        $body        = $rawBody;
 
         $allHeaders = array_merge($allHeaders, $this->parseRawHeaders($rawHeaders));
 
@@ -155,7 +154,7 @@ class Client implements HttpClientInterface
     /** @return array<string, string> */
     private function parseRawHeaders(string $rawHeaders): array
     {
-        $headers = explode("\n", $rawHeaders);
+        $headers    = explode("\n", $rawHeaders);
         $headersArr = [];
 
         foreach ($headers as $header) {

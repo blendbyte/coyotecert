@@ -9,9 +9,7 @@ use CoyoteCert\Support\KeyId;
 
 abstract class Endpoint
 {
-    public function __construct(protected Api $client)
-    {
-    }
+    public function __construct(protected Api $client) {}
 
     /**
      * @param array<string, mixed>|null $payload
@@ -24,7 +22,7 @@ abstract class Endpoint
             $accountUrl,
             $url,
             $this->client->nonce()->getNew(),
-            $payload
+            $payload,
         );
     }
 
@@ -37,9 +35,9 @@ abstract class Endpoint
     /** @param array<string, mixed>|null $payload */
     protected function postSigned(string $url, string $accountUrl, ?array $payload = null): Response
     {
-        $send = fn () => $this->client->getHttpClient()->post(
+        $send = fn() => $this->client->getHttpClient()->post(
             $url,
-            $this->createKeyId($accountUrl, $url, $payload)
+            $this->createKeyId($accountUrl, $url, $payload),
         );
 
         $response = $send();
@@ -68,7 +66,7 @@ abstract class Endpoint
 
     protected function isBadNonce(Response $response): bool
     {
-        return $response->getHttpResponseCode() === 400
+        return $response->getHttpResponseCode()      === 400
             && ($response->jsonBody()['type'] ?? '') === 'urn:ietf:params:acme:error:badNonce';
     }
 
@@ -91,7 +89,7 @@ abstract class Endpoint
      * Respects the ACME server's Retry-After header when present; otherwise
      * applies exponential back-off (baseDelay * 2^attempt) capped at 64 s.
      *
-     * @param int $attempt   Zero-based attempt index for the back-off exponent.
+     * @param int $attempt Zero-based attempt index for the back-off exponent.
      * @param int $baseDelay Initial delay in seconds (used when no header is set).
      */
     protected function retryAfterDelay(Response $response, int $attempt, int $baseDelay): int
@@ -107,10 +105,10 @@ abstract class Endpoint
     protected function logResponse(string $level, string $message, Response $response, array $additionalContext = []): void
     {
         $this->client->logger($level, $message, array_merge([
-            'url' => $response->getRequestedUrl(),
-            'status' => $response->getHttpResponseCode(),
+            'url'     => $response->getRequestedUrl(),
+            'status'  => $response->getHttpResponseCode(),
             'headers' => $response->getHeaders(),
-            'body' => $response->getBody(),
+            'body'    => $response->getBody(),
         ], $additionalContext));
     }
 }

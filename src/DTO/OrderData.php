@@ -23,8 +23,7 @@ class OrderData
         public readonly string  $accountUrl,
         public readonly ?string $certificateUrl,
         public readonly bool    $finalized = false,
-    ) {
-    }
+    ) {}
 
     public static function fromResponse(Response $response, string $accountUrl = ''): OrderData
     {
@@ -37,47 +36,47 @@ class OrderData
         $url = trim(rtrim($url, '?'));
 
         return new self(
-            id:                   Url::extractId($url),
-            url:                  $url,
-            status:               $response->jsonBody()['status'],
-            expires:              $response->jsonBody()['expires'],
-            identifiers:          $response->jsonBody()['identifiers'],
+            id: Url::extractId($url),
+            url: $url,
+            status: $response->jsonBody()['status'],
+            expires: $response->jsonBody()['expires'],
+            identifiers: $response->jsonBody()['identifiers'],
             domainValidationUrls: $response->jsonBody()['authorizations'],
-            finalizeUrl:          $response->jsonBody()['finalize'],
-            accountUrl:           $accountUrl,
-            certificateUrl:       Arr::get($response->jsonBody(), 'certificate'),
+            finalizeUrl: $response->jsonBody()['finalize'],
+            accountUrl: $accountUrl,
+            certificateUrl: Arr::get($response->jsonBody(), 'certificate'),
         );
     }
 
     public function withCertificateUrl(string $url): self
     {
         return new self(
-            id:                   $this->id,
-            url:                  $this->url,
-            status:               $this->status,
-            expires:              $this->expires,
-            identifiers:          $this->identifiers,
+            id: $this->id,
+            url: $this->url,
+            status: $this->status,
+            expires: $this->expires,
+            identifiers: $this->identifiers,
             domainValidationUrls: $this->domainValidationUrls,
-            finalizeUrl:          $this->finalizeUrl,
-            accountUrl:           $this->accountUrl,
-            certificateUrl:       $url,
-            finalized:            true,
+            finalizeUrl: $this->finalizeUrl,
+            accountUrl: $this->accountUrl,
+            certificateUrl: $url,
+            finalized: true,
         );
     }
 
     public function withFinalized(bool $finalized): self
     {
         return new self(
-            id:                   $this->id,
-            url:                  $this->url,
-            status:               $this->status,
-            expires:              $this->expires,
-            identifiers:          $this->identifiers,
+            id: $this->id,
+            url: $this->url,
+            status: $this->status,
+            expires: $this->expires,
+            identifiers: $this->identifiers,
             domainValidationUrls: $this->domainValidationUrls,
-            finalizeUrl:          $this->finalizeUrl,
-            accountUrl:           $this->accountUrl,
-            certificateUrl:       $this->certificateUrl,
-            finalized:            $finalized,
+            finalizeUrl: $this->finalizeUrl,
+            accountUrl: $this->accountUrl,
+            certificateUrl: $this->certificateUrl,
+            finalized: $finalized,
         );
     }
 

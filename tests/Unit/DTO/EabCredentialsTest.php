@@ -12,6 +12,6 @@ it('stores kid and hmacKey', function () {
 it('is readonly — properties cannot be changed', function () {
     $creds = new EabCredentials('kid', 'hmac');
 
-    expect(fn () => $creds->kid = 'other')
+    expect(fn() => $creds->kid = 'other')
         ->toThrow(\Error::class);
 });

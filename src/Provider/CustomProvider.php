@@ -9,21 +9,20 @@ class CustomProvider extends AbstractProvider
     /**
      * Use any ACME-compliant CA.
      *
-     * @param string      $directoryUrl Full directory URL of the CA.
-     * @param string      $displayName  Human-readable name (used in logs).
-     * @param string|null $eabKid       EAB key ID if required by the CA.
-     * @param string|null $eabHmac      EAB HMAC key if required by the CA.
-     * @param bool        $verifyTls    Whether to verify the CA's TLS certificate.
+     * @param string $directoryUrl Full directory URL of the CA.
+     * @param string $displayName Human-readable name (used in logs).
+     * @param string|null $eabKid EAB key ID if required by the CA.
+     * @param string|null $eabHmac EAB HMAC key if required by the CA.
+     * @param bool $verifyTls Whether to verify the CA's TLS certificate.
      */
     public function __construct(
         private readonly string  $directoryUrl,
-        private readonly string  $displayName      = 'Custom CA',
-        private readonly ?string $eabKid            = null,
-        private readonly ?string $eabHmac           = null,
-        private readonly bool    $verifyTls         = true,
+        private readonly string  $displayName = 'Custom CA',
+        private readonly ?string $eabKid = null,
+        private readonly ?string $eabHmac = null,
+        private readonly bool    $verifyTls = true,
         private readonly bool    $profilesSupported = false,
-    ) {
-    }
+    ) {}
 
     public function getDirectoryUrl(): string
     {

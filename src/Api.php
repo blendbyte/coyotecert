@@ -2,14 +2,13 @@
 
 namespace CoyoteCert;
 
-use Psr\Log\LoggerInterface;
 use CoyoteCert\Endpoints\Account;
 use CoyoteCert\Endpoints\Certificate;
-use CoyoteCert\Endpoints\RenewalInfo;
 use CoyoteCert\Endpoints\Directory;
 use CoyoteCert\Endpoints\DomainValidation;
 use CoyoteCert\Endpoints\Nonce;
 use CoyoteCert\Endpoints\Order;
+use CoyoteCert\Endpoints\RenewalInfo;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Http\Client;
@@ -18,6 +17,7 @@ use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
 use CoyoteCert\Storage\StorageAccountAdapter;
 use CoyoteCert\Storage\StorageInterface;
+use Psr\Log\LoggerInterface;
 
 class Api
 {
@@ -26,12 +26,11 @@ class Api
 
     public function __construct(
         private readonly AcmeProviderInterface $provider,
-        private readonly ?StorageInterface     $storage         = null,
-        private ?LoggerInterface               $logger          = null,
-        private ?HttpClientInterface           $httpClient      = null,
-        private readonly KeyType               $accountKeyType  = KeyType::EC_P256,
-    ) {
-    }
+        private readonly ?StorageInterface     $storage = null,
+        private ?LoggerInterface               $logger = null,
+        private ?HttpClientInterface           $httpClient = null,
+        private readonly KeyType               $accountKeyType = KeyType::EC_P256,
+    ) {}
 
     /**
      * Store a nonce returned in a server response's Replay-Nonce header
@@ -65,7 +64,7 @@ class Api
         }
 
         throw new AcmeException(
-            'No storage configured. Pass a StorageInterface to the Api constructor.'
+            'No storage configured. Pass a StorageInterface to the Api constructor.',
         );
     }
 

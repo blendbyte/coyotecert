@@ -24,8 +24,8 @@ interface ChallengeHandlerInterface
      *
      *   dns-persist-01 — same as dns-01; the TXT record must remain until cleanup().
      *
-     * @param string $domain           The domain being validated.
-     * @param string $token            Challenge token (http-01 filename; ignored for dns-01).
+     * @param string $domain The domain being validated.
+     * @param string $token Challenge token (http-01 filename; ignored for dns-01).
      * @param string $keyAuthorization Full key authorization (http-01 file body; dns-01 TXT value).
      */
     public function deploy(string $domain, string $token, string $keyAuthorization): void;
@@ -34,7 +34,7 @@ interface ChallengeHandlerInterface
      * Remove the challenge after validation completes (success or failure).
      *
      * @param string $domain The domain that was validated.
-     * @param string $token  The same token passed to deploy().
+     * @param string $token The same token passed to deploy().
      */
     public function cleanup(string $domain, string $token): void;
 }

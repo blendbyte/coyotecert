@@ -20,8 +20,7 @@ class StorageAccountAdapter implements AcmeAccountInterface
     public function __construct(
         private readonly StorageInterface $storage,
         private readonly KeyType          $keyType = KeyType::EC_P256,
-    ) {
-    }
+    ) {}
 
     public function getPrivateKey(): string
     {

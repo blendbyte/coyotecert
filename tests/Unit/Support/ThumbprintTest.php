@@ -14,9 +14,9 @@ it('make returns a non-empty base64url string for an RSA key', function () {
 });
 
 it('make matches manual thumbprint computation', function () {
-    $pem       = rsaKeyPem();
-    $jwk       = JsonWebKey::compute($pem);
-    $expected  = JsonWebKey::thumbprint($jwk);
+    $pem      = rsaKeyPem();
+    $jwk      = JsonWebKey::compute($pem);
+    $expected = JsonWebKey::thumbprint($jwk);
 
     expect(Thumbprint::make($pem))->toBe($expected);
 });

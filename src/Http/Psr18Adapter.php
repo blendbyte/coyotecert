@@ -2,10 +2,10 @@
 
 namespace CoyoteCert\Http;
 
+use CoyoteCert\Interfaces\HttpClientInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
-use CoyoteCert\Interfaces\HttpClientInterface;
 
 /**
  * Adapts any PSR-18 HTTP client to CoyoteCert's internal HttpClientInterface.
@@ -38,13 +38,13 @@ class Psr18Adapter implements HttpClientInterface
         $this->requestFactory = $requestFactory
             ?? ($client instanceof RequestFactoryInterface ? $client
                 : throw new \InvalidArgumentException(
-                    'Provide a RequestFactoryInterface or use a client that implements it (e.g. Symfony Psr18Client).'
+                    'Provide a RequestFactoryInterface or use a client that implements it (e.g. Symfony Psr18Client).',
                 ));
 
         $this->streamFactory = $streamFactory
             ?? ($client instanceof StreamFactoryInterface ? $client
                 : throw new \InvalidArgumentException(
-                    'Provide a StreamFactoryInterface or use a client that implements it (e.g. Symfony Psr18Client).'
+                    'Provide a StreamFactoryInterface or use a client that implements it (e.g. Symfony Psr18Client).',
                 ));
     }
 
@@ -73,7 +73,7 @@ class Psr18Adapter implements HttpClientInterface
 
         foreach ($headers as $header) {
             [$name, $value] = explode(':', $header, 2);
-            $request = $request->withAddedHeader(trim($name), trim($value));
+            $request        = $request->withAddedHeader(trim($name), trim($value));
         }
 
         return $this->send($request, $url);
@@ -94,7 +94,7 @@ class Psr18Adapter implements HttpClientInterface
 
         foreach ($headers as $header) {
             [$name, $value] = explode(':', $header, 2);
-            $request = $request->withAddedHeader(trim($name), trim($value));
+            $request        = $request->withAddedHeader(trim($name), trim($value));
         }
 
         return $this->send($request, $url);
@@ -115,10 +115,10 @@ class Psr18Adapter implements HttpClientInterface
             : $rawBody;
 
         return new Response(
-            headers:      $headers,
+            headers: $headers,
             requestedUrl: $url,
-            statusCode:   $psrResponse->getStatusCode(),
-            body:         $body,
+            statusCode: $psrResponse->getStatusCode(),
+            body: $body,
         );
     }
 }

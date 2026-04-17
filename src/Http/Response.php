@@ -13,8 +13,7 @@ class Response
         private readonly string $requestedUrl,
         private readonly ?int $statusCode,
         private readonly array|string $body,
-    ) {
-    }
+    ) {}
 
     public function getHeader(string $name, mixed $default = null): mixed
     {

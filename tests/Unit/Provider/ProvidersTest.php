@@ -109,7 +109,7 @@ it('ZeroSSL requires EAB', function () {
 });
 
 it('ZeroSSL returns pre-provisioned EAB credentials', function () {
-    $p    = new ZeroSSL(eabKid: 'kid1', eabHmac: 'hmac1');
+    $p     = new ZeroSSL(eabKid: 'kid1', eabHmac: 'hmac1');
     $creds = $p->getEabCredentials('test@example.com');
 
     expect($creds)->not->toBeNull();
@@ -209,7 +209,7 @@ it('SslCom verifies TLS', function () {
 it('CustomProvider uses the provided directory URL and display name', function () {
     $p = new CustomProvider(
         directoryUrl: 'https://acme.mycorp.com/directory',
-        displayName:  'MyCorp CA',
+        displayName: 'MyCorp CA',
     );
 
     expect($p->getDirectoryUrl())->toBe('https://acme.mycorp.com/directory');
@@ -219,8 +219,8 @@ it('CustomProvider uses the provided directory URL and display name', function (
 it('CustomProvider with EAB credentials is EAB required', function () {
     $p = new CustomProvider(
         directoryUrl: 'https://acme.mycorp.com/dir',
-        eabKid:       'kid',
-        eabHmac:      'hmac',
+        eabKid: 'kid',
+        eabHmac: 'hmac',
     );
 
     expect($p->isEabRequired())->toBeTrue();

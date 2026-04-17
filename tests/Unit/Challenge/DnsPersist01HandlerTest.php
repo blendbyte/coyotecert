@@ -43,7 +43,7 @@ it('cleanup is a no-op and does not throw', function () {
     $handler = new TestDnsPersist01Handler();
     $handler->deploy('example.com', 'tok', 'keyauth');
 
-    expect(fn () => $handler->cleanup('example.com', 'tok'))->not->toThrow(\Throwable::class);
+    expect(fn() => $handler->cleanup('example.com', 'tok'))->not->toThrow(\Throwable::class);
 });
 
 it('deploy array is unchanged after cleanup', function () {
