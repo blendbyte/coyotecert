@@ -81,7 +81,8 @@ class Order extends Endpoint
             $id,
         );
 
-        $response = $this->client->getHttpClient()->get($orderUrl);
+        // RFC 8555 §7.1.2.1: read-only resource access must use POST-as-GET.
+        $response = $this->postSigned($orderUrl, $account->url);
 
         // Everything below 400 is a success.
         if ($response->getHttpResponseCode() < 400) {
