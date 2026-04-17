@@ -31,7 +31,7 @@ class JsonHttpClient
      * Execute a JSON API request and return the decoded response body.
      *
      * @param array<string, mixed>|null $payload JSON request body (POST only).
-     * @param array<string, string>|null $queryParams URL query parameters (GET only).
+     * @param array<string, mixed>|null $queryParams URL query parameters (GET only).
      * @param array<int, string> $extraHeaders Per-request headers merged after defaults.
      * @return array<string, mixed>
      * @throws ChallengeException on connection error or HTTP 4xx/5xx.
