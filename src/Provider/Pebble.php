@@ -15,7 +15,7 @@ class Pebble extends AbstractProvider
      */
     public function __construct(
         private readonly string  $url       = 'https://localhost:14000/dir',
-        private readonly bool    $verifyTls = false,
+        private readonly bool    $verifyTls = true,
         private readonly bool    $eab       = false,
         private readonly ?string $eabKid    = null,
         private readonly ?string $eabHmac   = null,

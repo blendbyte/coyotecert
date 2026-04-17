@@ -139,6 +139,7 @@ class Client implements HttpClientInterface
         curl_setopt($curlHandle, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curlHandle, CURLOPT_TIMEOUT, $this->timeout);
         curl_setopt($curlHandle, CURLOPT_SSL_VERIFYPEER, $this->verifyTls);
+        curl_setopt($curlHandle, CURLOPT_SSL_VERIFYHOST, $this->verifyTls ? 2 : 0);
         curl_setopt($curlHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
         curl_setopt($curlHandle, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($curlHandle, CURLOPT_HEADER, true);
