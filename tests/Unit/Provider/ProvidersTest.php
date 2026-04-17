@@ -292,8 +292,12 @@ it('Pebble returns EAB credentials when configured', function () {
     expect($creds->hmacKey)->toBe('hmac1');
 });
 
-it('Pebble skips TLS verification by default', function () {
-    expect((new \CoyoteCert\Provider\Pebble())->verifyTls())->toBeFalse();
+it('Pebble verifies TLS by default', function () {
+    expect((new \CoyoteCert\Provider\Pebble())->verifyTls())->toBeTrue();
+});
+
+it('Pebble skips TLS verification when explicitly disabled', function () {
+    expect((new \CoyoteCert\Provider\Pebble(verifyTls: false))->verifyTls())->toBeFalse();
 });
 
 it('Pebble supports profiles', function () {

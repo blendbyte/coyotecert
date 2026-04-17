@@ -110,6 +110,38 @@ it('domains() accepts an array', function () {
     expect($c->domains(['example.com', 'www.example.com']))->toBe($c);
 });
 
+it('domains() accepts a wildcard domain', function () {
+    $c = makeCoyote();
+    expect($c->domains('*.example.com'))->toBe($c);
+});
+
+// ── SEC-05: domain name validation ───────────────────────────────────────────
+
+it('domains() throws AcmeException for a domain containing a newline', function () {
+    expect(fn () => makeCoyote()->domains("evil.com\ninjected"))
+        ->toThrow(AcmeException::class, 'Invalid domain name');
+});
+
+it('domains() throws AcmeException for a domain containing a slash', function () {
+    expect(fn () => makeCoyote()->domains('evil.com/path'))
+        ->toThrow(AcmeException::class, 'Invalid domain name');
+});
+
+it('domains() throws AcmeException for a bare TLD', function () {
+    expect(fn () => makeCoyote()->domains('com'))
+        ->toThrow(AcmeException::class, 'Invalid domain name');
+});
+
+it('domains() throws AcmeException for an empty string', function () {
+    expect(fn () => makeCoyote()->domains(''))
+        ->toThrow(AcmeException::class, 'Invalid domain name');
+});
+
+it('domains() throws AcmeException for a double wildcard', function () {
+    expect(fn () => makeCoyote()->domains('*.*.example.com'))
+        ->toThrow(AcmeException::class, 'Invalid domain name');
+});
+
 // ── detectChallengeType() ─────────────────────────────────────────────────────
 
 it('detectChallengeType() throws when the handler supports no known challenge type', function () {

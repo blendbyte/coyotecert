@@ -81,6 +81,33 @@ it('deploy throws when the challenge directory cannot be created', function () {
     @unlink($this->webroot);
 });
 
+// ── SEC-01: token validation ──────────────────────────────────────────────────
+
+it('deploy throws ChallengeException for a token containing path traversal', function () {
+    expect(fn () => $this->handler->deploy('example.com', '../../../etc/passwd', 'content'))
+        ->toThrow(ChallengeException::class, 'Invalid ACME token');
+});
+
+it('deploy throws ChallengeException for a token containing a slash', function () {
+    expect(fn () => $this->handler->deploy('example.com', 'tok/bad', 'content'))
+        ->toThrow(ChallengeException::class, 'Invalid ACME token');
+});
+
+it('deploy throws ChallengeException for a token containing a newline', function () {
+    expect(fn () => $this->handler->deploy('example.com', "tok\nbad", 'content'))
+        ->toThrow(ChallengeException::class, 'Invalid ACME token');
+});
+
+it('deploy throws ChallengeException for an empty token', function () {
+    expect(fn () => $this->handler->deploy('example.com', '', 'content'))
+        ->toThrow(ChallengeException::class, 'Invalid ACME token');
+});
+
+it('cleanup is a no-op for an invalid token and does not throw', function () {
+    expect(fn () => $this->handler->cleanup('example.com', '../../../etc/passwd'))
+        ->not->toThrow(\Throwable::class);
+});
+
 it('deploy throws when file_put_contents fails', function () {
     // Pre-create a DIRECTORY at the token path so file_put_contents returns false
     $tokenPath = $this->webroot . '/.well-known/acme-challenge/mytoken';
