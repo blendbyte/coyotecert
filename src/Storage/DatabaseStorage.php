@@ -99,14 +99,14 @@ class DatabaseStorage implements StorageInterface
 
     // ── Certificates ─────────────────────────────────────────────────────────
 
-    public function hasCertificate(string $domain): bool
+    public function hasCertificate(string $domain, KeyType $keyType): bool
     {
-        return $this->get($this->certKey($domain)) !== null;
+        return $this->get($this->certKey($domain, $keyType)) !== null;
     }
 
-    public function getCertificate(string $domain): ?StoredCertificate
+    public function getCertificate(string $domain, KeyType $keyType): ?StoredCertificate
     {
-        $json = $this->get($this->certKey($domain));
+        $json = $this->get($this->certKey($domain, $keyType));
 
         if ($json === null) {
             return null;
@@ -120,24 +120,24 @@ class DatabaseStorage implements StorageInterface
     public function saveCertificate(string $domain, StoredCertificate $cert): void
     {
         $this->set(
-            $this->certKey($domain),
+            $this->certKey($domain, $cert->keyType),
             json_encode($cert->toArray(), JSON_THROW_ON_ERROR),
         );
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, KeyType $keyType): void
     {
         $stmt = $this->pdo->prepare(
             "DELETE FROM `{$this->table}` WHERE `store_key` = :key",
         );
-        $stmt->execute([':key' => $this->certKey($domain)]);
+        $stmt->execute([':key' => $this->certKey($domain, $keyType)]);
     }
 
     // ── PDO helpers ───────────────────────────────────────────────────────────
 
-    private function certKey(string $domain): string
+    private function certKey(string $domain, KeyType $keyType): string
     {
-        return 'cert:' . $domain;
+        return 'cert:' . $domain . ':' . $keyType->value;
     }
 
     private function get(string $key): ?string

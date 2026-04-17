@@ -22,15 +22,20 @@ interface StorageInterface
 
     /**
      * @param string $domain Primary domain (used as the storage key).
+     * @param KeyType $keyType The key algorithm for the certificate to look up.
      */
-    public function hasCertificate(string $domain): bool;
+    public function hasCertificate(string $domain, KeyType $keyType): bool;
 
-    public function getCertificate(string $domain): ?StoredCertificate;
+    public function getCertificate(string $domain, KeyType $keyType): ?StoredCertificate;
 
+    /**
+     * Persist a certificate. The storage key is derived from the primary domain
+     * plus the key type carried inside $cert.
+     */
     public function saveCertificate(string $domain, StoredCertificate $cert): void;
 
     /**
-     * Remove a stored certificate. No-op when the domain is not found.
+     * Remove a stored certificate. No-op when the domain/key-type is not found.
      */
-    public function deleteCertificate(string $domain): void;
+    public function deleteCertificate(string $domain, KeyType $keyType): void;
 }

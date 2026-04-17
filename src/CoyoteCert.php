@@ -238,7 +238,7 @@ class CoyoteCert
             return true;
         }
 
-        $cert = $this->storage->getCertificate($this->domains[0]);
+        $cert = $this->storage->getCertificate($this->domains[0], $this->certKeyType);
 
         if ($cert === null) {
             return true;
@@ -290,7 +290,7 @@ class CoyoteCert
         $account = $this->getOrCreateAccount($api);
 
         $replacesId   = '';
-        $existingCert = $this->storage?->getCertificate($this->domains[0]);
+        $existingCert = $this->storage?->getCertificate($this->domains[0], $this->certKeyType);
         if ($existingCert !== null && ($issuerPem = $this->extractIssuerPem($existingCert)) !== null) {
             try {
                 $replacesId = $api->renewalInfo()->certId($existingCert->certificate, $issuerPem);
@@ -382,6 +382,7 @@ class CoyoteCert
             issuedAt: new DateTimeImmutable(),
             expiresAt: $expiresAt,
             domains: $this->domains,
+            keyType: $this->certKeyType,
         );
 
         if ($this->storage !== null) {
@@ -448,7 +449,7 @@ class CoyoteCert
                 throw new AcmeException('Certificate unexpectedly missing from storage.');
             }
 
-            return $this->storage->getCertificate($this->domains[0])
+            return $this->storage->getCertificate($this->domains[0], $this->certKeyType)
                 ?? throw new AcmeException('Certificate unexpectedly missing from storage.');
         }
 

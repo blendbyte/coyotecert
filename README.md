@@ -368,7 +368,7 @@ Files written:
 |---|---|
 | `/var/certs/account.pem` | ACME account private key (mode 0600) |
 | `/var/certs/account.json` | Key type metadata |
-| `/var/certs/{domain}.cert.json` | Serialised `StoredCertificate` |
+| `/var/certs/{domain}.{KeyType}.cert.json` | Serialised `StoredCertificate` (e.g. `example.com.EC_P256.cert.json`) |
 
 The directory is created automatically (mode 0700). Reads use shared locks, writes use exclusive locks, safe for concurrent processes.
 
@@ -453,25 +453,25 @@ class RedisStorage implements StorageInterface
         $this->redis->set('acme:account:type', $type->value);
     }
 
-    public function hasCertificate(string $domain): bool
+    public function hasCertificate(string $domain, KeyType $keyType): bool
     {
-        return (bool) $this->redis->exists("acme:cert:{$domain}");
+        return (bool) $this->redis->exists("acme:cert:{$domain}:{$keyType->value}");
     }
 
-    public function getCertificate(string $domain): ?StoredCertificate
+    public function getCertificate(string $domain, KeyType $keyType): ?StoredCertificate
     {
-        $json = $this->redis->get("acme:cert:{$domain}");
+        $json = $this->redis->get("acme:cert:{$domain}:{$keyType->value}");
         return $json ? StoredCertificate::fromArray(json_decode($json, true)) : null;
     }
 
     public function saveCertificate(string $domain, StoredCertificate $cert): void
     {
-        $this->redis->set("acme:cert:{$domain}", json_encode($cert->toArray()));
+        $this->redis->set("acme:cert:{$domain}:{$cert->keyType->value}", json_encode($cert->toArray()));
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, KeyType $keyType): void
     {
-        $this->redis->del("acme:cert:{$domain}");
+        $this->redis->del("acme:cert:{$domain}:{$keyType->value}");
     }
 }
 ```
@@ -766,6 +766,7 @@ Revoke a stored certificate with an optional RFC 5280 reason code.
 
 ```php
 use CoyoteCert\CoyoteCert;
+use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Provider\LetsEncrypt;
 use CoyoteCert\Storage\FilesystemStorage;
@@ -773,7 +774,7 @@ use CoyoteCert\Storage\FilesystemStorage;
 $storage = new FilesystemStorage('/var/certs');
 $coyote  = CoyoteCert::with(new LetsEncrypt())->storage($storage);
 
-$cert = $storage->getCertificate('example.com');
+$cert = $storage->getCertificate('example.com', KeyType::EC_P256);
 
 $coyote->revoke($cert);                                              // Unspecified (default)
 $coyote->revoke($cert, RevocationReason::KeyCompromise);
@@ -791,7 +792,7 @@ Returns `true` on success, `false` if the CA rejected the request.
 After revoking, remove the stored certificate so `issueOrRenew()` will request a fresh one:
 
 ```php
-$storage->deleteCertificate('example.com');
+$storage->deleteCertificate('example.com', KeyType::EC_P256);
 ```
 
 ---

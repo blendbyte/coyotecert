@@ -104,7 +104,7 @@ it('roundtrips through toArray/fromArray', function () {
 it('toArray contains all expected keys', function () {
     $data = makeCert()->toArray();
 
-    expect($data)->toHaveKeys(['certificate', 'private_key', 'fullchain', 'ca_bundle', 'issued_at', 'expires_at', 'domains']);
+    expect($data)->toHaveKeys(['certificate', 'private_key', 'fullchain', 'ca_bundle', 'issued_at', 'expires_at', 'domains', 'key_type']);
 });
 
 it('remainingDays returns approximate days until expiry', function () {

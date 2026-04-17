@@ -4,7 +4,7 @@ use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Storage\InMemoryStorage;
 use CoyoteCert\Storage\StoredCertificate;
 
-function makeStoredCert(): StoredCertificate
+function makeStoredCert(KeyType $keyType = KeyType::EC_P256): StoredCertificate
 {
     return new StoredCertificate(
         certificate: '-----BEGIN CERTIFICATE-----',
@@ -14,6 +14,7 @@ function makeStoredCert(): StoredCertificate
         issuedAt: new DateTimeImmutable(),
         expiresAt: new DateTimeImmutable('+90 days'),
         domains: ['example.com'],
+        keyType: $keyType,
     );
 }
 
@@ -41,8 +42,8 @@ it('throws when getting account key type before saving', function () {
 });
 
 it('has no certificate initially', function () {
-    expect((new InMemoryStorage())->hasCertificate('example.com'))->toBeFalse();
-    expect((new InMemoryStorage())->getCertificate('example.com'))->toBeNull();
+    expect((new InMemoryStorage())->hasCertificate('example.com', KeyType::EC_P256))->toBeFalse();
+    expect((new InMemoryStorage())->getCertificate('example.com', KeyType::EC_P256))->toBeNull();
 });
 
 it('saves and retrieves a certificate', function () {
@@ -50,8 +51,8 @@ it('saves and retrieves a certificate', function () {
     $cert    = makeStoredCert();
     $storage->saveCertificate('example.com', $cert);
 
-    expect($storage->hasCertificate('example.com'))->toBeTrue();
-    expect($storage->getCertificate('example.com'))->toBe($cert);
+    expect($storage->hasCertificate('example.com', KeyType::EC_P256))->toBeTrue();
+    expect($storage->getCertificate('example.com', KeyType::EC_P256))->toBe($cert);
 });
 
 it('isolates certificates by domain', function () {
@@ -59,22 +60,22 @@ it('isolates certificates by domain', function () {
     $cert    = makeStoredCert();
     $storage->saveCertificate('example.com', $cert);
 
-    expect($storage->hasCertificate('other.com'))->toBeFalse();
-    expect($storage->getCertificate('other.com'))->toBeNull();
+    expect($storage->hasCertificate('other.com', KeyType::EC_P256))->toBeFalse();
+    expect($storage->getCertificate('other.com', KeyType::EC_P256))->toBeNull();
 });
 
 it('deleteCertificate() removes the certificate', function () {
     $storage = new InMemoryStorage();
     $storage->saveCertificate('example.com', makeStoredCert());
-    $storage->deleteCertificate('example.com');
+    $storage->deleteCertificate('example.com', KeyType::EC_P256);
 
-    expect($storage->hasCertificate('example.com'))->toBeFalse();
-    expect($storage->getCertificate('example.com'))->toBeNull();
+    expect($storage->hasCertificate('example.com', KeyType::EC_P256))->toBeFalse();
+    expect($storage->getCertificate('example.com', KeyType::EC_P256))->toBeNull();
 });
 
 it('deleteCertificate() is a no-op for unknown domain', function () {
     $storage = new InMemoryStorage();
-    $storage->deleteCertificate('unknown.com'); // must not throw
+    $storage->deleteCertificate('unknown.com', KeyType::EC_P256); // must not throw
     expect(true)->toBeTrue();
 });
 
@@ -91,8 +92,32 @@ it('overwrites an existing certificate', function () {
         issuedAt: new DateTimeImmutable(),
         expiresAt: new DateTimeImmutable('+90 days'),
         domains: ['example.com'],
+        keyType: KeyType::EC_P256,
     );
     $storage->saveCertificate('example.com', $second);
 
-    expect($storage->getCertificate('example.com'))->toBe($second);
+    expect($storage->getCertificate('example.com', KeyType::EC_P256))->toBe($second);
+});
+
+it('stores RSA and ECDSA certificates for the same domain independently', function () {
+    $storage = new InMemoryStorage();
+    $rsa     = makeStoredCert(KeyType::RSA_2048);
+    $ec      = makeStoredCert(KeyType::EC_P256);
+
+    $storage->saveCertificate('example.com', $rsa);
+    $storage->saveCertificate('example.com', $ec);
+
+    expect($storage->getCertificate('example.com', KeyType::RSA_2048))->toBe($rsa);
+    expect($storage->getCertificate('example.com', KeyType::EC_P256))->toBe($ec);
+});
+
+it('deleting one key type does not affect the other', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeStoredCert(KeyType::RSA_2048));
+    $storage->saveCertificate('example.com', makeStoredCert(KeyType::EC_P256));
+
+    $storage->deleteCertificate('example.com', KeyType::RSA_2048);
+
+    expect($storage->hasCertificate('example.com', KeyType::RSA_2048))->toBeFalse();
+    expect($storage->hasCertificate('example.com', KeyType::EC_P256))->toBeTrue();
 });

@@ -19,7 +19,7 @@ function makeSqliteStorage(string $table = 'coyote_cert_storage'): DatabaseStora
     return new DatabaseStorage($pdo, $table);
 }
 
-function makeDatabaseCert(): StoredCertificate
+function makeDatabaseCert(KeyType $keyType = KeyType::EC_P256): StoredCertificate
 {
     return new StoredCertificate(
         certificate: '-----BEGIN CERTIFICATE-----\nMIIBtest\n-----END CERTIFICATE-----',
@@ -29,6 +29,7 @@ function makeDatabaseCert(): StoredCertificate
         issuedAt: new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
         expiresAt: new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
         domains: ['db.example.com'],
+        keyType: $keyType,
     );
 }
 
@@ -67,8 +68,8 @@ it('throws when getAccountKeyType is called with no key type stored', function (
 
 it('has no certificate initially', function () {
     $storage = makeSqliteStorage();
-    expect($storage->hasCertificate('example.com'))->toBeFalse();
-    expect($storage->getCertificate('example.com'))->toBeNull();
+    expect($storage->hasCertificate('example.com', KeyType::EC_P256))->toBeFalse();
+    expect($storage->getCertificate('example.com', KeyType::EC_P256))->toBeNull();
 });
 
 it('saves and retrieves a certificate', function () {
@@ -76,9 +77,9 @@ it('saves and retrieves a certificate', function () {
     $cert    = makeDatabaseCert();
     $storage->saveCertificate('db.example.com', $cert);
 
-    expect($storage->hasCertificate('db.example.com'))->toBeTrue();
+    expect($storage->hasCertificate('db.example.com', KeyType::EC_P256))->toBeTrue();
 
-    $loaded = $storage->getCertificate('db.example.com');
+    $loaded = $storage->getCertificate('db.example.com', KeyType::EC_P256);
     expect($loaded->toArray())->toBe($cert->toArray());
 });
 
@@ -94,10 +95,23 @@ it('overwrites an existing certificate', function () {
         issuedAt: new DateTimeImmutable('2026-03-01T00:00:00+00:00'),
         expiresAt: new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
         domains: ['example.com'],
+        keyType: KeyType::EC_P256,
     );
     $storage->saveCertificate('example.com', $updated);
 
-    expect($storage->getCertificate('example.com')->certificate)->toBe('new-cert');
+    expect($storage->getCertificate('example.com', KeyType::EC_P256)->certificate)->toBe('new-cert');
+});
+
+it('stores RSA and ECDSA certificates under separate keys', function () {
+    $storage = makeSqliteStorage();
+    $rsa     = makeDatabaseCert(KeyType::RSA_2048);
+    $ec      = makeDatabaseCert(KeyType::EC_P256);
+
+    $storage->saveCertificate('example.com', $rsa);
+    $storage->saveCertificate('example.com', $ec);
+
+    expect($storage->getCertificate('example.com', KeyType::RSA_2048)->keyType)->toBe(KeyType::RSA_2048);
+    expect($storage->getCertificate('example.com', KeyType::EC_P256)->keyType)->toBe(KeyType::EC_P256);
 });
 
 it('createTableSql returns a non-empty SQL string', function () {

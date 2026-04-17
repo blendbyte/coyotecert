@@ -27,6 +27,7 @@ function makeCoyoteCert(string $caBundle = '', int $expiresInDays = 90): StoredC
         issuedAt: new DateTimeImmutable(),
         expiresAt: new DateTimeImmutable("+{$expiresInDays} days"),
         domains: ['example.com'],
+        keyType: KeyType::EC_P256,
     );
 }
 
@@ -323,6 +324,7 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
         issuedAt: new DateTimeImmutable(),
         expiresAt: new DateTimeImmutable('+90 days'),
         domains: ['example.com'],
+        keyType: KeyType::EC_P256,
     ));
 
     $factory   = new \Nyholm\Psr7\Factory\Psr17Factory();
