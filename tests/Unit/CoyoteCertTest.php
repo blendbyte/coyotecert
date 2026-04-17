@@ -424,8 +424,8 @@ it('onRenewed() registers multiple callbacks', function () {
 });
 
 it('fireIssuedCallbacks() invokes onIssued callbacks with the certificate', function () {
-    $cert    = makeCoyoteCert();
-    $coyote  = makeCoyote();
+    $cert     = makeCoyoteCert();
+    $coyote   = makeCoyote();
     $received = null;
 
     $coyote->onIssued(function ($c) use (&$received) {
@@ -439,9 +439,9 @@ it('fireIssuedCallbacks() invokes onIssued callbacks with the certificate', func
 });
 
 it('fireIssuedCallbacks() does not invoke onRenewed callbacks when isRenewal is false', function () {
-    $cert    = makeCoyoteCert();
-    $coyote  = makeCoyote();
-    $called  = false;
+    $cert   = makeCoyoteCert();
+    $coyote = makeCoyote();
+    $called = false;
 
     $coyote->onRenewed(function () use (&$called) {
         $called = true;
@@ -473,8 +473,12 @@ it('fireIssuedCallbacks() invokes both onIssued and onRenewed when isRenewal is 
     $coyote = makeCoyote();
     $log    = [];
 
-    $coyote->onIssued(function () use (&$log) { $log[] = 'issued'; });
-    $coyote->onRenewed(function () use (&$log) { $log[] = 'renewed'; });
+    $coyote->onIssued(function () use (&$log) {
+        $log[] = 'issued';
+    });
+    $coyote->onRenewed(function () use (&$log) {
+        $log[] = 'renewed';
+    });
 
     $method = new \ReflectionMethod(CoyoteCert::class, 'fireIssuedCallbacks');
     $method->invoke($coyote, $cert, true);
@@ -487,9 +491,15 @@ it('fireIssuedCallbacks() invokes callbacks in registration order', function () 
     $coyote = makeCoyote();
     $log    = [];
 
-    $coyote->onIssued(function () use (&$log) { $log[] = 1; });
-    $coyote->onIssued(function () use (&$log) { $log[] = 2; });
-    $coyote->onIssued(function () use (&$log) { $log[] = 3; });
+    $coyote->onIssued(function () use (&$log) {
+        $log[] = 1;
+    });
+    $coyote->onIssued(function () use (&$log) {
+        $log[] = 2;
+    });
+    $coyote->onIssued(function () use (&$log) {
+        $log[] = 3;
+    });
 
     $method = new \ReflectionMethod(CoyoteCert::class, 'fireIssuedCallbacks');
     $method->invoke($coyote, $cert, false);

@@ -58,7 +58,7 @@ class CoyoteCert
     private bool                       $localTest        = true;
     private bool                       $skipCaaCheck     = false;
     /** @var callable[] */
-    private array $onIssuedCallbacks  = [];
+    private array $onIssuedCallbacks = [];
     /** @var callable[] */
     private array $onRenewedCallbacks = [];
 
