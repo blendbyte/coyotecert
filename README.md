@@ -9,9 +9,9 @@
 [![Static Analysis](https://img.shields.io/github/actions/workflow/status/blendbyte/coyotecert/static-analysis.yml?branch=main&style=flat-square&label=phpstan)](https://github.com/blendbyte/coyotecert/actions/workflows/static-analysis.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/blendbyte/coyotecert?style=flat-square)](https://codecov.io/gh/blendbyte/coyotecert)
 
-**A modern, fully RFC 8555-compliant ACME v2 client for PHP 8.3+.** Issue, renew, and revoke TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, Buypass, or any standards-compliant CA — with a clean fluent API, zero framework dependencies, and production-grade test coverage.
+**A PHP 8.3+ ACME v2 client for issuing, renewing, and revoking TLS certificates.** Works with Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, Buypass, and any RFC 8555-compliant CA. Fluent API, no framework dependencies, and solid test coverage.
 
-ACME (Automatic Certificate Management Environment) is the protocol that powers free, automated TLS certificates. CoyoteCert speaks the full protocol: account management, order lifecycle, HTTP-01 and DNS-01 challenge validation, certificate issuance, ARI-based smart renewal, and revocation. Everything you need from a single `composer require`.
+ACME (Automatic Certificate Management Environment) is the protocol behind free, automated TLS certificates. CoyoteCert covers the full thing: account management, order lifecycle, HTTP-01 and DNS-01 challenges, certificate issuance, smart renewal with ARI, and revocation. One `composer require` and you're set.
 
 ---
 
@@ -19,43 +19,47 @@ ACME (Automatic Certificate Management Environment) is the protocol that powers 
 
 ### Full RFC 8555 + RFC 9773 compliance
 
-CoyoteCert implements the complete ACME v2 specification — not just the happy path. That means proper nonce handling with automatic retry on `badNonce`, JWS signing for every request, EAB for CAs that require it, and ARI (Automatic Renewal Information, RFC 9773) for CA-guided renewal windows. If the CA publishes an ARI endpoint, CoyoteCert will respect it instead of guessing based on days remaining.
+CoyoteCert covers the full ACME v2 spec, not just the happy path. Proper nonce handling with automatic retry on `badNonce`, JWS signing for every request, EAB for CAs that require it, and ARI (Automatic Renewal Information, RFC 9773) so renewal windows are guided by the CA rather than a fixed day count.
 
 ### ECDSA-first key management
 
-Account keys and certificate keys both default to EC P-256 — the algorithm recommended by modern CAs for its speed and small key sizes. EC P-384, RSA-2048, and RSA-4096 are also available. JWS tokens are signed with the correct algorithm for each key type (ES256, ES384, RS256), so requests are accepted first time even by strict CAs.
+Keys default to EC P-256, which modern CAs recommend for speed and compact size. EC P-384, RSA-2048, and RSA-4096 are also supported. Each key type gets the right JWS algorithm (ES256, ES384, RS256), so requests go through first time even with strict CAs.
 
 ### Works with every major CA out of the box
 
-Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and Buypass — including full EAB support. ZeroSSL auto-provisions its EAB credentials from an API key so you never have to copy-paste tokens. A `CustomProvider` covers any ACME-compliant CA you might need.
+Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and Buypass, with full EAB support. ZeroSSL auto-provisions EAB credentials from your API key, so no copy-pasting tokens. A `CustomProvider` handles any other ACME-compliant CA.
 
 ### dns-persist-01: renewals without DNS propagation delays
 
-CoyoteCert introduces `dns-persist-01`, a challenge strategy where the TXT record is deployed once and kept in place between renewals. When it is time to renew, the CA validates immediately against the existing record — no waiting for DNS propagation on every 90-day cycle.
+CoyoteCert introduces `dns-persist-01`: deploy the TXT record once, leave it in place, and every subsequent renewal validates against it immediately. No DNS propagation wait on every 90-day cycle.
 
 ### ACME profiles and short-lived certificates
 
-Let's Encrypt's `shortlived` profile issues 6-day certificates that never need OCSP stapling or CRL distribution. CoyoteCert passes the profile to the order, and silently skips it for CAs that don't support profiles.
+Let's Encrypt's `shortlived` profile issues 6-day certificates with no OCSP or CRL requirements. CoyoteCert passes the profile through and silently ignores it for CAs that don't support profiles yet.
 
 ### Swappable HTTP client (PSR-18)
 
-The built-in curl client requires no dependencies. When you need proxy support, custom middleware, or framework integration, swap it for any PSR-18 client — Symfony HttpClient, Guzzle, or anything else — with one builder call.
+The built-in curl client needs no extra dependencies. Need proxy support, custom middleware, or framework integration? Swap it for any PSR-18 client (Symfony HttpClient, Guzzle, anything else) with one builder call.
 
 ### Three storage backends, fully swappable
 
-Filesystem with file locking, PDO (MySQL, PostgreSQL, SQLite) with dialect-aware upserts, and in-memory for testing. All three implement the same interface, so switching never touches your issuance code.
+Filesystem with file locking, PDO (MySQL, PostgreSQL, SQLite) with dialect-aware upserts, and in-memory for testing. All three share the same interface, so switching backends doesn't touch your issuance code.
 
 ### Pre-flight self-test
 
-Before asking the CA to validate a domain, CoyoteCert performs a local check — fetches the HTTP challenge token or looks up the DNS TXT record itself. Misconfigured web servers and DNS propagation delays are caught before they waste a rate-limit attempt.
+Before asking the CA to validate, CoyoteCert does its own check first: it fetches the HTTP token or looks up the DNS TXT record itself. Misconfigured servers and propagation delays get caught before burning a rate-limit attempt.
 
 ### 94 %+ test coverage with real CA integration tests
 
-Every code path is unit-tested with mocked responses. The integration suite runs against a live [Pebble](https://github.com/letsencrypt/pebble) ACME test server in CI across PHP 8.3, 8.4, and 8.5. No mock-only false confidence.
+Every code path has unit tests with mocked responses. The integration suite runs against a live [Pebble](https://github.com/letsencrypt/pebble) server in CI across PHP 8.3, 8.4, and 8.5. No mock-only false confidence.
 
 ### Modern, idiomatic PHP
 
 PHP 8.3+, strict types, backed enums, readonly constructor promotion, named arguments throughout. No magic methods, no global state, no hidden singletons.
+
+### Truly independent
+
+CoyoteCert has no affiliation with any certificate authority, not maintained by one, not financed by one. We run it on our own projects and for our customers, with whichever CA or provider the job calls for. We have a direct stake in it working well across all of them.
 
 ---
 
@@ -106,7 +110,7 @@ echo $cert->caBundle;    // PEM intermediate chain
 - [Issuing certificates](#issuing-certificates)
 - [Wildcard and multi-domain certificates](#wildcard-and-multi-domain-certificates)
 - [Automatic renewal](#automatic-renewal)
-- [ARI — CA-guided renewal windows](#ari--ca-guided-renewal-windows)
+- [ARI: CA-guided renewal windows](#ari-ca-guided-renewal-windows)
 - [ACME profiles](#acme-profiles)
 - [Key types](#key-types)
 - [Certificate revocation](#certificate-revocation)
@@ -270,7 +274,7 @@ DNS-01 is the only challenge type that supports wildcard certificates (`*.exampl
 
 ### dns-persist-01
 
-A CoyoteCert-specific strategy where the TXT record is deployed once and kept in place permanently. On every subsequent renewal, the CA validates against the same record — no DNS propagation wait, no deploy/cleanup cycle.
+A CoyoteCert-specific strategy where the TXT record is deployed once and kept in place permanently. On every subsequent renewal, the CA validates against the same record. No DNS propagation wait, no deploy/cleanup cycle.
 
 Extend `DnsPersist01Handler` and implement `deploy()`. The `cleanup()` method is a final no-op.
 
@@ -316,7 +320,7 @@ Files written:
 | `/var/certs/account.json` | Key type metadata |
 | `/var/certs/{domain}.cert.json` | Serialised `StoredCertificate` |
 
-The directory is created automatically (mode 0700). Reads use shared locks; writes use exclusive locks — safe for concurrent processes.
+The directory is created automatically (mode 0700). Reads use shared locks, writes use exclusive locks, safe for concurrent processes.
 
 ### Database (PDO)
 
@@ -367,7 +371,7 @@ use CoyoteCert\Storage\InMemoryStorage;
 
 ### Custom storage
 
-Implement `StorageInterface` with seven methods:
+Implement `StorageInterface` with eight methods:
 
 ```php
 use CoyoteCert\Enums\KeyType;
@@ -452,7 +456,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
     ->issueOrRenew(daysBeforeExpiry: 30);
 ```
 
-Run this in a cron job or scheduler. It is safe to call as often as you like — it does nothing when the certificate is still valid.
+Run this in a cron job or scheduler. Safe to call as often as you like; it does nothing when the certificate is still valid.
 
 ### renew()
 
@@ -539,7 +543,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
 // (compare serial or expiry to detect renewal)
 ```
 
-Add to crontab — daily is sufficient; `issueOrRenew()` skips the CA call when nothing is due:
+Add to crontab. Daily is sufficient; `issueOrRenew()` skips the CA call when nothing is due:
 
 ```
 0 3 * * * php /usr/local/bin/renew-certs.php
@@ -547,7 +551,7 @@ Add to crontab — daily is sufficient; `issueOrRenew()` skips the CA call when 
 
 ---
 
-## ARI — CA-guided renewal windows
+## ARI: CA-guided renewal windows
 
 [RFC 9773](https://datatracker.ietf.org/doc/html/rfc9773) lets a CA advertise a specific time window during which it wants you to renew. CoyoteCert checks the ARI endpoint automatically when `needsRenewal()` or `issueOrRenew()` is called.
 
@@ -568,7 +572,7 @@ Profiles let you request a specific certificate type from the CA. Let's Encrypt 
 ->profile('classic')    // 90-day certificate (default if no profile specified)
 ```
 
-Short-lived certificates are renewed more frequently but eliminate the need for OCSP stapling, CRL checks, and revocation infrastructure — a significant operational simplification.
+Short-lived certificates are renewed more frequently but eliminate the need for OCSP stapling, CRL checks, and revocation infrastructure. A significant operational simplification.
 
 Profiles are forwarded to the CA only if the provider reports `supportsProfiles() === true`. For CAs that don't support profiles (ZeroSSL, Buypass, etc.) the setting is silently ignored, so you can call `->profile()` unconditionally.
 
@@ -603,10 +607,10 @@ use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Provider\LetsEncrypt;
 use CoyoteCert\Storage\FilesystemStorage;
 
-$coyote = CoyoteCert::with(new LetsEncrypt())
-    ->storage(new FilesystemStorage('/var/certs'));
+$storage = new FilesystemStorage('/var/certs');
+$coyote  = CoyoteCert::with(new LetsEncrypt())->storage($storage);
 
-$cert = $coyote->storage->getCertificate('example.com');
+$cert = $storage->getCertificate('example.com');
 
 $coyote->revoke($cert);                                              // Unspecified (default)
 $coyote->revoke($cert, RevocationReason::KeyCompromise);
@@ -615,7 +619,9 @@ $coyote->revoke($cert, RevocationReason::AffiliationChanged);
 $coyote->revoke($cert, RevocationReason::Superseded);
 $coyote->revoke($cert, RevocationReason::CessationOfOperation);
 $coyote->revoke($cert, RevocationReason::CertificateHold);
+$coyote->revoke($cert, RevocationReason::RemoveFromCrl);
 $coyote->revoke($cert, RevocationReason::PrivilegeWithdrawn);
+$coyote->revoke($cert, RevocationReason::AaCompromise);
 ```
 
 Returns `true` on success, `false` if the CA rejected the request.
@@ -665,7 +671,7 @@ Adjust the built-in curl client's timeout without replacing the whole client:
 ->withHttpTimeout(30) // seconds
 ```
 
-If a custom PSR-18 client is configured, this call has no effect — configure the timeout in your client directly.
+If a custom PSR-18 client is configured, this call has no effect. Configure the timeout in your client directly.
 
 ---
 
@@ -774,7 +780,7 @@ CoyoteCert::with(AcmeProviderInterface $provider)  // factory — select the CA
 
 ## Low-level API
 
-For advanced use cases — custom account management, manual order orchestration, or scripted key rollovers — the `Api` class exposes every ACME endpoint directly.
+For advanced use cases (custom account management, manual order orchestration, scripted key rollovers), the `Api` class exposes every ACME endpoint directly.
 
 ```php
 use CoyoteCert\Api;
@@ -864,7 +870,7 @@ services:
   <img src="https://avatars.githubusercontent.com/u/69378377?s=200&v=4" alt="Blendbyte" width="80" align="left" style="margin-right: 16px;">
 </a>
 
-This project is maintained by **[Blendbyte](https://www.blendbyte.com)** — a team of engineers with 20+ years of experience building cloud infrastructure, web applications, and developer tools. We use these packages in production ourselves and actively contribute to the open source ecosystem we rely on every day. Issues and PRs are always welcome.
+This project is maintained by **[Blendbyte](https://www.blendbyte.com)**, a team of engineers with 20+ years of experience building cloud infrastructure, web applications, and developer tools. We use these packages in production and contribute to the open source ecosystem we rely on every day. Issues and PRs are always welcome.
 
 🌐 [blendbyte.com](https://www.blendbyte.com) · 📧 [hello@blendbyte.com](mailto:hello@blendbyte.com)
 
