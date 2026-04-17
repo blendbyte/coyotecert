@@ -47,8 +47,8 @@
     "test": "vendor/bin/pest",
     "test:coverage": "vendor/bin/pest --coverage",
     "analyse": "vendor/bin/phpstan analyse --memory-limit=512M",
-    "lint": "vendor/bin/php-cs-fixer fix",
-    "lint:check": "vendor/bin/php-cs-fixer fix --dry-run --diff"
+    "lint": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer fix",
+    "lint:check": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer fix --dry-run --diff"
   },
   "config": {
     "sort-packages": true,
