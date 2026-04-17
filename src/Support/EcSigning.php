@@ -17,12 +17,29 @@ final class EcSigning
      */
     public static function derToRaw(string $der, int $componentLen): string
     {
+        $len = strlen($der);
+
+        // Minimum valid DER ECDSA sequence: 0x30 len 0x02 rLen r 0x02 sLen s
+        if ($len < 8 || ord($der[0]) !== 0x30 || ord($der[2]) !== 0x02) {
+            throw new CryptoException('Malformed DER-encoded ECDSA signature.');
+        }
+
         $pos  = 2;
         $rLen = ord($der[$pos + 1]);
+
+        if ($pos + 2 + $rLen + 2 > $len || ord($der[$pos + 2 + $rLen]) !== 0x02) {
+            throw new CryptoException('Malformed DER-encoded ECDSA signature.');
+        }
+
         $r    = substr($der, $pos + 2, $rLen);
         $pos += 2 + $rLen;
         $sLen = ord($der[$pos + 1]);
-        $s    = substr($der, $pos + 2, $sLen);
+
+        if ($pos + 2 + $sLen > $len) {
+            throw new CryptoException('Malformed DER-encoded ECDSA signature.');
+        }
+
+        $s = substr($der, $pos + 2, $sLen);
 
         return str_pad(ltrim($r, "\x00"), $componentLen, "\x00", STR_PAD_LEFT)
              . str_pad(ltrim($s, "\x00"), $componentLen, "\x00", STR_PAD_LEFT);
