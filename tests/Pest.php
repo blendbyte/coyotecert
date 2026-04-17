@@ -21,6 +21,21 @@ namespace CoyoteCert\Endpoints {
     }
 }
 
+// ── Override sleep() in the Challenge\Dns namespace (unit tests only) ─────────
+// pollForTxtRecord() and awaitPropagation() call sleep() for poll intervals and
+// optional fixed delays. Same no-op trick keeps DNS handler unit tests instant.
+
+namespace CoyoteCert\Challenge\Dns {
+    function sleep(int $seconds): void
+    {
+        if (!defined('COYOTE_INTEGRATION_TESTS')) {
+            return; // no-op for unit tests
+        }
+
+        \sleep($seconds); // real sleep for integration tests
+    }
+}
+
 // ── Global helpers ────────────────────────────────────────────────────────────
 
 namespace {
