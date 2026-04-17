@@ -1,9 +1,10 @@
 # coyote-cert
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/blendbyte/coyote-cert.svg?style=flat-square)](https://packagist.org/packages/blendbyte/coyote-cert)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/blendbyte/coyote-cert/blob/main/LICENSE)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/blendbyte/coyotecert.svg?style=flat-square)](https://packagist.org/packages/blendbyte/coyotecert)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/blendbyte/coyotecert/blob/main/LICENSE)
 [![PHP](https://img.shields.io/badge/PHP-8.3%2B-787cb5?style=flat-square)](https://www.php.net)
-[![Tests](https://img.shields.io/github/actions/workflow/status/blendbyte/coyote-cert/tests.yml?branch=main&style=flat-square&label=tests)](https://github.com/blendbyte/coyote-cert/actions/workflows/tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/blendbyte/coyotecert/tests.yml?branch=main&style=flat-square&label=tests)](https://github.com/blendbyte/coyotecert/actions/workflows/tests.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/blendbyte/coyotecert?style=flat-square)](https://codecov.io/gh/blendbyte/coyotecert)
 
 ACME v2 PHP library for issuing, renewing, and revoking TLS certificates from Let's Encrypt and any other RFC 8555-compliant CA.
 
@@ -15,7 +16,7 @@ ACME v2 PHP library for issuing, renewing, and revoking TLS certificates from Le
 ## Installation
 
 ```bash
-composer require blendbyte/coyote-cert
+composer require blendbyte/coyotecert
 ```
 
 ## Quick start

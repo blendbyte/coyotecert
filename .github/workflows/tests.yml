@@ -46,4 +46,11 @@ jobs:
             'until curl -sk https://localhost:14000/dir > /dev/null 2>&1; do sleep 1; done'
 
       - name: Run tests
-        run: vendor/bin/pest --parallel --coverage --min=80
+        run: vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.php == '8.3'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

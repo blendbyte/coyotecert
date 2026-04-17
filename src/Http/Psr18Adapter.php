@@ -51,7 +51,7 @@ class Psr18Adapter implements HttpClientInterface
     public function head(string $url): Response
     {
         $request = $this->requestFactory->createRequest('HEAD', $url)
-            ->withHeader('User-Agent', 'blendbyte/coyote-cert')
+            ->withHeader('User-Agent', 'blendbyte/coyotecert')
             ->withHeader('Accept', 'application/json');
 
         return $this->send($request, $url);
@@ -68,7 +68,7 @@ class Psr18Adapter implements HttpClientInterface
         }
 
         $request = $this->requestFactory->createRequest('GET', $url)
-            ->withHeader('User-Agent', 'blendbyte/coyote-cert')
+            ->withHeader('User-Agent', 'blendbyte/coyotecert')
             ->withHeader('Accept', 'application/json');
 
         foreach ($headers as $header) {
@@ -87,7 +87,7 @@ class Psr18Adapter implements HttpClientInterface
     {
         $body    = json_encode($payload, JSON_THROW_ON_ERROR);
         $request = $this->requestFactory->createRequest('POST', $url)
-            ->withHeader('User-Agent', 'blendbyte/coyote-cert')
+            ->withHeader('User-Agent', 'blendbyte/coyotecert')
             ->withHeader('Accept', 'application/json')
             ->withHeader('Content-Type', 'application/jose+json')
             ->withBody($this->streamFactory->createStream($body));
