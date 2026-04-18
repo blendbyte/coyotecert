@@ -85,6 +85,8 @@ composer require blendbyte/coyotecert
 
 ## Quick start
 
+**HTTP-01** — write a token to your web root:
+
 ```php
 use CoyoteCert\CoyoteCert;
 use CoyoteCert\Challenge\Http01Handler;
@@ -97,8 +99,27 @@ $cert = CoyoteCert::with(new LetsEncrypt())
     ->email('admin@example.com')
     ->challenge(new Http01Handler('/var/www/html'))
     ->issueOrRenew();
+```
 
-// Use the certificate
+**DNS-01** — deploy a TXT record via a DNS provider (required for wildcards):
+
+```php
+use CoyoteCert\CoyoteCert;
+use CoyoteCert\Challenge\Dns\CloudflareDns01Handler;
+use CoyoteCert\Provider\LetsEncrypt;
+use CoyoteCert\Storage\FilesystemStorage;
+
+$cert = CoyoteCert::with(new LetsEncrypt())
+    ->storage(new FilesystemStorage('/var/certs'))
+    ->identifiers(['example.com', '*.example.com'])
+    ->email('admin@example.com')
+    ->challenge(new CloudflareDns01Handler(apiToken: 'your-api-token'))
+    ->issueOrRenew();
+```
+
+Both examples return the same value object:
+
+```php
 echo $cert->certificate; // PEM leaf certificate
 echo $cert->privateKey;  // PEM private key
 echo $cert->fullchain;   // PEM leaf + intermediates
