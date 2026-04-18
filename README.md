@@ -29,6 +29,10 @@ Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, a
 
 Filesystem with file locking, PDO (MySQL, PostgreSQL, SQLite), and in-memory for testing. All three share the same interface, so switching backends doesn't touch your issuance code.
 
+### Six built-in DNS-01 providers
+
+Cloudflare, Hetzner DNS, DigitalOcean, ClouDNS, AWS Route53, and shell/exec — all with automatic zone detection, post-deploy propagation checking, and a fluent builder for timeout and delay tuning. No AWS SDK required for Route53. Pass `--dns cloudflare` in the CLI or hand a handler directly to `->challenge()`. Wildcard certificates require DNS-01; CoyoteCert has the providers covered out of the box.
+
 ### dns-persist-01: renewals without DNS propagation delays
 
 CoyoteCert introduces `dns-persist-01`: deploy the TXT record once, leave it in place, and every subsequent renewal validates against it immediately. No DNS propagation wait on every 90-day cycle.
@@ -117,13 +121,29 @@ Make sure `~/.composer/vendor/bin` (or `~/.config/composer/vendor/bin` on Linux)
 
 ### `coyote issue`
 
-Issue or renew a certificate using HTTP-01 challenge validation.
+Issue or renew a certificate using HTTP-01 or DNS-01 challenge validation.
+
+**HTTP-01** — write a token file to your web root:
 
 ```bash
 coyote issue \
   --domain example.com \
   --domain www.example.com \
   --webroot /var/www/html \
+  --email admin@example.com \
+  --provider letsencrypt \
+  --storage /etc/certs
+```
+
+**DNS-01** — create a TXT record via a DNS provider (required for wildcards). Set the provider's credentials as environment variables, then pass `--dns`:
+
+```bash
+export CLOUDFLARE_API_TOKEN=your-token
+
+coyote issue \
+  --domain example.com \
+  --domain '*.example.com' \
+  --dns cloudflare \
   --email admin@example.com \
   --provider letsencrypt \
   --storage /etc/certs
@@ -138,6 +158,10 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 | `--domain` | `-d` | — | Domain to include on the certificate. Repeat for SANs: `--domain example.com --domain www.example.com` |
 | `--email` | `-e` | — | Contact email registered with the ACME account |
 | `--webroot` | `-w` | — | Webroot path for HTTP-01. CoyoteCert writes tokens under `.well-known/acme-challenge/` |
+| `--dns` | — | — | DNS provider for DNS-01 challenge. See DNS providers table below. Mutually exclusive with `--webroot` |
+| `--dns-propagation-timeout` | — | `60` | Seconds to wait for the TXT record to appear in DNS before submitting the challenge to the CA |
+| `--dns-propagation-delay` | — | `0` | Fixed delay in seconds after the propagation check, for providers with slow secondary sync |
+| `--dns-skip-propagation` | — | — | Skip the post-deploy DNS propagation check entirely (split-horizon or internal DNS) |
 | `--provider` | `-p` | — | CA to use. See provider table below. **Required** |
 | `--storage` | `-s` | `./certs` | Directory to read/write certificates and account keys |
 | `--days` | — | `30` | Renew when fewer than this many days remain before expiry |
@@ -160,6 +184,19 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 | `buypass` | Buypass Go SSL (production) |
 | `buypass-staging` | Buypass Go SSL (staging) |
 | `sslcom`, `ssl.com` | SSL.com (requires `--eab-kid` and `--eab-hmac`) |
+
+**DNS providers**
+
+| `--dns` value | Required env vars | Optional zone override |
+|---|---|---|
+| `cloudflare` | `CLOUDFLARE_API_TOKEN` | `CLOUDFLARE_ZONE_ID` |
+| `hetzner` | `HETZNER_API_TOKEN` | `HETZNER_ZONE_ID` |
+| `digitalocean`, `do` | `DO_API_TOKEN` | `DO_ZONE` |
+| `cloudns` | `CLOUDNS_AUTH_ID`, `CLOUDNS_AUTH_PASSWORD` | `CLOUDNS_ZONE` |
+| `route53` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_ROUTE53_ZONE_ID` |
+| `exec`, `shell` | `DNS_DEPLOY_CMD` | `DNS_CLEANUP_CMD` |
+
+Zone is auto-detected from the domain for all providers that support it. Supply the zone override to skip the detection API call or to disambiguate when the same domain appears in multiple zones.
 
 ### `coyote status`
 
@@ -210,6 +247,7 @@ coyote status --help  # Full option reference for the status command
 - [CLI](#cli)
 - [Providers](#providers)
 - [Challenge handlers](#challenge-handlers)
+- [DNS-01 providers](#dns-01-providers)
 - [Storage backends](#storage-backends)
 - [Issuing certificates](#issuing-certificates)
 - [Event callbacks](#event-callbacks)
@@ -349,13 +387,17 @@ The file is written to `{webroot}/.well-known/acme-challenge/{token}` and remove
 
 ### dns-01
 
-Deploy a TXT record at `_acme-challenge.{domain}` and remove it after validation. Implement `ChallengeHandlerInterface`:
+Deploy a TXT record at `_acme-challenge.{domain}` and remove it after validation.
+
+CoyoteCert ships built-in handlers for Cloudflare, Hetzner DNS, DigitalOcean, ClouDNS, AWS Route53, and shell scripts. See [DNS-01 providers](#dns-01-providers) for full details and library usage.
+
+To implement a custom handler, use `ChallengeHandlerInterface`:
 
 ```php
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 
-class CloudflareDns01Handler implements ChallengeHandlerInterface
+class MyDns01Handler implements ChallengeHandlerInterface
 {
     public function supports(AuthorizationChallengeEnum $type): bool
     {
@@ -365,18 +407,18 @@ class CloudflareDns01Handler implements ChallengeHandlerInterface
     public function deploy(string $domain, string $token, string $keyAuthorization): void
     {
         // $keyAuthorization is the value to put in the TXT record
-        Cloudflare::setTxtRecord('_acme-challenge.' . $domain, $keyAuthorization);
+        MyDns::setTxtRecord('_acme-challenge.' . $domain, $keyAuthorization);
     }
 
     public function cleanup(string $domain, string $token): void
     {
-        Cloudflare::deleteTxtRecord('_acme-challenge.' . $domain);
+        MyDns::deleteTxtRecord('_acme-challenge.' . $domain);
     }
 }
 ```
 
 ```php
-->challenge(new CloudflareDns01Handler())
+->challenge(new MyDns01Handler())
 ```
 
 DNS-01 is the only challenge type that supports wildcard certificates (`*.example.com`).
@@ -440,6 +482,116 @@ class MyTlsAlpn01Handler extends TlsAlpn01Handler
 ```
 
 > **Note:** TLS-ALPN-01 validates on port 443 only and does not require port 80. It is supported by Caddy, nginx (with the ACME plugin), and HAProxy. Wildcard certificates are not supported; use DNS-01 for those.
+
+---
+
+## DNS-01 providers
+
+CoyoteCert ships built-in DNS-01 handlers for six providers. Every handler extends `AbstractDns01Handler`, which runs a post-deploy propagation check by default and exposes three fluent controls:
+
+```php
+// All return a new immutable instance.
+$handler->propagationTimeout(120)    // seconds to poll for the TXT record (default: 60)
+$handler->propagationDelay(10)       // fixed pause after the check, for slow secondaries (default: 0)
+$handler->skipPropagationCheck()     // skip polling entirely (split-horizon / internal DNS)
+```
+
+Zone detection is automatic: the handler walks the domain's public-suffix candidates (`sub.example.com` → `example.com`) until it finds a matching zone in the API. Supply an explicit zone to skip the detection call.
+
+### Cloudflare
+
+Requires an API token with `Zone.DNS:Edit` permission. Detects the zone automatically.
+
+```php
+use CoyoteCert\Challenge\Dns\CloudflareDns01Handler;
+
+$handler = new CloudflareDns01Handler(apiToken: 'your-api-token');
+
+// With explicit zone ID (skips zone detection)
+$handler = new CloudflareDns01Handler(apiToken: 'your-api-token', zoneId: 'zone-id');
+```
+
+```php
+->challenge($handler->propagationTimeout(90))
+```
+
+### Hetzner DNS
+
+Requires an API token from the [Hetzner DNS Console](https://dns.hetzner.com).
+
+```php
+use CoyoteCert\Challenge\Dns\HetznerDns01Handler;
+
+$handler = new HetznerDns01Handler(apiToken: 'your-api-token');
+
+// With explicit zone ID
+$handler = new HetznerDns01Handler(apiToken: 'your-api-token', zoneId: 'zone-id');
+```
+
+### DigitalOcean
+
+Requires a personal access token with write access to domains.
+
+```php
+use CoyoteCert\Challenge\Dns\DigitalOceanDns01Handler;
+
+$handler = new DigitalOceanDns01Handler(apiToken: 'your-api-token');
+
+// With explicit zone name
+$handler = new DigitalOceanDns01Handler(apiToken: 'your-api-token', zone: 'example.com');
+```
+
+### ClouDNS
+
+Requires a ClouDNS auth-id and auth-password from your account panel.
+
+```php
+use CoyoteCert\Challenge\Dns\ClouDnsDns01Handler;
+
+$handler = new ClouDnsDns01Handler(authId: '12345', authPassword: 'secret');
+
+// With explicit zone name
+$handler = new ClouDnsDns01Handler(authId: '12345', authPassword: 'secret', zone: 'example.com');
+```
+
+### AWS Route53
+
+No AWS SDK required — SigV4 request signing is implemented directly with `hash_hmac()` and `hash()`. Requires an IAM user or role with `route53:ChangeResourceRecordSets` and `route53:ListHostedZonesByName` permissions.
+
+```php
+use CoyoteCert\Challenge\Dns\Route53Dns01Handler;
+
+$handler = new Route53Dns01Handler(
+    accessKeyId:     'AKIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+);
+
+// With explicit zone ID (with or without the /hostedzone/ prefix)
+$handler = new Route53Dns01Handler(
+    accessKeyId:     'AKIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    zoneId:          'Z1D633PJN98FT9',
+);
+```
+
+### Shell / exec
+
+Delegates to any command-line tool — useful for `nsupdate`, acme.sh hook scripts, or a custom DNS CLI. Use `{domain}` and `{keyauth}` as placeholders in the command template. The values are also injected as `ACME_DOMAIN` and `ACME_KEYAUTH` environment variables for scripts that prefer the environment.
+
+```php
+use CoyoteCert\Challenge\Dns\ShellDns01Handler;
+
+// Single command for deploy; no cleanup
+$handler = new ShellDns01Handler('/usr/local/bin/dns-hook {domain} {keyauth}');
+
+// Separate deploy and cleanup commands
+$handler = new ShellDns01Handler(
+    deployCommand:  '/usr/local/bin/dns-hook add {domain} {keyauth}',
+    cleanupCommand: '/usr/local/bin/dns-hook del {domain}',
+);
+```
+
+A non-zero exit code throws `ChallengeException`.
 
 ---
 

@@ -21,6 +21,200 @@ namespace CoyoteCert\Endpoints {
     }
 }
 
+// ── Override sleep() / time() / curl_* in Challenge\Dns namespace ─────────────
+// pollForTxtRecord() and awaitPropagation() call sleep() and time() without a
+// backslash prefix, so PHP resolves them in this namespace first.
+//
+// sleep() is a no-op in unit tests; it also advances $GLOBALS['__test_time']
+// when that key is set, enabling deterministic deadline-based loop tests.
+//
+// time() returns $GLOBALS['__test_time'] when set so tests can freeze or
+// advance the clock without real sleeps. Unset the global to restore real time.
+//
+// curl_* stubs follow the same $GLOBALS['__test_curl'] pattern as the Internal
+// namespace stubs below — they cover Route53Dns01Handler::send().
+
+namespace CoyoteCert\Challenge\Dns {
+    function time(): int
+    {
+        return $GLOBALS['__test_time'] ?? \time();
+    }
+
+    function sleep(int $seconds): void
+    {
+        if (!defined('COYOTE_INTEGRATION_TESTS')) {
+            if (isset($GLOBALS['__test_time'])) {
+                $GLOBALS['__test_time'] += $seconds;
+            }
+
+            return;
+        }
+
+        \sleep($seconds);
+    }
+
+    function curl_init(string $url = ''): object|false
+    {
+        if (!isset($GLOBALS['__test_curl'])) {
+            return \curl_init($url);
+        }
+
+        if (!($GLOBALS['__test_curl']['init'] ?? true)) {
+            return false;
+        }
+
+        return new \stdClass();
+    }
+
+    function curl_setopt_array(object|false $handle, array $options): bool
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return true;
+        }
+
+        return \curl_setopt_array($handle, $options);
+    }
+
+    function curl_setopt(object|false $handle, int $option, mixed $value): bool
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return true;
+        }
+
+        return \curl_setopt($handle, $option, $value);
+    }
+
+    function curl_exec(object|false $handle): string|bool
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return $GLOBALS['__test_curl']['body'] ?? '';
+        }
+
+        return \curl_exec($handle);
+    }
+
+    function curl_getinfo(object|false $handle, int $option = 0): mixed
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return $GLOBALS['__test_curl']['status'] ?? 200;
+        }
+
+        return \curl_getinfo($handle, $option);
+    }
+
+    function curl_error(object|false $handle): string
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return $GLOBALS['__test_curl']['error'] ?? '';
+        }
+
+        return \curl_error($handle);
+    }
+
+    function curl_close(object|false $handle): void
+    {
+        if (!isset($GLOBALS['__test_curl'])) {
+            \curl_close($handle);
+        }
+    }
+
+    function proc_open(
+        string|array $command,
+        array $descriptorspec,
+        mixed &$pipes,
+        ?string $cwd = null,
+        ?array $env = null,
+        ?array $options = null,
+    ): mixed {
+        if (isset($GLOBALS['__test_proc_open']) && $GLOBALS['__test_proc_open'] === false) {
+            $pipes = [];
+
+            return false;
+        }
+
+        return \proc_open($command, $descriptorspec, $pipes, $cwd, $env, $options ?? []);
+    }
+}
+
+// ── Override curl_* in the Challenge\Dns\Internal namespace (unit tests only) ──
+// JsonHttpClient::send() calls curl_*() without a backslash, so PHP resolves
+// them in the current namespace first. Defining stubs here lets unit tests
+// exercise the full send() code path without a real HTTP server.
+//
+// Activate a fixture by setting $GLOBALS['__test_curl'] to an array:
+//   init   => bool       (false = curl_init() failure; default: true)
+//   body   => string|false (false = connection error body; default: '')
+//   status => int        (HTTP status code; default: 200)
+//   error  => string     (curl_error() output; default: '')
+// Unset $GLOBALS['__test_curl'] (or leave it unset) to use real curl.
+
+namespace CoyoteCert\Challenge\Dns\Internal {
+    function curl_init(string $url = ''): object|false
+    {
+        if (!isset($GLOBALS['__test_curl'])) {
+            return \curl_init($url);
+        }
+
+        if (!($GLOBALS['__test_curl']['init'] ?? true)) {
+            return false;
+        }
+
+        return new \stdClass();
+    }
+
+    function curl_setopt_array(object|false $handle, array $options): bool
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return true;
+        }
+
+        return \curl_setopt_array($handle, $options);
+    }
+
+    function curl_setopt(object|false $handle, int $option, mixed $value): bool
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return true;
+        }
+
+        return \curl_setopt($handle, $option, $value);
+    }
+
+    function curl_exec(object|false $handle): string|bool
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return $GLOBALS['__test_curl']['body'] ?? '';
+        }
+
+        return \curl_exec($handle);
+    }
+
+    function curl_getinfo(object|false $handle, int $option = 0): mixed
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return $GLOBALS['__test_curl']['status'] ?? 200;
+        }
+
+        return \curl_getinfo($handle, $option);
+    }
+
+    function curl_error(object|false $handle): string
+    {
+        if (isset($GLOBALS['__test_curl'])) {
+            return $GLOBALS['__test_curl']['error'] ?? '';
+        }
+
+        return \curl_error($handle);
+    }
+
+    function curl_close(object|false $handle): void
+    {
+        if (!isset($GLOBALS['__test_curl'])) {
+            \curl_close($handle);
+        }
+    }
+}
+
 // ── Global helpers ────────────────────────────────────────────────────────────
 
 namespace {

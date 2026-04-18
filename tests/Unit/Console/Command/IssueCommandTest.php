@@ -44,11 +44,11 @@ it('fails when no --domain is provided', function () {
     expect($output)->toContain('No domains specified');
 });
 
-it('fails when --webroot is missing', function () {
+it('fails when neither --webroot nor --dns is provided', function () {
     [$code, $output] = runIssue(['--domain' => ['example.com']]);
 
     expect($code)->toBe(Command::FAILURE);
-    expect($output)->toContain('--webroot is required');
+    expect($output)->toContain('--webroot');
 });
 
 it('fails when --provider is not provided', function () {
@@ -268,6 +268,60 @@ it('uses warning colour when certificate expires within 7 days', function () {
 
 it('uses caution colour when certificate expires within 30 days', function () {
     [$code] = runStub(makeIssueCert(daysUntilExpiry: 20));
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+// ── DNS provider resolution ───────────────────────────────────────────────────
+
+afterEach(function () {
+    putenv('DNS_DEPLOY_CMD');
+});
+
+it('fails for an unknown --dns provider', function () {
+    [$code, $output] = runStub(makeIssueCert(), ['--dns' => 'unknown-provider']);
+
+    expect($code)->toBe(Command::FAILURE);
+    expect($output)->toContain('unknown-provider');
+});
+
+it('fails when the required env var is missing for the --dns provider', function () {
+    putenv('DNS_DEPLOY_CMD');
+
+    [$code, $output] = runStub(makeIssueCert(), ['--dns' => 'exec']);
+
+    expect($code)->toBe(Command::FAILURE);
+    expect($output)->toContain('DNS_DEPLOY_CMD');
+});
+
+it('resolves the --dns exec handler and succeeds when the env var is set', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec']);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('applies --dns-propagation-timeout when provided', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-propagation-timeout' => '120']);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('applies --dns-propagation-delay when provided', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-propagation-delay' => '5']);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('applies --dns-skip-propagation when provided', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-skip-propagation' => true]);
 
     expect($code)->toBe(Command::SUCCESS);
 });
