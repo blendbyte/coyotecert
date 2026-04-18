@@ -15,6 +15,10 @@ use CoyoteCert\Exceptions\ChallengeException;
  * for non-existent zones, so zone detection checks the response body rather than
  * HTTP status codes.
  *
+ * add-record.json does not return the new record's ID in its response body.
+ * After creating the record, deploy() fetches /dns/records.json filtered by host
+ * and type to locate the record and obtain its ID for use in cleanup().
+ *
  * All operations use GET requests with credentials passed as query parameters —
  * the standard supported mode for the ClouDNS REST API.
  *
@@ -49,21 +53,47 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
 
     public function deploy(string $domain, string $token, string $keyAuthorization): void
     {
-        $zone     = $this->resolveZone($domain);
+        $zone = $this->resolveZone($domain);
+        $host = $this->relativeRecordName($domain, $zone);
+
         $response = $this->httpClient->request('GET', '/dns/add-record.json', queryParams: [
             ...$this->auth(),
             'domain-name' => $zone,
             'record-type' => 'TXT',
-            'host'        => $this->relativeRecordName($domain, $zone),
+            'host'        => $host,
             'record'      => $keyAuthorization,
             'ttl'         => 60,
         ]);
 
-        if (empty($response['id'])) {
-            throw new ChallengeException('ClouDNS did not return a record ID after creating the TXT record.');
+        if (($response['status'] ?? '') !== 'Success') {
+            throw new ChallengeException(
+                sprintf('ClouDNS add-record failed: %s', $response['statusDescription'] ?? 'unknown error'),
+            );
         }
 
-        $this->recordIds[$domain] = (string) $response['id'];
+        // add-record.json does not return the new record's ID.
+        // Retrieve it via the records list, matching by TXT value.
+        $records  = $this->httpClient->request('GET', '/dns/records.json', queryParams: [
+            ...$this->auth(),
+            'domain-name' => $zone,
+            'host'        => $host,
+            'type'        => 'TXT',
+        ]);
+
+        $recordId = null;
+
+        foreach ($records as $record) {
+            if (is_array($record) && ($record['record'] ?? null) === $keyAuthorization) {
+                $recordId = (string) $record['id'];
+                break;
+            }
+        }
+
+        if ($recordId === null) {
+            throw new ChallengeException('ClouDNS: could not locate the TXT record after creation.');
+        }
+
+        $this->recordIds[$domain] = $recordId;
         $this->awaitPropagation($domain, $keyAuthorization);
     }
 

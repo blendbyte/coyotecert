@@ -70,9 +70,16 @@ function clouDnsZoneMissing(): array
     return ['status' => 'Failed', 'statusDescription' => "The zone doesn't exist."];
 }
 
-function clouDnsRecordCreated(int $id): array
+function clouDnsRecordCreated(): array
 {
-    return ['status' => 'Success', 'statusDescription' => 'The record was added successfully.', 'id' => $id];
+    // add-record.json returns only status; it does NOT return the new record's ID.
+    return ['status' => 'Success', 'statusDescription' => 'The record was added successfully.'];
+}
+
+function clouDnsRecordsList(int $id, string $keyauth = 'keyauth'): array
+{
+    // records.json response is a JSON object keyed by record ID strings.
+    return [(string) $id => ['id' => (string) $id, 'host' => '_acme-challenge', 'record' => $keyauth, 'type' => 'TXT']];
 }
 
 function clouDnsDeleted(): array
@@ -84,7 +91,8 @@ function clouDnsDeleted(): array
 
 it('every request carries auth-id and auth-password as query params', function () {
     [$client, $handler] = clouDnsHandler('12345', 'secret', 'example.com', [
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
@@ -99,18 +107,20 @@ it('every request carries auth-id and auth-password as query params', function (
 
 it('deploy skips zone detection when zone is provided', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
 
-    expect($client->captured)->toHaveCount(1);
+    expect($client->captured)->toHaveCount(2);
     expect($client->captured[0]['path'])->toBe('/dns/add-record.json');
 });
 
 it('deploy uses _acme-challenge as the host for an apex domain', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
@@ -120,7 +130,8 @@ it('deploy uses _acme-challenge as the host for an apex domain', function () {
 
 it('deploy uses _acme-challenge.sub as the host for a subdomain', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('sub.example.com', '', 'keyauth');
@@ -130,7 +141,8 @@ it('deploy uses _acme-challenge.sub as the host for a subdomain', function () {
 
 it('deploy sends all required fields to /dns/add-record.json', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(99),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(99, 'my-key-auth'),
     ]);
 
     $handler->deploy('example.com', '', 'my-key-auth');
@@ -145,16 +157,33 @@ it('deploy sends all required fields to /dns/add-record.json', function () {
     ]);
 });
 
+it('deploy fetches records.json with domain-name host and type after add-record', function () {
+    [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
+    ]);
+
+    $handler->deploy('example.com', '', 'keyauth');
+
+    expect($client->captured[1]['path'])->toBe('/dns/records.json');
+    expect($client->captured[1]['queryParams'])->toMatchArray([
+        'domain-name' => 'example.com',
+        'host'        => '_acme-challenge',
+        'type'        => 'TXT',
+    ]);
+});
+
 it('deploy stores the record ID for use in cleanup', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(42),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(42),
         clouDnsDeleted(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
     $handler->cleanup('example.com', '');
 
-    expect($client->captured[1]['queryParams']['record-id'])->toBe('42');
+    expect($client->captured[2]['queryParams']['record-id'])->toBe('42');
 });
 
 // ── deploy() with zone auto-detection ─────────────────────────────────────────
@@ -162,7 +191,8 @@ it('deploy stores the record ID for use in cleanup', function () {
 it('deploy queries /dns/get-zone-info.json to detect the zone', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', null, [
         clouDnsZoneFound('example.com'),
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
@@ -175,7 +205,8 @@ it('deploy skips candidates with a Failed response body and falls back to apex',
     [$client, $handler] = clouDnsHandler('id', 'pw', null, [
         clouDnsZoneMissing(),                  // sub.example.com → not found (HTTP 200 + Failed)
         clouDnsZoneFound('example.com'),        // example.com    → found
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('sub.example.com', '', 'keyauth');
@@ -189,7 +220,8 @@ it('deploy also skips candidates that return an HTTP error', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', null, [
         new ChallengeException('API returned HTTP 400 for GET /dns/get-zone-info.json.'),
         clouDnsZoneFound('example.com'),
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('sub.example.com', '', 'keyauth');
@@ -201,7 +233,8 @@ it('deploy uses _acme-challenge.sub when zone is auto-detected from apex', funct
     [$client, $handler] = clouDnsHandler('id', 'pw', null, [
         clouDnsZoneMissing(),
         clouDnsZoneFound('example.com'),
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
     ]);
 
     $handler->deploy('sub.example.com', '', 'keyauth');
@@ -212,8 +245,10 @@ it('deploy uses _acme-challenge.sub when zone is auto-detected from apex', funct
 it('deploy caches the detected zone and does not query it again', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', null, [
         clouDnsZoneFound('example.com'),
-        clouDnsRecordCreated(1),
-        clouDnsRecordCreated(2),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1, 'keyauth1'),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(2, 'keyauth2'),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth1');
@@ -234,29 +269,40 @@ it('deploy throws when no zone is found for any candidate', function () {
         ->toThrow(ChallengeException::class, 'No ClouDNS zone found');
 });
 
-it('deploy throws when the API does not return a record ID', function () {
+it('deploy throws when add-record returns a Failed status', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
         ['status' => 'Failed', 'statusDescription' => 'Invalid record.'],
     ]);
 
     expect(fn() => $handler->deploy('example.com', '', 'key'))
-        ->toThrow(ChallengeException::class, 'did not return a record ID');
+        ->toThrow(ChallengeException::class, 'ClouDNS add-record failed');
+});
+
+it('deploy throws when the record cannot be found in the records list after creation', function () {
+    [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
+        clouDnsRecordCreated(),
+        [],  // empty records list — record not found
+    ]);
+
+    expect(fn() => $handler->deploy('example.com', '', 'key'))
+        ->toThrow(ChallengeException::class, 'could not locate the TXT record');
 });
 
 // ── cleanup() ─────────────────────────────────────────────────────────────────
 
 it('cleanup sends a GET to /dns/delete-record.json with the correct params', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(77),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(77),
         clouDnsDeleted(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
     $handler->cleanup('example.com', '');
 
-    expect($client->captured[1]['path'])->toBe('/dns/delete-record.json');
-    expect($client->captured[1]['queryParams']['domain-name'])->toBe('example.com');
-    expect($client->captured[1]['queryParams']['record-id'])->toBe('77');
+    expect($client->captured[2]['path'])->toBe('/dns/delete-record.json');
+    expect($client->captured[2]['queryParams']['domain-name'])->toBe('example.com');
+    expect($client->captured[2]['queryParams']['record-id'])->toBe('77');
 });
 
 it('cleanup is a no-op when deploy was never called for the domain', function () {
@@ -268,7 +314,8 @@ it('cleanup is a no-op when deploy was never called for the domain', function ()
 
 it('cleanup clears the stored record ID so a second call is a no-op', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
-        clouDnsRecordCreated(1),
+        clouDnsRecordCreated(),
+        clouDnsRecordsList(1),
         clouDnsDeleted(),
     ]);
 
@@ -276,7 +323,7 @@ it('cleanup clears the stored record ID so a second call is a no-op', function (
     $handler->cleanup('example.com', '');
     $handler->cleanup('example.com', '');  // second call: no extra request
 
-    expect($client->captured)->toHaveCount(2);
+    expect($client->captured)->toHaveCount(3);
 });
 
 // ── Default client wiring ─────────────────────────────────────────────────────
