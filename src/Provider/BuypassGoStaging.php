@@ -11,6 +11,11 @@ class BuypassGoStaging extends AbstractProvider
         return 'https://api.test4.buypass.no/acme/directory';
     }
 
+    public function getSlug(): string
+    {
+        return 'buypass-staging';
+    }
+
     public function getDisplayName(): string
     {
         return 'Buypass Go SSL (Staging)';

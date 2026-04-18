@@ -11,6 +11,11 @@ class BuypassGo extends AbstractProvider
         return 'https://api.buypass.com/acme/directory';
     }
 
+    public function getSlug(): string
+    {
+        return 'buypass';
+    }
+
     public function getDisplayName(): string
     {
         return 'Buypass Go SSL';

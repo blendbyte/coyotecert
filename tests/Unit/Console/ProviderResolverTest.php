@@ -92,36 +92,38 @@ it('throws for sslcom without EAB credentials', function () {
     ProviderResolver::resolve('sslcom');
 })->throws(\InvalidArgumentException::class, 'eab-kid');
 
-// ── displayName() ──────────────────────────────────────────────────────────────
+// ── getSlug() ─────────────────────────────────────────────────────────────────
 
-it('returns display name for letsencrypt', function () {
-    expect(ProviderResolver::displayName('letsencrypt'))->toBe("Let's Encrypt");
+it('letsencrypt slug is letsencrypt', function () {
+    expect(ProviderResolver::resolve('letsencrypt')->getSlug())->toBe('letsencrypt');
 });
 
-it('returns display name for letsencrypt-staging', function () {
-    expect(ProviderResolver::displayName('letsencrypt-staging'))->toContain('Staging');
+it('letsencrypt-staging slug is letsencrypt-staging', function () {
+    expect(ProviderResolver::resolve('letsencrypt-staging')->getSlug())->toBe('letsencrypt-staging');
 });
 
-it('returns display name for zerossl', function () {
-    expect(ProviderResolver::displayName('zerossl'))->toBe('ZeroSSL');
+it('zerossl slug is zerossl', function () {
+    expect(ProviderResolver::resolve('zerossl')->getSlug())->toBe('zerossl');
 });
 
-it('returns display name for google', function () {
-    expect(ProviderResolver::displayName('google'))->toContain('Google');
+it('google slug is google', function () {
+    expect(ProviderResolver::resolve('google', eabKid: 'k', eabHmac: 'h')->getSlug())->toBe('google');
 });
 
-it('returns display name for buypass', function () {
-    expect(ProviderResolver::displayName('buypass'))->toContain('Buypass');
+it('buypass slug is buypass', function () {
+    expect(ProviderResolver::resolve('buypass')->getSlug())->toBe('buypass');
 });
 
-it('returns display name for buypass-staging', function () {
-    expect(ProviderResolver::displayName('buypass-staging'))->toContain('Staging');
+it('buypass-staging slug is buypass-staging', function () {
+    expect(ProviderResolver::resolve('buypass-staging')->getSlug())->toBe('buypass-staging');
 });
 
-it('returns display name for sslcom', function () {
-    expect(ProviderResolver::displayName('sslcom'))->toContain('SSL');
+it('sslcom slug is sslcom', function () {
+    expect(ProviderResolver::resolve('sslcom', eabKid: 'k', eabHmac: 'h')->getSlug())->toBe('sslcom');
 });
 
-it('falls back to the raw name for unknown providers', function () {
-    expect(ProviderResolver::displayName('customca'))->toBe('customca');
+it('aliases resolve to the same slug as the canonical name', function () {
+    expect(ProviderResolver::resolve('le')->getSlug())->toBe(ProviderResolver::resolve('letsencrypt')->getSlug());
+    expect(ProviderResolver::resolve('staging')->getSlug())->toBe(ProviderResolver::resolve('letsencrypt-staging')->getSlug());
+    expect(ProviderResolver::resolve('gts', eabKid: 'k', eabHmac: 'h')->getSlug())->toBe(ProviderResolver::resolve('google', eabKid: 'k', eabHmac: 'h')->getSlug());
 });

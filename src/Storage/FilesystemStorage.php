@@ -9,8 +9,14 @@ class FilesystemStorage implements StorageInterface
 {
     /**
      * @param string $directory Path where account keys and certificates are stored.
+     * @param string|null $providerSlug When set, account files are namespaced per CA
+     *                                  (e.g. "letsencrypt" → account-letsencrypt.pem).
+     *                                  Prevents different CAs from sharing the same key.
      */
-    public function __construct(private readonly string $directory) {}
+    public function __construct(
+        private readonly string $directory,
+        private ?string $providerSlug = null,
+    ) {}
 
     // ── Account key ──────────────────────────────────────────────────────────
 
@@ -113,16 +119,31 @@ class FilesystemStorage implements StorageInterface
         }
     }
 
+    public function withProviderSlug(string $slug): self
+    {
+        $clone               = clone $this;
+        $clone->providerSlug = $slug;
+
+        return $clone;
+    }
+
     // ── Paths ─────────────────────────────────────────────────────────────────
 
     private function accountKeyPath(): string
     {
-        return $this->dir() . 'account.pem';
+        return $this->dir() . $this->accountBasename() . '.pem';
     }
 
     private function accountMetaPath(): string
     {
-        return $this->dir() . 'account.json';
+        return $this->dir() . $this->accountBasename() . '.json';
+    }
+
+    private function accountBasename(): string
+    {
+        return $this->providerSlug !== null
+            ? 'account-' . $this->providerSlug
+            : 'account';
     }
 
     private function certPath(string $domain, KeyType $keyType): string

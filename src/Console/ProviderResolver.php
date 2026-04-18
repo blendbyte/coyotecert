@@ -61,20 +61,6 @@ class ProviderResolver
         };
     }
 
-    public static function displayName(string $name): string
-    {
-        return match (strtolower($name)) {
-            'letsencrypt', 'le'                            => "Let's Encrypt",
-            'letsencrypt-staging', 'le-staging', 'staging' => "Let's Encrypt (Staging)",
-            'zerossl'                                      => 'ZeroSSL',
-            'google', 'google-trust-services', 'gts'       => 'Google Trust Services',
-            'sslcom', 'ssl.com'                            => 'SSL.com',
-            'buypass'                                      => 'Buypass Go',
-            'buypass-staging'                              => 'Buypass Go (Staging)',
-            default                                        => $name,
-        };
-    }
-
     private static function requireEab(callable $factory, ?string $kid, ?string $hmac, string $providerName): AcmeProviderInterface
     {
         if ($kid === null || $hmac === null) {

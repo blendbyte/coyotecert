@@ -24,6 +24,11 @@ class SslCom extends AbstractProvider
             : 'https://acme.ssl.com/sslcom-dv-rsa';
     }
 
+    public function getSlug(): string
+    {
+        return 'sslcom';
+    }
+
     public function getDisplayName(): string
     {
         return 'SSL.com' . ($this->ecc ? ' (ECC)' : ' (RSA)');

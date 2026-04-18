@@ -20,6 +20,11 @@ class GoogleTrustServices extends AbstractProvider
         return 'https://dv.acme-v02.api.pki.goog/directory';
     }
 
+    public function getSlug(): string
+    {
+        return 'google';
+    }
+
     public function getDisplayName(): string
     {
         return 'Google Trust Services';

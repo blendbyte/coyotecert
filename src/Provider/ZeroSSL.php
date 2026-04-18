@@ -23,6 +23,11 @@ class ZeroSSL extends AbstractProvider
         return 'https://acme.zerossl.com/v2/DV90';
     }
 
+    public function getSlug(): string
+    {
+        return 'zerossl';
+    }
+
     public function getDisplayName(): string
     {
         return 'ZeroSSL';

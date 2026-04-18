@@ -11,6 +11,11 @@ class LetsEncryptStaging extends AbstractProvider
         return 'https://acme-staging-v02.api.letsencrypt.org/directory';
     }
 
+    public function getSlug(): string
+    {
+        return 'letsencrypt-staging';
+    }
+
     public function getDisplayName(): string
     {
         return "Let's Encrypt (Staging)";

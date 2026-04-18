@@ -11,6 +11,11 @@ class LetsEncrypt extends AbstractProvider
         return 'https://acme-v02.api.letsencrypt.org/directory';
     }
 
+    public function getSlug(): string
+    {
+        return 'letsencrypt';
+    }
+
     public function getDisplayName(): string
     {
         return "Let's Encrypt";

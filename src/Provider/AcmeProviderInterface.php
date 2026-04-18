@@ -12,6 +12,12 @@ interface AcmeProviderInterface
     public function getDirectoryUrl(): string;
 
     /**
+     * A short, filesystem-safe identifier for this CA (e.g. "letsencrypt", "zerossl").
+     * Used to namespace account keys in storage so different CAs never share a key.
+     */
+    public function getSlug(): string;
+
+    /**
      * Human-readable name of the CA (used in logs and error messages).
      */
     public function getDisplayName(): string;

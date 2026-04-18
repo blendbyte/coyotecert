@@ -146,7 +146,7 @@ class IssueCommand extends Command
         }
 
         $primaryIdentifier = $identifiers[0];
-        $providerDisplay   = ProviderResolver::displayName($provider);
+        $providerDisplay   = $acmeProvider->getDisplayName();
 
         $output->writeln(sprintf(
             '  Requesting certificate for <info>%s</info> via <comment>%s</comment>...',

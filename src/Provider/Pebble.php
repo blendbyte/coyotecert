@@ -26,6 +26,11 @@ class Pebble extends AbstractProvider
         return $this->url;
     }
 
+    public function getSlug(): string
+    {
+        return 'pebble';
+    }
+
     public function getDisplayName(): string
     {
         return 'Pebble (local test CA)';

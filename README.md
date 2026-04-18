@@ -603,8 +603,8 @@ Files written:
 
 | File | Contents |
 |---|---|
-| `/var/certs/account.pem` | ACME account private key (mode 0600) |
-| `/var/certs/account.json` | Key type metadata |
+| `/var/certs/account-{provider}.pem` | ACME account private key (mode 0600), e.g. `account-letsencrypt.pem` |
+| `/var/certs/account-{provider}.json` | Key type metadata |
 | `/var/certs/{domain}.{KeyType}.cert.json` | Serialised `StoredCertificate` (e.g. `example.com.EC_P256.cert.json`) |
 
 The directory is created automatically (mode 0700). Reads use shared locks, writes use exclusive locks, safe for concurrent processes.

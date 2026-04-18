@@ -35,6 +35,13 @@ class CustomProvider extends AbstractProvider
         return $this->directoryUrl;
     }
 
+    public function getSlug(): string
+    {
+        $host = parse_url($this->directoryUrl, PHP_URL_HOST) ?? 'custom';
+
+        return preg_replace('/[^a-z0-9\-]/', '-', strtolower($host));
+    }
+
     public function getDisplayName(): string
     {
         return $this->displayName;
