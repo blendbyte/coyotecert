@@ -50,16 +50,16 @@ function makeStatusCert(
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
-it('fails when --domain is not provided', function () {
+it('fails when --identifier is not provided', function () {
     $this->tester->execute(['--storage' => $this->dir]);
 
     expect($this->tester->getStatusCode())->toBe(Command::FAILURE);
-    expect($this->buffer->fetch())->toContain('--domain is required');
+    expect($this->buffer->fetch())->toContain('--identifier is required');
 });
 
 it('fails when no certificate is found in storage', function () {
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -72,7 +72,7 @@ it('fails when no certificate is found in storage', function () {
 
 it('fails for an unknown --key-type', function () {
     $this->tester->execute([
-        '--domain'   => 'example.com',
+        '--identifier'   => 'example.com',
         '--storage'  => $this->dir,
         '--key-type' => 'rsa9999',
     ]);
@@ -87,7 +87,7 @@ it('shows cert details for a valid certificate', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(daysUntilExpiry: 90));
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -102,7 +102,7 @@ it('shows days remaining', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(daysUntilExpiry: 45));
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -113,7 +113,7 @@ it('shows Expiring soon when fewer than 7 days remain', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(daysUntilExpiry: 5));
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -124,7 +124,7 @@ it('shows Renewal due when between 7 and 30 days remain', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(daysUntilExpiry: 20));
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -145,7 +145,7 @@ it('shows Expired for a past-expiry certificate', function () {
     $this->storage->saveCertificate('example.com', $expired);
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -156,7 +156,7 @@ it('shows the key type label', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(keyType: KeyType::RSA_2048));
 
     $this->tester->execute([
-        '--domain'   => 'example.com',
+        '--identifier'   => 'example.com',
         '--storage'  => $this->dir,
         '--key-type' => 'rsa2048',
     ]);
@@ -169,7 +169,7 @@ it('shows all domains for a multi-domain certificate', function () {
     $this->storage->saveCertificate('example.com', $cert);
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 
@@ -183,7 +183,7 @@ it('shows the EC P-384 key type label', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(keyType: KeyType::EC_P384));
 
     $this->tester->execute([
-        '--domain'   => 'example.com',
+        '--identifier'   => 'example.com',
         '--storage'  => $this->dir,
         '--key-type' => 'ec384',
     ]);
@@ -195,7 +195,7 @@ it('shows the RSA 4096 key type label', function () {
     $this->storage->saveCertificate('example.com', makeStatusCert(keyType: KeyType::RSA_4096));
 
     $this->tester->execute([
-        '--domain'   => 'example.com',
+        '--identifier'   => 'example.com',
         '--storage'  => $this->dir,
         '--key-type' => 'rsa4096',
     ]);
@@ -239,7 +239,7 @@ it('shows SANs parsed from a real certificate', function () {
     $this->storage->saveCertificate('example.com', $stored);
 
     $this->tester->execute([
-        '--domain'  => 'example.com',
+        '--identifier'  => 'example.com',
         '--storage' => $this->dir,
     ]);
 

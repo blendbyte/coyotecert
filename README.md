@@ -152,8 +152,8 @@ Issue or renew a certificate using HTTP-01 or DNS-01 challenge validation.
 
 ```bash
 coyote issue \
-  --domain example.com \
-  --domain www.example.com \
+  --identifier example.com \
+  --identifier www.example.com \
   --webroot /var/www/html \
   --email admin@example.com \
   --provider letsencrypt \
@@ -166,8 +166,8 @@ coyote issue \
 export CLOUDFLARE_API_TOKEN=your-token
 
 coyote issue \
-  --domain example.com \
-  --domain '*.example.com' \
+  --identifier example.com \
+  --identifier '*.example.com' \
   --dns cloudflare \
   --email admin@example.com \
   --provider letsencrypt \
@@ -180,7 +180,7 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 
 | Option | Short | Default | Description |
 |---|---|---|---|
-| `--domain` | `-d` | | Domain to include on the certificate. Repeat for SANs: `--domain example.com --domain www.example.com` |
+| `--identifier` | `-i` | | Identifier to include on the certificate (domain name or wildcard). Repeat for SANs: `--identifier example.com --identifier www.example.com` |
 | `--email` | `-e` | | Contact email registered with the ACME account |
 | `--webroot` | `-w` | | Webroot path for HTTP-01. CoyoteCert writes tokens under `.well-known/acme-challenge/` |
 | `--dns` | | | DNS provider for DNS-01 challenge. See DNS providers table below. Mutually exclusive with `--webroot` |
@@ -228,12 +228,12 @@ Zone is auto-detected from the domain for all providers that support it. Supply 
 Inspect a stored certificate.
 
 ```bash
-coyote status --domain example.com --storage /etc/certs
+coyote status --identifier example.com --storage /etc/certs
 ```
 
 | Option | Short | Default | Description |
 |---|---|---|---|
-| `--domain` | `-d` | | Primary domain of the certificate to inspect |
+| `--identifier` | `-i` | | Primary identifier of the certificate to inspect |
 | `--storage` | `-s` | `./certs` | Directory where certificates are stored |
 | `--key-type` | | `ec256` | Key type to look up: `ec256`, `ec384`, `rsa2048`, `rsa4096` |
 
@@ -251,7 +251,7 @@ The status line reflects time to expiry:
 Add a daily cron job to keep certificates renewed automatically:
 
 ```
-0 3 * * * coyote issue --domain example.com --webroot /var/www/html --storage /etc/certs --email admin@example.com
+0 3 * * * coyote issue --identifier example.com --webroot /var/www/html --storage /etc/certs --email admin@example.com
 ```
 
 The command is idempotent: it does nothing until fewer than `--days` (default 30) remain, so running it daily is safe.

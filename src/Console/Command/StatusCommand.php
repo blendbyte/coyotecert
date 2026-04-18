@@ -19,21 +19,21 @@ class StatusCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('domain', 'd', InputOption::VALUE_REQUIRED, 'Primary domain of the certificate to inspect')
+            ->addOption('identifier', 'i', InputOption::VALUE_REQUIRED, 'Primary identifier of the certificate to inspect')
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Certificate storage directory', './certs')
             ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Key type to look up: ec256, ec384, rsa2048, rsa4096', 'ec256');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $domain  = $input->getOption('domain');
-        $storage = $input->getOption('storage');
+        $identifier = $input->getOption('identifier');
+        $storage    = $input->getOption('storage');
 
-        if ($domain === null) {
+        if ($identifier === null) {
             render(<<<HTML
                     <div class="mt-1 mb-1 ml-2">
                         <span class="text-red-500 font-bold">✗</span>
-                        <span class="ml-1 text-red-500">--domain is required.</span>
+                        <span class="ml-1 text-red-500">--identifier is required.</span>
                     </div>
                 HTML);
 
@@ -57,7 +57,7 @@ class StatusCommand extends Command
         }
 
         $fs   = new FilesystemStorage($storage);
-        $cert = $fs->getCertificate($domain, $keyType);
+        $cert = $fs->getCertificate($identifier, $keyType);
 
         if ($cert === null) {
             render(sprintf(
@@ -67,7 +67,7 @@ class StatusCommand extends Command
                         <span class="ml-1">No certificate found for <span class="font-bold">%s</span> in %s</span>
                     </div>
                     HTML,
-                $domain,
+                $identifier,
                 $storage,
             ));
 
@@ -95,9 +95,9 @@ class StatusCommand extends Command
         $expiresDate = $cert->expiresAt->format('M j, Y');
         $expiresStr  = sprintf('%s (%d days remaining)', $expiresDate, $days);
         $issuedDate  = $cert->issuedAt->format('M j, Y');
-        $domainsStr  = implode(', ', $cert->domains);
+        $identifiersStr = implode(', ', $cert->domains);
         $sans        = $cert->sans();
-        $sansStr     = empty($sans) ? $domainsStr : implode(', ', $sans);
+        $sansStr     = empty($sans) ? $identifiersStr : implode(', ', $sans);
         $keyLabel    = match ($cert->keyType) {
             KeyType::EC_P256  => 'EC P-256',
             KeyType::EC_P384  => 'EC P-384',
@@ -143,7 +143,7 @@ class StatusCommand extends Command
                 HTML,
             $statusColor,
             $statusIcon,
-            $domainsStr,
+            $identifiersStr,
             $storagePath,
             $statusColor,
             $statusText,

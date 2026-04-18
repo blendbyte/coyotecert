@@ -37,15 +37,15 @@ function runIssue(array $input): array
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
-it('fails when no --domain is provided', function () {
+it('fails when no --identifier is provided', function () {
     [$code, $output] = runIssue([]);
 
     expect($code)->toBe(Command::FAILURE);
-    expect($output)->toContain('No domains specified');
+    expect($output)->toContain('No identifiers specified');
 });
 
 it('fails when neither --webroot nor --dns is provided', function () {
-    [$code, $output] = runIssue(['--domain' => ['example.com']]);
+    [$code, $output] = runIssue(['--identifier' => ['example.com']]);
 
     expect($code)->toBe(Command::FAILURE);
     expect($output)->toContain('--webroot');
@@ -53,7 +53,7 @@ it('fails when neither --webroot nor --dns is provided', function () {
 
 it('fails when --provider is not provided', function () {
     [$code, $output] = runIssue([
-        '--domain'  => ['example.com'],
+        '--identifier'  => ['example.com'],
         '--webroot' => '/tmp',
     ]);
 
@@ -63,7 +63,7 @@ it('fails when --provider is not provided', function () {
 
 it('fails for an unknown --provider', function () {
     [$code, $output] = runIssue([
-        '--domain'   => ['example.com'],
+        '--identifier'   => ['example.com'],
         '--webroot'  => '/tmp',
         '--provider' => 'nonexistent-ca',
     ]);
@@ -74,7 +74,7 @@ it('fails for an unknown --provider', function () {
 
 it('fails for an unknown --key-type', function () {
     [$code, $output] = runIssue([
-        '--domain'   => ['example.com'],
+        '--identifier'   => ['example.com'],
         '--webroot'  => '/tmp',
         '--provider' => 'letsencrypt',
         '--key-type' => 'rsa9999',
@@ -86,7 +86,7 @@ it('fails for an unknown --key-type', function () {
 
 it('fails for google provider without EAB credentials', function () {
     [$code, $output] = runIssue([
-        '--domain'   => ['example.com'],
+        '--identifier'   => ['example.com'],
         '--webroot'  => '/tmp',
         '--provider' => 'google',
     ]);
@@ -97,7 +97,7 @@ it('fails for google provider without EAB credentials', function () {
 
 it('fails for sslcom provider without EAB credentials', function () {
     [$code, $output] = runIssue([
-        '--domain'   => ['example.com'],
+        '--identifier'   => ['example.com'],
         '--webroot'  => '/tmp',
         '--provider' => 'sslcom',
     ]);
@@ -153,7 +153,7 @@ function runStub(mixed $result, array $input = []): array
 {
     $tester = new CommandTester(new StubIssueCommand($result));
     $tester->execute(array_merge([
-        '--domain'   => ['example.com'],
+        '--identifier'   => ['example.com'],
         '--webroot'  => '/tmp',
         '--storage'  => sys_get_temp_dir(),
         '--provider' => 'letsencrypt',

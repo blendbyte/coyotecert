@@ -49,6 +49,6 @@ it('doRun delegates --help to the named command when a command is given', functi
     $tester->run(['command' => 'issue', '--help' => true]);
     $output = $tester->getDisplay();
 
-    expect($output)->toContain('--domain');
+    expect($output)->toContain('--identifier');
     expect($output)->toContain('--webroot');
 });

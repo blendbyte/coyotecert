@@ -25,7 +25,7 @@ class IssueCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('domain', 'd', InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Domain name(s) to include on the certificate')
+            ->addOption('identifier', 'i', InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Identifier(s) to include on the certificate (domain names, wildcards)')
             ->addOption('email', 'e', InputOption::VALUE_REQUIRED, 'Contact email for the ACME account')
             ->addOption('webroot', 'w', InputOption::VALUE_REQUIRED, 'Webroot path for HTTP-01 challenge (.well-known/acme-challenge will be written here)')
             ->addOption('dns', null, InputOption::VALUE_REQUIRED, 'DNS provider for DNS-01 challenge: cloudflare, hetzner, digitalocean, cloudns, route53, exec')
@@ -46,13 +46,13 @@ class IssueCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $domains     = $input->getOption('domain');
+        $identifiers = $input->getOption('identifier');
         $webroot     = $input->getOption('webroot');
         $dnsProvider = $input->getOption('dns');
         $provider    = $input->getOption('provider');
 
-        if (empty($domains)) {
-            $this->renderError('No domains specified. Use --domain example.com (repeatable for SANs).');
+        if (empty($identifiers)) {
+            $this->renderError('No identifiers specified. Use --identifier example.com (repeatable for SANs).');
 
             return Command::FAILURE;
         }
@@ -124,7 +124,7 @@ class IssueCommand extends Command
 
         $coyote = CoyoteCert::with($acmeProvider)
             ->storage(new FilesystemStorage($storagePath))
-            ->identifiers($domains)
+            ->identifiers($identifiers)
             ->challenge($challengeHandler)
             ->keyType($keyType);
 
@@ -140,12 +140,12 @@ class IssueCommand extends Command
             $coyote = $coyote->skipLocalTest();
         }
 
-        $primaryDomain   = $domains[0];
-        $providerDisplay = ProviderResolver::displayName($provider);
+        $primaryIdentifier = $identifiers[0];
+        $providerDisplay   = ProviderResolver::displayName($provider);
 
         $output->writeln(sprintf(
             '  Requesting certificate for <info>%s</info> via <comment>%s</comment>...',
-            $primaryDomain,
+            $primaryIdentifier,
             $providerDisplay,
         ));
 
@@ -195,7 +195,7 @@ class IssueCommand extends Command
         $heading = $wasIssued ? 'Certificate issued successfully' : 'Certificate is still valid — no renewal needed';
         $color   = $wasIssued ? 'text-green-500' : 'text-blue-500';
 
-        $domainsStr = implode(', ', $cert->domains);
+        $identifiersStr = implode(', ', $cert->domains);
         $keyLabel   = $this->keyTypeLabel($cert->keyType);
         $days       = $cert->remainingDays();
         $daysColor  = match (true) {
@@ -214,7 +214,7 @@ class IssueCommand extends Command
                     </div>
                     <table class="mt-1 ml-4">
                         <tr>
-                            <td class="text-gray-500 pr-4">Domain(s)</td>
+                            <td class="text-gray-500 pr-4">Identifier(s)</td>
                             <td>%s</td>
                         </tr>
                         <tr>
@@ -239,7 +239,7 @@ class IssueCommand extends Command
             $color,
             $icon,
             $heading,
-            $domainsStr,
+            $identifiersStr,
             $provider,
             $keyLabel,
             $daysColor,
