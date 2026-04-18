@@ -192,12 +192,22 @@ class DomainValidation extends Endpoint
     /** @param DomainValidationData[] $domainValidation */
     private function challengeSucceeded(array $domainValidation): bool
     {
-        // Verify if the challenges have been passed.
         foreach ($domainValidation as $status) {
             $this->client->logger(
                 'info',
                 "Check {$status->identifier['type']} challenge of {$status->identifier['value']}.",
             );
+
+            if (!$status->isValid() && $status->identifier['type'] === 'dns') {
+                [$ns, $ip, $found] = LocalChallengeTest::lookupTxt($status->identifier['value']);
+                $this->client->logger('debug', sprintf(
+                    'DNS check via %s (%s) → _acme-challenge.%s TXT = %s',
+                    $ns,
+                    $ip,
+                    $status->identifier['value'],
+                    empty($found) ? '(none)' : implode(', ', array_map(fn($v) => '"' . $v . '"', $found)),
+                ));
+            }
 
             if (!$status->isValid()) {
                 return false;

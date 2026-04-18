@@ -107,12 +107,42 @@ class LocalChallengeTest
     public static function getNameserver(string $domain): string
     {
         $dnsResolver = new Dns();
+        $parts       = explode('.', $domain);
 
-        $result = $dnsResolver->getRecords($domain, DNS_NS);
+        // Walk up the zone hierarchy until we find NS records.
+        // e.g. certtest.oa1.net has no NS → try oa1.net → found.
+        for ($i = 0; $i < count($parts) - 1; $i++) {
+            $candidate = implode('.', array_slice($parts, $i));
+            try {
+                $result = $dnsResolver->getRecords($candidate, DNS_NS);
+                if (!empty($result)) {
+                    return $result[0]->target();
+                }
+            } catch (\Throwable) {
+                // No NS at this level; try parent zone.
+            }
+        }
 
-        return empty($result)
-            ? self::DEFAULT_NAMESERVER
-            : $result[0]->target();
+        return self::DEFAULT_NAMESERVER;
+    }
+
+    /**
+     * Look up _acme-challenge TXT records from the authoritative NS.
+     *
+     * @return array{0: string, 1: string, 2: string[]} [nameserver, ip, found_values]
+     */
+    public static function lookupTxt(string $domain): array
+    {
+        try {
+            $ns      = self::getNameserver($domain);
+            $ip      = gethostbyname($ns);
+            $records = self::getRecords($ns, '_acme-challenge.' . $domain, DNS_TXT);
+            $found   = array_map(fn($r) => $r->txt(), $records);
+
+            return [$ns, $ip !== $ns ? $ip : 'unresolved', $found];
+        } catch (\Throwable) {
+            return [self::DEFAULT_NAMESERVER, 'unresolved', []];
+        }
     }
 
     /** @return array<mixed> */

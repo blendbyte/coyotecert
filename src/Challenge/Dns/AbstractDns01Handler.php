@@ -221,6 +221,7 @@ abstract class AbstractDns01Handler implements ChallengeHandlerInterface
 
         try {
             LocalChallengeTest::dns($domain, '_acme-challenge', $keyAuthorization);
+            $this->logger?->debug(sprintf('TXT record confirmed: _acme-challenge.%s is visible', $domain));
 
             return true;
         } catch (DomainValidationException $e) {
