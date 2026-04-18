@@ -111,12 +111,6 @@ namespace CoyoteCert\Challenge\Dns {
         return \curl_error($handle);
     }
 
-    function curl_close(object|false $handle): void
-    {
-        if (!isset($GLOBALS['__test_curl'])) {
-            \curl_close($handle);
-        }
-    }
 
     function proc_open(
         string|array $command,
@@ -282,7 +276,6 @@ namespace {
                 ]);
                 curl_exec($ch);
                 $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
                 $result = $code > 0;
             }
         }

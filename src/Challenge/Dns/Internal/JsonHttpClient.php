@@ -98,7 +98,6 @@ class JsonHttpClient
         $raw    = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error  = curl_error($ch);
-        curl_close($ch);
 
         if ($raw === false || $error !== '') {
             throw new ChallengeException($this->prefixed("HTTP request failed: {$error}"));
