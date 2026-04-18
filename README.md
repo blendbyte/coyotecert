@@ -132,6 +132,81 @@ echo $cert->caBundle;    // PEM intermediate chain
 
 ---
 
+## Full example: nginx + automatic renewal
+
+A complete production setup — certificate issuance, PEM files on disk, nginx pointed at them, automatic reload on renewal, and a daily cron job.
+
+**`/usr/local/bin/renew-certs.php`**
+
+```php
+<?php
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use CoyoteCert\CoyoteCert;
+use CoyoteCert\Challenge\Http01Handler;
+use CoyoteCert\Provider\LetsEncrypt;
+use CoyoteCert\Storage\FilesystemStorage;
+
+CoyoteCert::with(new LetsEncrypt())
+    ->storage(new FilesystemStorage('/etc/certs'))
+    ->identifiers(['example.com', 'www.example.com'])
+    ->email('admin@example.com')
+    ->challenge(new Http01Handler('/var/www/html'))
+    ->onRenewed(fn() => exec('systemctl reload nginx'))
+    ->issueOrRenew();
+```
+
+On first run this creates the ACME account and issues the certificate. On subsequent runs it does nothing until renewal is due (30 days before expiry by default), then issues a new certificate and reloads nginx automatically.
+
+Files written to `/etc/certs/`:
+
+```
+account-letsencrypt.pem
+account-letsencrypt.json
+example.com.EC_P256.cert.json
+example.com.EC_P256.certificate.pem
+example.com.EC_P256.fullchain.pem    ← point nginx here
+example.com.EC_P256.ca.pem
+example.com.EC_P256.private_key.pem  ← and here
+```
+
+**`/etc/nginx/sites-available/example.com`**
+
+```nginx
+server {
+    listen 80;
+    server_name example.com www.example.com;
+
+    # Required for HTTP-01 challenge validation
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name example.com www.example.com;
+
+    ssl_certificate     /etc/certs/example.com.EC_P256.fullchain.pem;
+    ssl_certificate_key /etc/certs/example.com.EC_P256.private_key.pem;
+
+    # ... the rest of your config
+}
+```
+
+**Cron — daily at 03:00, idempotent:**
+
+```
+0 3 * * * php /usr/local/bin/renew-certs.php
+```
+
+---
+
 ## CLI
 
 CoyoteCert ships with a `coyote` CLI for issuing and inspecting certificates without writing PHP. It wraps the same builder API as the library.
@@ -599,13 +674,24 @@ use CoyoteCert\Storage\FilesystemStorage;
 ->storage(new FilesystemStorage('/var/certs'))
 ```
 
-Files written:
+Files written per certificate:
 
-| File | Contents |
-|---|---|
-| `/var/certs/account-{provider}.pem` | ACME account private key (mode 0600), e.g. `account-letsencrypt.pem` |
-| `/var/certs/account-{provider}.json` | Key type metadata |
-| `/var/certs/{domain}.{KeyType}.cert.json` | Serialised `StoredCertificate` (e.g. `example.com.EC_P256.cert.json`) |
+| File | Mode | Contents |
+|---|---|---|
+| `/var/certs/account-{provider}.pem` | 0600 | ACME account private key, e.g. `account-letsencrypt.pem` |
+| `/var/certs/account-{provider}.json` | 0600 | Account key type metadata |
+| `/var/certs/{domain}.{KeyType}.cert.json` | 0600 | Serialised `StoredCertificate` (e.g. `example.com.EC_P256.cert.json`) |
+| `/var/certs/{domain}.{KeyType}.certificate.pem` | 0644 | Leaf certificate |
+| `/var/certs/{domain}.{KeyType}.private_key.pem` | 0600 | Private key |
+| `/var/certs/{domain}.{KeyType}.fullchain.pem` | 0644 | Leaf + intermediate chain |
+| `/var/certs/{domain}.{KeyType}.ca.pem` | 0644 | Intermediate chain only |
+
+The PEM files are written on every `saveCertificate()` call alongside the JSON, so they're always in sync. Point your web server straight at them:
+
+```nginx
+ssl_certificate     /var/certs/example.com.EC_P256.fullchain.pem;
+ssl_certificate_key /var/certs/example.com.EC_P256.private_key.pem;
+```
 
 The directory is created automatically (mode 0700). Reads use shared locks, writes use exclusive locks, safe for concurrent processes.
 

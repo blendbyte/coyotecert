@@ -146,6 +146,70 @@ it('deleteCertificate() is a no-op for unknown domain', function () {
     expect(true)->toBeTrue();
 });
 
+// ── PEM file output ───────────────────────────────────────────────────────────
+
+it('saveCertificate writes PEM files alongside the JSON', function () {
+    $cert = makeFileCert();
+    $this->storage->saveCertificate('example.com', $cert);
+
+    $base = $this->dir . '/example.com.EC_P256.';
+    expect(file_get_contents($base . 'certificate.pem'))->toBe($cert->certificate);
+    expect(file_get_contents($base . 'private_key.pem'))->toBe($cert->privateKey);
+    expect(file_get_contents($base . 'fullchain.pem'))->toBe($cert->fullchain);
+    expect(file_get_contents($base . 'ca.pem'))->toBe($cert->caBundle);
+});
+
+it('private_key.pem is mode 0600 and public PEM files are mode 0644', function () {
+    $this->storage->saveCertificate('example.com', makeFileCert());
+
+    $base = $this->dir . '/example.com.EC_P256.';
+    expect(decoct(fileperms($base . 'private_key.pem') & 0777))->toBe('600');
+    expect(decoct(fileperms($base . 'certificate.pem') & 0777))->toBe('644');
+    expect(decoct(fileperms($base . 'fullchain.pem') & 0777))->toBe('644');
+    expect(decoct(fileperms($base . 'ca.pem') & 0777))->toBe('644');
+})->skip(fn() => function_exists('posix_getuid') && posix_getuid() === 0, 'root bypasses chmod checks');
+
+it('saveCertificate overwrites PEM files on renewal', function () {
+    $this->storage->saveCertificate('example.com', makeFileCert());
+
+    $renewed = new StoredCertificate(
+        certificate: 'renewed-cert',
+        privateKey: 'renewed-key',
+        fullchain: 'renewed-fullchain',
+        caBundle: 'renewed-ca',
+        issuedAt: new DateTimeImmutable('2026-06-01T00:00:00+00:00'),
+        expiresAt: new DateTimeImmutable('2026-09-01T00:00:00+00:00'),
+        domains: ['example.com'],
+        keyType: KeyType::EC_P256,
+    );
+    $this->storage->saveCertificate('example.com', $renewed);
+
+    $base = $this->dir . '/example.com.EC_P256.';
+    expect(file_get_contents($base . 'certificate.pem'))->toBe('renewed-cert');
+    expect(file_get_contents($base . 'private_key.pem'))->toBe('renewed-key');
+    expect(file_get_contents($base . 'fullchain.pem'))->toBe('renewed-fullchain');
+    expect(file_get_contents($base . 'ca.pem'))->toBe('renewed-ca');
+});
+
+it('deleteCertificate removes PEM files', function () {
+    $this->storage->saveCertificate('example.com', makeFileCert());
+    $this->storage->deleteCertificate('example.com', KeyType::EC_P256);
+
+    $base = $this->dir . '/example.com.EC_P256.';
+    expect(file_exists($base . 'certificate.pem'))->toBeFalse();
+    expect(file_exists($base . 'private_key.pem'))->toBeFalse();
+    expect(file_exists($base . 'fullchain.pem'))->toBeFalse();
+    expect(file_exists($base . 'ca.pem'))->toBeFalse();
+});
+
+it('RSA and ECDSA certificates write separate PEM file sets', function () {
+    $this->storage->saveCertificate('example.com', makeFileCert(KeyType::RSA_2048));
+    $this->storage->saveCertificate('example.com', makeFileCert(KeyType::EC_P256));
+
+    expect(file_exists($this->dir . '/example.com.RSA_2048.fullchain.pem'))->toBeTrue();
+    expect(file_exists($this->dir . '/example.com.EC_P256.fullchain.pem'))->toBeTrue();
+});
+
 // ── StoredCertificate helpers ─────────────────────────────────────────────────
 
 it('isExpired() returns false for a future certificate', function () {

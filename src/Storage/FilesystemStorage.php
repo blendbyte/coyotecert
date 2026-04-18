@@ -99,6 +99,11 @@ class FilesystemStorage implements StorageInterface
             $this->certPath($domain, $cert->keyType),
             json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
         );
+        $base = $this->pemBase($domain, $cert->keyType);
+        $this->writeFile($base . 'certificate.pem', $cert->certificate);
+        $this->writeFile($base . 'private_key.pem', $cert->privateKey);
+        $this->writeFile($base . 'fullchain.pem', $cert->fullchain);
+        $this->writeFile($base . 'ca.pem', $cert->caBundle);
     }
 
     public function deleteCertificate(string $domain, KeyType $keyType): void
@@ -107,6 +112,13 @@ class FilesystemStorage implements StorageInterface
 
         if (file_exists($path)) {
             unlink($path);
+            $base = $this->pemBase($domain, $keyType);
+            foreach (['certificate.pem', 'private_key.pem', 'fullchain.pem', 'ca.pem'] as $file) {
+                $p = $base . $file;
+                if (file_exists($p)) {
+                    unlink($p);
+                }
+            }
 
             return;
         }
@@ -148,9 +160,14 @@ class FilesystemStorage implements StorageInterface
 
     private function certPath(string $domain, KeyType $keyType): string
     {
+        return $this->pemBase($domain, $keyType) . 'cert.json';
+    }
+
+    private function pemBase(string $domain, KeyType $keyType): string
+    {
         $safe = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $domain);
 
-        return $this->dir() . $safe . '.' . $keyType->value . '.cert.json';
+        return $this->dir() . $safe . '.' . $keyType->value . '.';
     }
 
     /** Pre-v2 path — one cert per domain, no key-type suffix. */
@@ -243,9 +260,11 @@ class FilesystemStorage implements StorageInterface
 
         file_put_contents($path, $contents, LOCK_EX);
 
-        // Restrict private key files to owner-read-only.
         if (str_ends_with($path, '.pem')) {
-            chmod($path, 0o600);
+            $isPublic = str_ends_with($path, 'certificate.pem')
+                     || str_ends_with($path, 'fullchain.pem')
+                     || str_ends_with($path, 'ca.pem');
+            chmod($path, $isPublic ? 0o644 : 0o600);
         }
     }
 }
