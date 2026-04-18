@@ -58,6 +58,50 @@ it('does not support tls-alpn-01', function () {
     expect((new TestDns01Handler())->supports(AuthorizationChallengeEnum::TLS_ALPN))->toBeFalse();
 });
 
+// ── zoneCandidates ────────────────────────────────────────────────────────────
+
+it('zoneCandidates returns just the apex for a two-part domain', function () {
+    $handler = new class extends AbstractDns01Handler {
+        public function deploy(string $d, string $t, string $k): void {}
+        public function cleanup(string $d, string $t): void {}
+        public function candidates(string $domain): array { return $this->zoneCandidates($domain); }
+    };
+
+    expect($handler->candidates('example.com'))->toBe(['example.com']);
+});
+
+it('zoneCandidates produces the full suffix walk for a subdomain', function () {
+    $handler = new class extends AbstractDns01Handler {
+        public function deploy(string $d, string $t, string $k): void {}
+        public function cleanup(string $d, string $t): void {}
+        public function candidates(string $domain): array { return $this->zoneCandidates($domain); }
+    };
+
+    expect($handler->candidates('sub.example.com'))->toBe(['sub.example.com', 'example.com']);
+});
+
+// ── relativeRecordName ────────────────────────────────────────────────────────
+
+it('relativeRecordName returns _acme-challenge for an apex domain', function () {
+    $handler = new class extends AbstractDns01Handler {
+        public function deploy(string $d, string $t, string $k): void {}
+        public function cleanup(string $d, string $t): void {}
+        public function name(string $domain, string $zone): string { return $this->relativeRecordName($domain, $zone); }
+    };
+
+    expect($handler->name('example.com', 'example.com'))->toBe('_acme-challenge');
+});
+
+it('relativeRecordName returns _acme-challenge.sub for a one-level subdomain', function () {
+    $handler = new class extends AbstractDns01Handler {
+        public function deploy(string $d, string $t, string $k): void {}
+        public function cleanup(string $d, string $t): void {}
+        public function name(string $domain, string $zone): string { return $this->relativeRecordName($domain, $zone); }
+    };
+
+    expect($handler->name('sub.example.com', 'example.com'))->toBe('_acme-challenge.sub');
+});
+
 // ── challengeName ─────────────────────────────────────────────────────────────
 
 it('challengeName prepends _acme-challenge', function () {

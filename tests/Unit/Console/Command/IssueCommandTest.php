@@ -271,3 +271,57 @@ it('uses caution colour when certificate expires within 30 days', function () {
 
     expect($code)->toBe(Command::SUCCESS);
 });
+
+// ── DNS provider resolution ───────────────────────────────────────────────────
+
+afterEach(function () {
+    putenv('DNS_DEPLOY_CMD');
+});
+
+it('fails for an unknown --dns provider', function () {
+    [$code, $output] = runStub(makeIssueCert(), ['--dns' => 'unknown-provider']);
+
+    expect($code)->toBe(Command::FAILURE);
+    expect($output)->toContain('unknown-provider');
+});
+
+it('fails when the required env var is missing for the --dns provider', function () {
+    putenv('DNS_DEPLOY_CMD');
+
+    [$code, $output] = runStub(makeIssueCert(), ['--dns' => 'exec']);
+
+    expect($code)->toBe(Command::FAILURE);
+    expect($output)->toContain('DNS_DEPLOY_CMD');
+});
+
+it('resolves the --dns exec handler and succeeds when the env var is set', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec']);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('applies --dns-propagation-timeout when provided', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-propagation-timeout' => '120']);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('applies --dns-propagation-delay when provided', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-propagation-delay' => '5']);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('applies --dns-skip-propagation when provided', function () {
+    putenv('DNS_DEPLOY_CMD=echo');
+
+    [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-skip-propagation' => true]);
+
+    expect($code)->toBe(Command::SUCCESS);
+});
