@@ -145,7 +145,7 @@ it('RenewalInfo::get() returns null when renewalInfo is absent from the director
 
 // ── Order ─────────────────────────────────────────────────────────────────────
 
-it('Order::finalize() returns false when the order is not ready (status=pending)', function () {
+it('Order::finalize() throws when the order is not ready (status=pending)', function () {
     $storage = new InMemoryStorage();
     $storage->saveAccountKey(testProvider()->getSlug(), rsaKeyPem(), KeyType::RSA_2048);
 
@@ -165,7 +165,8 @@ it('Order::finalize() returns false when the order is not ready (status=pending)
         finalized: false,
     );
 
-    expect($api->order()->finalize($orderData, 'fake-csr'))->toBeFalse();
+    expect(fn() => $api->order()->finalize($orderData, 'fake-csr'))
+        ->toThrow(AcmeException::class, 'Cannot finalize order 1: status is pending.');
 });
 
 // ── Additional helpers ────────────────────────────────────────────────────────
@@ -512,28 +513,30 @@ it('Order::waitUntilValid() throws after exhausting max attempts', function () {
         ->toThrow(AcmeException::class, 'did not become valid');
 });
 
-it('Order::finalize() returns true on 200 response', function () {
+it('Order::finalize() succeeds on 200 response', function () {
     $api = makeEndpointApi(endpointMock(
         getBody: directoryBody(),
         postBody: orderBody('valid', 'https://acme.example/cert/1'),
         postCode: 200,
     ), withKeyStorage());
 
-    expect($api->order()->finalize(readyOrderData(), base64_encode('fake-csr')))->toBeTrue();
+    $api->order()->finalize(readyOrderData(), base64_encode('fake-csr'));
+    expect(true)->toBeTrue();
 });
 
-it('Order::finalize() returns false on non-200 response', function () {
+it('Order::finalize() throws on non-200 response', function () {
     $api = makeEndpointApi(endpointMock(
         getBody: directoryBody(),
         postBody: ['detail' => 'Forbidden'],
         postCode: 403,
     ), withKeyStorage());
 
-    expect($api->order()->finalize(readyOrderData(), base64_encode('fake-csr')))->toBeFalse();
+    expect(fn() => $api->order()->finalize(readyOrderData(), base64_encode('fake-csr')))
+        ->toThrow(AcmeException::class);
 });
 
 it('Order::finalize() extracts base64 from a PEM-formatted CSR', function () {
-    // Generate a real PEM CSR so the regex extraction path (lines 130–132) is covered
+    // Generate a real PEM CSR so the regex extraction path is covered.
     $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
     $csr = openssl_csr_new(['commonName' => 'example.com'], $key);
     openssl_csr_export($csr, $csrPem);
@@ -544,7 +547,8 @@ it('Order::finalize() extracts base64 from a PEM-formatted CSR', function () {
         postCode: 200,
     ), withKeyStorage());
 
-    expect($api->order()->finalize(readyOrderData(), $csrPem))->toBeTrue();
+    $api->order()->finalize(readyOrderData(), $csrPem);
+    expect(true)->toBeTrue();
 });
 
 it('Order::get() throws OrderNotFoundException on 404', function () {

@@ -361,9 +361,7 @@ class CoyoteCert
         $certKeyPem = OpenSsl::openSslKeyToString($certKey);
         $csr        = OpenSsl::generateCsr($this->domains, $certKey);
 
-        if (!$api->order()->finalize($order, $csr)) {
-            throw new AcmeException('Order finalization failed.');
-        }
+        $api->order()->finalize($order, $csr);
 
         $order  = $api->order()->waitUntilValid($order);
         $bundle = $api->certificate()->getBundle($order, $this->preferredChain ?: null);

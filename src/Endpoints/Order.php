@@ -118,15 +118,12 @@ class Order extends Endpoint
         throw new AcmeException("Order did not become valid after {$maxAttempts} attempts.");
     }
 
-    public function finalize(OrderData $orderData, string $csr): bool
+    public function finalize(OrderData $orderData, string $csr): void
     {
         if (!$orderData->isReady()) {
-            $this->client->logger(
-                'error',
-                "Order status for {$orderData->id} is {$orderData->status}. Cannot finalize order.",
+            throw new AcmeException(
+                "Cannot finalize order {$orderData->id}: status is {$orderData->status}.",
             );
-
-            return false;
         }
 
         if (preg_match('~-----BEGIN\sCERTIFICATE\sREQUEST-----(.*)-----END\sCERTIFICATE\sREQUEST-----~s', $csr, $matches)) {
@@ -137,12 +134,8 @@ class Order extends Endpoint
 
         $response = $this->postSigned($orderData->finalizeUrl, $orderData->accountUrl, compact('csr'));
 
-        if ($response->getHttpResponseCode() === 200) {
-            return true;
+        if ($response->getHttpResponseCode() !== 200) {
+            $this->throwError($response, 'Cannot finalize order ' . $orderData->id);
         }
-
-        $this->logResponse('error', 'Cannot finalize order ' . $orderData->id, $response, ['orderData' => $orderData]);
-
-        return false;
     }
 }
