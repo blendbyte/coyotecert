@@ -101,8 +101,8 @@ class StatusCommand extends Command
         } catch (\CoyoteCert\Exceptions\CryptoException) {
             $sans = [];
         }
-        $sansStr        = empty($sans) ? $identifiersStr : implode(', ', $sans);
-        $keyLabel       = match ($cert->keyType) {
+        $sansStr  = empty($sans) ? $identifiersStr : implode(', ', $sans);
+        $keyLabel = match ($cert->keyType) {
             KeyType::EC_P256  => 'EC P-256',
             KeyType::EC_P384  => 'EC P-384',
             KeyType::RSA_2048 => 'RSA 2048',

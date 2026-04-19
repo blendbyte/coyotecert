@@ -338,6 +338,9 @@ class CoyoteCert
         }
 
         foreach ($challenges as $domainValidation) {
+            if ($domainValidation->isValid()) {
+                continue;
+            }
             $api->domainValidation()->start($account, $domainValidation, $challengeType, $this->localTest);
         }
 
