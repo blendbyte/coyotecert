@@ -15,6 +15,7 @@ class CustomProvider extends AbstractProvider
         private readonly bool         $verifyTls = true,
         private readonly bool         $profilesSupported = false,
         private readonly EabAlgorithm $eabAlgorithm = EabAlgorithm::HS256,
+        /** @var string[] */
         private readonly array        $caaIdentifiers = [],
     ) {}
 
