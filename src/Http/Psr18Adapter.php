@@ -72,6 +72,9 @@ class Psr18Adapter implements HttpClientInterface
             ->withHeader('Accept', 'application/json');
 
         foreach ($headers as $header) {
+            if (!str_contains($header, ':')) {
+                continue;
+            }
             [$name, $value] = explode(':', $header, 2);
             $request        = $request->withAddedHeader(trim($name), trim($value));
         }
@@ -93,6 +96,9 @@ class Psr18Adapter implements HttpClientInterface
             ->withBody($this->streamFactory->createStream($body));
 
         foreach ($headers as $header) {
+            if (!str_contains($header, ':')) {
+                continue;
+            }
             [$name, $value] = explode(':', $header, 2);
             $request        = $request->withAddedHeader(trim($name), trim($value));
         }
