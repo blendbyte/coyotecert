@@ -334,7 +334,6 @@ class CoyoteCert
 
     // ── Private issue() helpers ───────────────────────────────────────────────
 
-
     private function getOrCreateAccount(Api $api): AccountData
     {
         return $api->account()->exists()
