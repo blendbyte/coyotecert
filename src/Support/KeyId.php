@@ -47,7 +47,7 @@ class KeyId
         // []    → '{}' (challenge response: empty JSON object per RFC 8555 §7.5.1)
         // [...] → JSON-encoded object
         $payloadStr = is_array($payload)
-            ? str_replace('\\/', '/', empty($payload) ? '{}' : (string) json_encode($payload))
+            ? (empty($payload) ? '{}' : (string) json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES))
             : '';
 
         $payload64   = Base64::urlSafeEncode($payloadStr);
