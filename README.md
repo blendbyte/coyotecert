@@ -11,7 +11,42 @@
 
 **A PHP 8.3+ ACME v2 client for issuing, renewing, and revoking TLS certificates.** Works with Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, Buypass, and any RFC 8555-compliant CA. Fluent API, no framework dependencies, solid test coverage.
 
-ACME (Automatic Certificate Management Environment) is the protocol behind free, automated TLS certificates. Yes, same name as the cartoon supply company. We leaned into it. CoyoteCert covers the whole thing: account management, order lifecycle, HTTP-01, DNS-01, and TLS-ALPN-01 challenges, certificate issuance, ARI smart renewal, and revocation. One `composer require blendbyte/coyotecert` and you're running.
+ACME (Automatic Certificate Management Environment) is the protocol behind free, automated TLS certificates. Yes, same name as the cartoon supply company. We leaned into it. CoyoteCert covers the whole thing: account management, order lifecycle, HTTP-01, DNS-01, and TLS-ALPN-01 challenges, certificate issuance, ARI smart renewal, and revocation. One `composer require blendbyte/coyotecert` and you're off. No cliff. No 🪨.
+
+---
+
+## Contents
+
+- [Why CoyoteCert](#why-coyotecert)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Laravel](#laravel)
+- [Quick start](#quick-start)
+- [Full example: nginx + automatic renewal](#full-example-nginx--automatic-renewal)
+- [CLI](#cli)
+- [Providers](#providers)
+- [Challenge handlers](#challenge-handlers)
+- [DNS-01 providers](#dns-01-providers)
+- [Storage backends](#storage-backends)
+- [Issuing certificates](#issuing-certificates)
+- [Event callbacks](#event-callbacks)
+- [CAA pre-check](#caa-pre-check)
+- [Error handling](#error-handling)
+- [Wildcard and multi-domain certificates](#wildcard-and-multi-domain-certificates)
+- [IP address certificates](#ip-address-certificates-rfc-8738)
+- [Automatic renewal](#automatic-renewal)
+- [ARI: CA-guided renewal windows](#ari-ca-guided-renewal-windows)
+- [ACME profiles](#acme-profiles)
+- [Preferred chain selection](#preferred-chain-selection)
+- [Key types](#key-types)
+- [Certificate revocation](#certificate-revocation)
+- [PSR-18 HTTP client](#psr-18-http-client)
+- [HTTP timeout](#http-timeout)
+- [Logging](#logging)
+- [Inspecting StoredCertificate](#inspecting-storedcertificate)
+- [Builder reference](#builder-reference)
+- [Low-level API](#low-level-api)
+- [Testing with Pebble](#testing-with-pebble)
 
 ---
 
@@ -19,27 +54,27 @@ ACME (Automatic Certificate Management Environment) is the protocol behind free,
 
 ### Every major CA, out of the box
 
-Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and Buypass, full EAB support included, and ZeroSSL auto-provisions credentials from your API key so no token copy-pasting. Anything more exotic? `CustomProvider` handles any RFC 8555-compliant CA.
+Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and Buypass. Full EAB support included; ZeroSSL auto-provisions credentials from your API key, no token copy-pasting. Need something more exotic? `CustomProvider` handles any RFC 8555-compliant CA.
 
 ### A CLI that ships with the package
 
-`coyote issue` and `coyote status` come in the box. Issue a certificate with one command, check what you've got with another. Drop it in wherever certbot or acme.sh would go in a PHP stack: same providers, same key types, same storage paths, cron-friendly exit codes.
+`coyote issue` and `coyote status` come in the box. Issue a certificate with one command, inspect it with another. Drop it anywhere certbot or acme.sh would go in a PHP stack: same providers, same key types, same storage paths, cron-friendly exit codes.
 
 ### Storage that fits wherever you are
 
-Filesystem with file locking, PDO for MySQL/PostgreSQL/SQLite, and in-memory for tests. All three share the same interface, so switching backends never touches your issuance code.
+Filesystem with file locking, PDO for MySQL/PostgreSQL/SQLite, and in-memory for tests, all sharing the same interface. Switching backends never touches your issuance code.
 
 ### Six DNS-01 providers, no extra SDK needed
 
-Cloudflare, Hetzner DNS, DigitalOcean, ClouDNS, AWS Route53, and shell/exec, all with automatic zone detection, post-deploy propagation checking, and a fluent API for tuning timeouts. Route53 handles SigV4 signing itself; no AWS SDK required. Wildcards need DNS-01, and CoyoteCert has the providers covered.
+Cloudflare, Hetzner DNS, DigitalOcean, ClouDNS, AWS Route53, and shell/exec, all with automatic zone detection, post-deploy propagation checking, and fluent timeout controls. Route53 handles SigV4 signing itself; no AWS SDK required. Wildcards need DNS-01, and CoyoteCert has the providers covered.
 
-### dns-persist-01: skip the propagation wait every renewal cycle
+### ⚡ dns-persist-01: skip the propagation wait every renewal cycle
 
-Deploy the TXT record once, leave it there. Every subsequent renewal validates against the same record with no propagation wait. No DNS dance every 90 days.
+Deploy the TXT record once, leave it permanently. Every renewal validates against the same record with no propagation wait and no DNS dance every 90 days.
 
-### Fails fast, before it costs you
+### 🪨 Fails fast, before it costs you
 
-CoyoteCert checks CAA DNS records for every domain before touching the CA. If a record blocks your chosen CA, you get a `CaaException` immediately, not after burning a rate-limit attempt. Same pre-flight logic verifies your HTTP token or DNS TXT record locally before the CA comes knocking.
+CoyoteCert checks CAA DNS records for every domain before touching the CA. If a record blocks your chosen CA, you get a `CaaException` immediately, not after burning a rate-limit attempt. Same pre-flight logic verifies your HTTP token or DNS TXT record locally before the CA comes knocking. Unlike a certain cartoon coyote, we check for obstacles before ordering supplies.
 
 ### Typed exceptions that tell you what actually went wrong
 
@@ -55,7 +90,7 @@ Proper nonce handling with automatic retry on `badNonce`, JWS signing for every 
 
 ### No default CA, no hidden opinions
 
-CoyoteCert has no default CA. Every call requires an explicit provider. Trust store coverage, rate limits, certificate lifetime, EAB requirements, data residency. Those trade-offs are yours to make, not ours.
+CoyoteCert has no default CA. Every call requires an explicit provider. Trust store coverage, rate limits, certificate lifetime, EAB requirements, data residency. Those trade-offs are yours, not ours.
 
 ### Also worth knowing
 
@@ -91,7 +126,7 @@ composer require blendbyte/coyotecert
 
 First-party Laravel integration is available as a separate package: [`blendbyte/coyotecert-laravel`](https://github.com/blendbyte/coyotecert-laravel).
 
-It adds a service provider, config file, Artisan commands (`cert:issue`, `cert:renew`, `cert:status`, `cert:revoke`), HTTP-01 challenge served through your app via the cache store (no web server changes, works behind load balancers), Laravel Events, queue job support for DNS-01, and a daily scheduled renewal task. No boilerplate beyond publishing the config.
+Adds a service provider, config file, Artisan commands (`cert:issue`, `cert:renew`, `cert:status`, `cert:revoke`), HTTP-01 challenge served through your app via the cache store (no web server changes, works behind load balancers), Laravel Events, queue job support for DNS-01, and a daily scheduled renewal task. No boilerplate beyond publishing the config.
 
 ---
 
@@ -142,7 +177,7 @@ echo $cert->caBundle;    // PEM intermediate chain
 
 ## Full example: nginx + automatic renewal
 
-A complete production setup — certificate issuance, PEM files on disk, nginx pointed at them, automatic reload on renewal, and a daily cron job.
+A complete production setup: certificate issuance, PEM files on disk, nginx pointed at them, automatic reload on renewal, and a daily cron job.
 
 **`/usr/local/bin/renew-certs.php`**
 
@@ -207,7 +242,7 @@ server {
 }
 ```
 
-**Cron — daily at 03:00, idempotent:**
+**Cron, daily at 03:00, idempotent:**
 
 ```
 0 3 * * * php /usr/local/bin/renew-certs.php
@@ -231,7 +266,7 @@ Make sure `~/.composer/vendor/bin` (or `~/.config/composer/vendor/bin` on Linux)
 
 Issue or renew a certificate using HTTP-01 or DNS-01 challenge validation.
 
-**HTTP-01** write a token file to your web root:
+**HTTP-01:**
 
 ```bash
 coyote issue \
@@ -243,7 +278,7 @@ coyote issue \
   --storage /etc/certs
 ```
 
-**DNS-01** create a TXT record via a DNS provider (required for wildcards). Set the provider's credentials as environment variables, then pass `--dns`:
+**DNS-01** (required for wildcards). Set the provider's credentials as environment variables, then pass `--dns`:
 
 ```bash
 export CLOUDFLARE_API_TOKEN=your-token
@@ -331,13 +366,11 @@ The status line reflects time to expiry:
 
 ### Cron renewal
 
-Add a daily cron job to keep certificates renewed automatically:
-
 ```
 0 3 * * * coyote issue --identifier example.com --webroot /var/www/html --storage /etc/certs --email admin@example.com
 ```
 
-The command is idempotent: it does nothing until fewer than `--days` (default 30) remain, so running it daily is safe.
+The command is idempotent: it does nothing until fewer than `--days` (default 30) remain, so running it daily is safe. Set it and forget it. Unlike certain Road Runner traps, this actually works unattended.
 
 ### Help and version
 
@@ -349,7 +382,6 @@ coyote status --help  # full option reference for status
 ```
 
 ---
-
 
 ## Providers
 
@@ -368,7 +400,7 @@ CoyoteCert ships with built-in providers for every major public ACME CA. Pick on
 
 ### Let's Encrypt
 
-The classic. Production for real certs, staging for development. No rate limits on staging, but certificates aren't browser-trusted.
+Production for real certs, staging for development. No rate limits on staging, but staging certificates aren't browser-trusted.
 
 ```php
 use CoyoteCert\Provider\LetsEncrypt;
@@ -380,7 +412,7 @@ CoyoteCert::with(new LetsEncryptStaging())
 
 ### ZeroSSL
 
-ZeroSSL requires EAB credentials. CoyoteCert can provision them automatically from your API key, or you can supply pre-provisioned credentials directly.
+Requires EAB credentials. CoyoteCert can provision them automatically from your API key, or accept pre-provisioned credentials directly.
 
 ```php
 use CoyoteCert\Provider\ZeroSSL;
@@ -405,7 +437,7 @@ CoyoteCert::with(new GoogleTrustServices(eabKid: 'kid', eabHmac: 'hmac'))
 
 ### SSL.com
 
-SSL.com exposes separate endpoints for RSA and ECC certificates.
+Exposes separate endpoints for RSA and ECC certificates.
 
 ```php
 use CoyoteCert\Provider\SslCom;
@@ -451,11 +483,11 @@ CoyoteCert::with(new CustomProvider(
 
 ## Challenge handlers
 
-ACME requires you to prove domain ownership by completing a challenge. CoyoteCert ships with an HTTP-01 handler and abstract bases for DNS-persist-01 and TLS-ALPN-01. DNS-01 is implemented via the `ChallengeHandlerInterface`.
+ACME requires domain ownership proof via a challenge. CoyoteCert ships with an HTTP-01 handler and abstract bases for DNS-persist-01 and TLS-ALPN-01. DNS-01 is implemented via `ChallengeHandlerInterface`.
 
 ### http-01
 
-The simplest challenge. CoyoteCert writes a token file to your web root; the CA fetches it over HTTP to confirm you control the domain.
+CoyoteCert writes a token file to your web root; the CA fetches it over HTTP to confirm domain control.
 
 ```php
 use CoyoteCert\Challenge\Http01Handler;
@@ -530,7 +562,7 @@ class Route53DnsPersist01Handler extends DnsPersist01Handler
 
 Defined in [RFC 8737](https://datatracker.ietf.org/doc/html/rfc8737). The CA opens a TLS connection to port 443, negotiates `acme-tls/1`, and expects a self-signed certificate with a critical `id-pe-acmeIdentifier` extension containing the SHA-256 digest of the key authorization. No port 80 required.
 
-Extend `TlsAlpn01Handler`, implement `deploy()` and `cleanup()`, and call `generateAcmeCertificate()` to get the RFC 8737-encoded cert and key, no manual DER encoding needed.
+Extend `TlsAlpn01Handler`, implement `deploy()` and `cleanup()`, and call `generateAcmeCertificate()` to get the RFC 8737-encoded cert and key. No manual DER encoding needed.
 
 ```php
 use CoyoteCert\Challenge\TlsAlpn01Handler;
@@ -562,7 +594,7 @@ class MyTlsAlpn01Handler extends TlsAlpn01Handler
 
 ## DNS-01 providers
 
-Six built-in DNS-01 handlers, all extending `AbstractDns01Handler`, which runs a post-deploy propagation check by default. Three fluent controls let you tune the behaviour:
+Six built-in DNS-01 handlers, all extending `AbstractDns01Handler`, which runs a post-deploy propagation check by default. Three fluent controls tune the behaviour:
 
 ```php
 // All return a new immutable instance.
@@ -575,7 +607,7 @@ Zone detection is automatic: the handler walks public-suffix candidates (`sub.ex
 
 ### Cloudflare
 
-Needs an API token with `Zone.DNS:Edit` permission.
+API token with `Zone.DNS:Edit` permission.
 
 ```php
 use CoyoteCert\Challenge\Dns\CloudflareDns01Handler;
@@ -592,7 +624,7 @@ $handler = new CloudflareDns01Handler(apiToken: 'your-api-token', zoneId: 'zone-
 
 ### Hetzner DNS
 
-Needs an API token from the [Hetzner DNS Console](https://dns.hetzner.com).
+API token from the [Hetzner DNS Console](https://dns.hetzner.com).
 
 ```php
 use CoyoteCert\Challenge\Dns\HetznerDns01Handler;
@@ -605,7 +637,7 @@ $handler = new HetznerDns01Handler(apiToken: 'your-api-token', zoneId: 'zone-id'
 
 ### DigitalOcean
 
-Needs a personal access token with write access to domains.
+Personal access token with write access to domains.
 
 ```php
 use CoyoteCert\Challenge\Dns\DigitalOceanDns01Handler;
@@ -618,7 +650,7 @@ $handler = new DigitalOceanDns01Handler(apiToken: 'your-api-token', zone: 'examp
 
 ### ClouDNS
 
-Needs a ClouDNS auth-id and auth-password from your account panel.
+Auth-id and auth-password from your ClouDNS account panel.
 
 ```php
 use CoyoteCert\Challenge\Dns\ClouDnsDns01Handler;
@@ -672,7 +704,7 @@ A non-zero exit code throws `ChallengeException`.
 
 ## Storage backends
 
-Storage persists the ACME account key and issued certificates between runs. Without it, CoyoteCert issues a fresh certificate and creates a new ACME account every time, which is probably not what you want.
+Storage persists the ACME account key and issued certificates between runs. Without it, CoyoteCert issues a fresh certificate and creates a new ACME account every time. Probably not what you want.
 
 ### Filesystem
 
@@ -694,7 +726,7 @@ Files written per certificate:
 | `/var/certs/{domain}.{KeyType}.fullchain.pem` | 0644 | Leaf + intermediate chain |
 | `/var/certs/{domain}.{KeyType}.ca.pem` | 0644 | Intermediate chain only |
 
-The PEM files are written on every `saveCertificate()` call alongside the JSON, so they're always in sync. Point your web server straight at them:
+PEM files are written on every `saveCertificate()` call alongside the JSON, so they're always in sync. Point your web server straight at them:
 
 ```nginx
 ssl_certificate     /var/certs/example.com.EC_P256.fullchain.pem;
@@ -752,7 +784,7 @@ use CoyoteCert\Storage\InMemoryStorage;
 
 ### No storage
 
-If you don't call `->storage()` at all, `issue()` still works and returns a `StoredCertificate` with the cert and private key — nothing is persisted. Useful when your application manages its own persistence (database ORM, secret manager, etc.) and you only want the cert in-hand:
+If you don't call `->storage()` at all, `issue()` still works and returns a `StoredCertificate`. Nothing is persisted. Useful when your application manages its own persistence (database ORM, secret manager, etc.) and you only want the cert in-hand:
 
 ```php
 $cert = CoyoteCert::with(new LetsEncrypt())
@@ -843,7 +875,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
 
 ### issueOrRenew()
 
-The one you want in production. Returns the existing certificate if it's still valid; issues a new one when it's getting close to expiry. Accepts an optional `$daysBeforeExpiry` threshold (default 30).
+The one you want in production. Returns the existing certificate if it's still valid; issues a new one when it's getting close to expiry. Accepts an optional `$daysBeforeExpiry` threshold (default 30). Safe to call as often as you like. It does nothing when the certificate is still healthy.
 
 ```php
 $cert = CoyoteCert::with(new LetsEncrypt())
@@ -853,8 +885,6 @@ $cert = CoyoteCert::with(new LetsEncrypt())
     ->challenge(new Http01Handler('/var/www/html'))
     ->issueOrRenew(daysBeforeExpiry: 30);
 ```
-
-Safe to call as often as you like. It does nothing when the certificate is still healthy. Run it in a cron job and forget about it.
 
 ### needsRenewal()
 
@@ -922,9 +952,9 @@ Both methods accept any `callable` and can be called multiple times. Callbacks r
 
 ## CAA pre-check
 
-[CAA (Certification Authority Authorization)](https://en.wikipedia.org/wiki/DNS_Certification_Authority_Authorization) records let a domain owner restrict which CAs can issue for them. If `example.com` has `CAA 0 issue "digicert.com"`, Let's Encrypt will reject the order, but only after you've consumed a rate-limit attempt and sat through the ACME workflow.
+[CAA (Certification Authority Authorization)](https://en.wikipedia.org/wiki/DNS_Certification_Authority_Authorization) records let domain owners restrict which CAs can issue for them. If `example.com` has `CAA 0 issue "digicert.com"`, Let's Encrypt will reject the order, but only after you've burned a rate-limit attempt and sat through the full ACME workflow.
 
-CoyoteCert checks CAA itself before talking to the CA. If the records block your chosen CA, you get a `CaaException` right away:
+CoyoteCert checks CAA before talking to the CA. Unlike a certain cartoon coyote, we look before we order from the ACME Corporation:
 
 ```php
 use CoyoteCert\Exceptions\CaaException;
@@ -947,9 +977,7 @@ try {
 4. For wildcards (`*.example.com`), `issuewild` records are checked first, falling back to `issue` records if none exist.
 5. Parameter extensions after a semicolon (`letsencrypt.org; validationmethods=http-01`) are stripped before comparison.
 
-`CaaException` extends `AcmeException`, so existing catch blocks for the base type keep working.
-
-IP address identifiers are excluded; CAA records apply to domain names only.
+`CaaException` extends `AcmeException`, so existing catch blocks for the base type keep working. IP address identifiers are excluded. CAA records apply to domain names only.
 
 ### Opting out
 
@@ -1002,7 +1030,7 @@ try {
 }
 ```
 
-`AuthException` is thrown on 401 and 403 responses. Distinct from a rate limit or a transient server error, so you can alert or re-provision credentials rather than retrying blindly.
+`AuthException` is thrown on 401 and 403 responses, distinct from a rate limit or transient error, so you can alert or re-provision credentials rather than retrying blindly.
 
 ### Per-identifier subproblems (RFC 8555 §6.7)
 
@@ -1090,7 +1118,7 @@ IP SANs are validated via HTTP-01 (the CA connects to the IP directly). Wildcard
 
 ## Automatic renewal
 
-The recommended setup: a scheduled cron job calling `issueOrRenew()`.
+The recommended setup: a daily cron job calling `issueOrRenew()`. Here's the full script with PSR-3 logging:
 
 ```php
 // /usr/local/bin/renew-certs.php
