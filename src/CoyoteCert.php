@@ -180,7 +180,7 @@ class CoyoteCert
     }
 
     /** No-op when a custom PSR-18 client is configured. */
-    public function withHttpTimeout(int $seconds): static
+    public function withHttpTimeout(int $seconds): self
     {
         if ($this->httpClient instanceof HttpClient) {
             $this->httpClient->setTimeout($seconds);
