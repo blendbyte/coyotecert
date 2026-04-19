@@ -132,6 +132,14 @@ readonly class StoredCertificate
 
     // ── Certificate inspection ────────────────────────────────────────────────
 
+    /** @return array<string, mixed> */
+    private function parsedCertificate(): array
+    {
+        $parsed = openssl_x509_parse($this->certificate);
+
+        return $parsed === false ? [] : $parsed;
+    }
+
     /**
      * Subject Alternative Names parsed from the certificate PEM.
      * Returns both DNS names and IP addresses.
@@ -140,7 +148,7 @@ readonly class StoredCertificate
      */
     public function sans(): array
     {
-        $parsed = openssl_x509_parse($this->certificate);
+        $parsed = $this->parsedCertificate();
         $san    = $parsed['extensions']['subjectAltName'] ?? '';
 
         if (empty($san)) {
@@ -163,7 +171,7 @@ readonly class StoredCertificate
      */
     public function serialNumber(): string
     {
-        return strtolower(openssl_x509_parse($this->certificate)['serialNumberHex'] ?? '');
+        return strtolower($this->parsedCertificate()['serialNumberHex'] ?? '');
     }
 
     /**
@@ -172,7 +180,7 @@ readonly class StoredCertificate
      */
     public function authorityKeyId(): ?string
     {
-        $parsed = openssl_x509_parse($this->certificate);
+        $parsed = $this->parsedCertificate();
         $ext    = $parsed['extensions']['authorityKeyIdentifier'] ?? null;
 
         if ($ext === null) {
@@ -199,6 +207,6 @@ readonly class StoredCertificate
      */
     public function issuer(): array
     {
-        return openssl_x509_parse($this->certificate)['issuer'] ?? [];
+        return $this->parsedCertificate()['issuer'] ?? [];
     }
 }
