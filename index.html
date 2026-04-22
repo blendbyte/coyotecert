@@ -180,7 +180,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h16"/><circle cx="18" cy="12" r="2"/></svg>
         </div>
         <h3>HTTP-01 and DNS-01</h3>
-        <p>HTTP challenge? Built in. DNS challenge for wildcards? Bring a tiny adapter. Route53, Cloudflare, DigitalOcean, your cousin's DNS server. Two methods to implement and you're out.</p>
+        <p>HTTP challenge? Built in. DNS-01 for wildcards? Cloudflare, Route 53, DigitalOcean already packed in. Running something weirder? Two methods to implement and you're certified.</p>
       </article>
       <article class="fcard">
         <div class="stamp-mini">TYPED</div>
@@ -207,7 +207,16 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
         </div>
         <h3>Renewal on autopilot</h3>
-        <p>Stick one command in cron. It's idempotent, writes atomically, and skips certs that aren't due yet. Run it every hour if you feel fancy. The CA won't even notice.</p>
+        <p>One cron line. <code class="inline">vendor/bin/coyotecert renew --due</code>. Idempotent, atomic, skips what isn't due. No PHP script. No drama. Run it every hour if you feel fancy. The CA won't even notice.</p>
+      </article>
+      <article class="fcard">
+        <div class="stamp-mini">CLI</div>
+        <div class="num">№ 07</div>
+        <div class="ficon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 9l3 3-3 3M13 15h3"/></svg>
+        </div>
+        <h3>Embedded CLI, no PHP required</h3>
+        <p>Not a PHP person? Nobody's judging. <code class="inline">vendor/bin/coyotecert issue example.com</code>. Cert issued, go touch grass. Cron, CI, Docker, a shell script from 2009 — it runs wherever shells run.</p>
       </article>
       <article class="fcard">
         <div class="stamp-mini">OBSERVE</div>
@@ -286,6 +295,19 @@
       <div class="pcard">Your own<small>Step-CA · Smallstep</small></div>
     </div>
 
+    <div class="sec-head" style="margin-top:3.5rem">
+      <div class="sec-kicker">DNS challenge drivers</div>
+      <h3 class="sec-title" style="font-size:clamp(1.5rem,3vw,2rem)">Wildcards without the yak-shaving.</h3>
+      <p class="sec-sub">Cloudflare, Route 53, DigitalOcean are already in there. Running something else? Write two methods and ship it.</p>
+    </div>
+
+    <div class="pgrid">
+      <div class="pcard">Cloudflare<small>Built-in</small></div>
+      <div class="pcard">Route 53<small>AWS · Built-in</small></div>
+      <div class="pcard">DigitalOcean<small>Built-in</small></div>
+      <div class="pcard">Bring your own<small>Two methods. Done.</small></div>
+    </div>
+
     <div class="stats">
       <div class="stat"><div class="n">8555</div><div class="l">RFC compliant</div></div>
       <div class="stat"><div class="n">8.3+</div><div class="l">PHP required</div></div>
@@ -316,13 +338,13 @@
         <span class="chip">STEP 02</span>
         <h4>Catch your first cert</h4>
         <p>Test on staging. Flip to prod when it stops crashing. (It won't.)</p>
-        <code><span class="c-k">$</span> php artisan cert:issue example.com</code>
+        <code><span class="c-t">CoyoteCert</span>::<span class="c-m">with</span>(<span class="c-k">new</span> <span class="c-t">LetsEncrypt</span>())-><span class="c-m">issueOrRenew</span>();</code>
       </div>
       <div class="step">
         <span class="chip">STEP 03</span>
         <h4>Set it, forget it</h4>
-        <p>Safe to run every hour. Only renews what's actually about to expire.</p>
-        <code><span class="c-k">$</span> php artisan cert:renew --due</code>
+        <p>Skip the PHP script. Slap the CLI in cron. Done.</p>
+        <code><span class="c-k">0 * * * *</span> vendor/bin/coyotecert renew --due</code>
       </div>
     </div>
   </div>
