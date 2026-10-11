@@ -186,27 +186,34 @@ class FilesystemStorage implements StorageInterface
     }
 
     /**
-     * Files are owner-only unless $public: that covers the keys and cert.json, which
-     * embeds the certificate's private key.
+     * Write atomically: a temp file in the same directory is renamed over the target, so a
+     * reader (or a web server reload) never sees a half-written file. Files are owner-only
+     * unless $public: that covers the keys and cert.json, which embeds the private key.
      */
     private function writeFile(string $path, string $contents, bool $public = false): void
     {
-        // Pre-check writability to avoid a PHP E_WARNING from file_put_contents.
-        $checkTarget = file_exists($path) ? $path : dirname($path);
-        if (!is_writable($checkTarget)) {
+        $dir = dirname($path);
+
+        // Pre-check writability to avoid PHP warnings from tempnam()/rename()
+        if (!is_writable($dir)) {
             throw new StorageException(
                 sprintf('Could not write storage file "%s".', $path),
             );
         }
 
-        $oldUmask = $public ? null : umask(0o177);
+        // tempnam() creates the file with mode 0600, so a key is never readable by others
+        $tmp = tempnam($dir, '.coyote-');
 
-        file_put_contents($path, $contents, LOCK_EX);
-
-        if ($oldUmask !== null) {
-            umask($oldUmask);
+        if ($tmp === false || file_put_contents($tmp, $contents) === false) {
+            throw new StorageException(sprintf('Could not write storage file "%s".', $path));
         }
 
-        chmod($path, $public ? 0o644 : 0o600);
+        chmod($tmp, $public ? 0o644 : 0o600);
+
+        if (!rename($tmp, $path)) {
+            unlink($tmp);
+
+            throw new StorageException(sprintf('Could not write storage file "%s".', $path));
+        }
     }
 }

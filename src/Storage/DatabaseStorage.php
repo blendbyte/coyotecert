@@ -15,25 +15,35 @@ class DatabaseStorage implements StorageInterface
     }
 
     /**
-     * Returns the SQL statement that creates the storage table.
-     * Execute this once during your application's setup / migration.
+     * Returns the SQL statement that creates the storage table for $driver, the PDO driver
+     * name ('mysql' for MySQL/MariaDB, 'pgsql', or 'sqlite'). Execute it once during your
+     * application's setup / migration:
      *
-     * Supports MySQL/MariaDB, PostgreSQL, and SQLite.
+     *   $pdo->exec(DatabaseStorage::createTableSql(driver: $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
      */
-    public static function createTableSql(string $table = 'coyote_cert_storage'): string
+    public static function createTableSql(string $table = 'coyote_cert_storage', string $driver = 'mysql'): string
     {
         self::validateIdentifier($table);
 
-        return <<<SQL
-            CREATE TABLE IF NOT EXISTS `{$table}` (
-                `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                `store_key`  VARCHAR(255)  NOT NULL,
-                `value`      MEDIUMTEXT    NOT NULL,
-                `updated_at` TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                UNIQUE KEY `uq_store_key` (`store_key`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            SQL;
+        return match ($driver) {
+            'mysql' => <<<SQL
+                CREATE TABLE IF NOT EXISTS `{$table}` (
+                    `store_key`  VARCHAR(255) NOT NULL,
+                    `value`      MEDIUMTEXT   NOT NULL,
+                    `updated_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`store_key`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                SQL,
+            'pgsql', 'sqlite' => <<<SQL
+                CREATE TABLE IF NOT EXISTS "{$table}" (
+                    "store_key" VARCHAR(255) NOT NULL PRIMARY KEY,
+                    "value"     TEXT         NOT NULL
+                )
+                SQL,
+            default => throw new \InvalidArgumentException(
+                sprintf('Unsupported PDO driver "%s": use mysql, pgsql or sqlite.', $driver),
+            ),
+        };
     }
 
     // ── Account key ──────────────────────────────────────────────────────────
@@ -90,7 +100,7 @@ class DatabaseStorage implements StorageInterface
     public function deleteCertificate(string $domain, KeyType $keyType): void
     {
         $this->pdo
-            ->prepare("DELETE FROM `{$this->table}` WHERE `store_key` = :key")
+            ->prepare(sprintf('DELETE FROM %s WHERE %s = :key', $this->quote($this->table), $this->quote('store_key')))
             ->execute([':key' => $this->certKey($domain, $keyType)]);
     }
 
@@ -103,9 +113,12 @@ class DatabaseStorage implements StorageInterface
 
     private function get(string $key): ?string
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT `value` FROM `{$this->table}` WHERE `store_key` = :key LIMIT 1",
-        );
+        $stmt = $this->pdo->prepare(sprintf(
+            'SELECT %s FROM %s WHERE %s = :key LIMIT 1',
+            $this->quote('value'),
+            $this->quote($this->table),
+            $this->quote('store_key'),
+        ));
         $stmt->execute([':key' => $key]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -114,17 +127,41 @@ class DatabaseStorage implements StorageInterface
 
     private function set(string $key, string $value): void
     {
-        $sql = match ($this->pdo->getAttribute(\PDO::ATTR_DRIVER_NAME)) {
-            'sqlite' => "INSERT OR REPLACE INTO `{$this->table}` (`store_key`, `value`) VALUES (:key, :value)",
-            'pgsql'  => "INSERT INTO \"{$this->table}\" (\"store_key\", \"value\")
-                         VALUES (:key, :value)
-                         ON CONFLICT (\"store_key\") DO UPDATE SET \"value\" = EXCLUDED.\"value\"",
-            default => "INSERT INTO `{$this->table}` (`store_key`, `value`)
-                         VALUES (:key, :value)
-                         ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
-        };
+        [$table, $keyColumn, $valueColumn] = [$this->quote($this->table), $this->quote('store_key'), $this->quote('value')];
 
-        $this->pdo->prepare($sql)->execute([':key' => $key, ':value' => $value]);
+        if ($this->isMysql()) {
+            // A second placeholder instead of VALUES(), which MySQL 8 deprecates (MariaDB lacks the alias syntax)
+            $this->pdo->prepare(sprintf(
+                'INSERT INTO %s (%s, %s) VALUES (:key, :value) ON DUPLICATE KEY UPDATE %s = :update_value',
+                $table,
+                $keyColumn,
+                $valueColumn,
+                $valueColumn,
+            ))->execute([':key' => $key, ':value' => $value, ':update_value' => $value]);
+
+            return;
+        }
+
+        $this->pdo->prepare(sprintf(
+            'INSERT INTO %s (%s, %s) VALUES (:key, :value) ON CONFLICT (%s) DO UPDATE SET %s = excluded.%s',
+            $table,
+            $keyColumn,
+            $valueColumn,
+            $keyColumn,
+            $valueColumn,
+            $valueColumn,
+        ))->execute([':key' => $key, ':value' => $value]);
+    }
+
+    /** MySQL quotes identifiers with backticks; PostgreSQL and SQLite with standard double quotes. */
+    private function quote(string $identifier): string
+    {
+        return $this->isMysql() ? "`{$identifier}`" : "\"{$identifier}\"";
+    }
+
+    private function isMysql(): bool
+    {
+        return !in_array($this->pdo->getAttribute(\PDO::ATTR_DRIVER_NAME), ['pgsql', 'sqlite'], true);
     }
 
     private static function validateIdentifier(string $name): void

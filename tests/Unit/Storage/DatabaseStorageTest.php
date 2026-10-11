@@ -227,3 +227,64 @@ it('createTableSql() throws InvalidArgumentException for a table name with a sem
     expect(fn() => DatabaseStorage::createTableSql('certs; DROP TABLE users; --'))
         ->toThrow(\InvalidArgumentException::class, 'Invalid SQL identifier');
 });
+
+// ── Driver portability ────────────────────────────────────────────────────────
+
+it('works end to end on SQLite with the table from createTableSql()', function () {
+    $pdo = new PDO('sqlite::memory:', options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec(DatabaseStorage::createTableSql(driver: 'sqlite'));
+    $storage = new DatabaseStorage($pdo);
+
+    $storage->saveCertificate('db.example.com', makeDatabaseCert());
+    $storage->saveCertificate('db.example.com', makeDatabaseCert()); // upsert path
+    $storage->saveAccountKey('letsencrypt', 'pem', KeyType::EC_P256);
+
+    expect($storage->getCertificate('db.example.com', KeyType::EC_P256)?->domains)->toBe(['db.example.com']);
+    expect($storage->getAccountKey('letsencrypt'))->toBe('pem');
+
+    $storage->deleteCertificate('db.example.com', KeyType::EC_P256);
+    expect($storage->hasCertificate('db.example.com', KeyType::EC_P256))->toBeFalse();
+});
+
+it('quotes identifiers with double quotes on PostgreSQL, never backticks', function () {
+    $mockPdo = new class extends \PDO {
+        public array $capturedSql = [];
+
+        public function __construct() {}
+
+        public function getAttribute(int $attribute): mixed
+        {
+            return 'pgsql';
+        }
+
+        public function prepare(string $query, array $options = []): \PDOStatement|false
+        {
+            $this->capturedSql[] = $query;
+
+            return new class extends \PDOStatement {
+                public function execute(?array $params = null): bool
+                {
+                    return true;
+                }
+
+                public function fetch(int $mode = \PDO::FETCH_DEFAULT, int $cursorOrientation = \PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed
+                {
+                    return false;
+                }
+            };
+        }
+    };
+
+    $storage = new DatabaseStorage($mockPdo);
+    $storage->hasCertificate('example.com', KeyType::EC_P256);
+    $storage->saveAccountKey('letsencrypt', 'pem', KeyType::EC_P256);
+    $storage->deleteCertificate('example.com', KeyType::EC_P256);
+
+    expect(implode("\n", $mockPdo->capturedSql))->not->toContain('`')->toContain('"coyote_cert_storage"');
+    expect(DatabaseStorage::createTableSql(driver: 'pgsql'))->not->toContain('`');
+});
+
+it('createTableSql() rejects an unsupported driver', function () {
+    expect(fn() => DatabaseStorage::createTableSql(driver: 'sqlsrv'))
+        ->toThrow(\InvalidArgumentException::class, 'Unsupported PDO driver "sqlsrv"');
+});

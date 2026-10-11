@@ -285,3 +285,16 @@ it('writeFile throws StorageException when the file cannot be written', function
         chmod($this->dir, 0o755); // restore so afterEach cleanup can remove the dir
     }
 })->skip(fn() => function_exists('posix_getuid') && posix_getuid() === 0, 'root can write to any directory');
+
+it('replaces files atomically via rename and leaves no temp files behind', function () {
+    $this->storage->saveCertificate('example.com', makeFileCert());
+    $path  = $this->dir . '/example.com.EC_P256.private_key.pem';
+    $inode = fileinode($path);
+
+    $this->storage->saveCertificate('example.com', makeFileCert());
+    clearstatcache();
+
+    // A rename swaps in a new inode; an in-place write would keep the old one
+    expect(fileinode($path))->not->toBe($inode);
+    expect(glob($this->dir . '/.coyote-*') ?: [])->toBe([]);
+});

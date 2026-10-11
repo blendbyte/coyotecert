@@ -807,28 +807,28 @@ $storage = new DatabaseStorage($pdo);
 $storage = new DatabaseStorage($pdo, table: 'ssl_storage');
 ```
 
-Run this once to create the table:
+Run this once to create the table. Pass the PDO driver so the SQL matches your database:
 
 ```php
-$pdo->exec(DatabaseStorage::createTableSql());
+$pdo->exec(DatabaseStorage::createTableSql(driver: $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
 // Or with a custom name:
-$pdo->exec(DatabaseStorage::createTableSql('ssl_storage'));
+$pdo->exec(DatabaseStorage::createTableSql('ssl_storage', $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
 ```
 
-The generated schema (MySQL):
+The generated schema for MySQL/MariaDB (`driver: 'mysql'`, the default):
 
 ```sql
 CREATE TABLE IF NOT EXISTS `coyote_cert_storage` (
-    `id`         INT UNSIGNED  NOT NULL AUTO_INCREMENT,
-    `store_key`  VARCHAR(255)  NOT NULL,
-    `value`      MEDIUMTEXT    NOT NULL,
-    `updated_at` TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_store_key` (`store_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `store_key`  VARCHAR(255) NOT NULL,
+    `value`      MEDIUMTEXT   NOT NULL,
+    `updated_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`store_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 ```
 
-Upserts are dialect-aware: `INSERT OR REPLACE` (SQLite), `ON CONFLICT DO UPDATE` (PostgreSQL), `ON DUPLICATE KEY UPDATE` (MySQL/MariaDB).
+PostgreSQL and SQLite (`driver: 'pgsql'` or `'sqlite'`) get a `store_key VARCHAR(255) PRIMARY KEY, value TEXT` table. Tables created by earlier versions keep working: only `store_key` (unique) and `value` are used.
+
+Upserts are dialect-aware: `ON CONFLICT DO UPDATE` (PostgreSQL, SQLite) and `ON DUPLICATE KEY UPDATE` (MySQL/MariaDB).
 
 ### In-memory
 
