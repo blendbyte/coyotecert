@@ -10,3 +10,13 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      composer-dev:
+        dependency-type: "development"

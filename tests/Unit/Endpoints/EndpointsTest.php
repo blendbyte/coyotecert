@@ -548,15 +548,26 @@ it('Order::waitUntilValid() throws after exhausting max attempts', function () {
         ->toThrow(AcmeException::class, 'did not become valid');
 });
 
-it('Order::finalize() succeeds on 200 response', function () {
-    $api = makeEndpointApi(endpointMock(
-        getBody: directoryBody(),
-        postBody: orderBody('valid', 'https://acme.example/cert/1'),
-        postCode: 200,
-    ), withKeyStorage());
+/** Captures the decoded JWS payload of every POST. */
+function payloadCapturingApi(array &$payloads, array $postBody = []): Api
+{
+    return makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url, $jws) use (&$payloads, $postBody) {
+            $payloads[$url] = json_decode(Base64::urlSafeDecode($jws['payload']), true);
 
-    $api->order()->finalize(readyOrderData(), base64_encode('fake-csr'));
-    expect(true)->toBeTrue();
+            return str_contains($url, 'new-account')
+                ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
+                : new Response([], $url, 200, $postBody);
+        },
+    ), withKeyStorage());
+}
+
+it('Order::finalize() sends a base64-encoded DER CSR as base64url', function () {
+    $payloads = [];
+    payloadCapturingApi($payloads, orderBody('valid'))->order()->finalize(readyOrderData(), base64_encode('fake-csr'));
+
+    expect($payloads['https://acme.example/finalize/1'])->toBe(['csr' => Base64::urlSafeEncode('fake-csr')]);
 });
 
 it('Order::finalize() throws on non-200 response', function () {
@@ -576,14 +587,11 @@ it('Order::finalize() extracts base64 from a PEM-formatted CSR', function () {
     $csr = openssl_csr_new(['commonName' => 'example.com'], $key);
     openssl_csr_export($csr, $csrPem);
 
-    $api = makeEndpointApi(endpointMock(
-        getBody: directoryBody(),
-        postBody: orderBody('valid', 'https://acme.example/cert/1'),
-        postCode: 200,
-    ), withKeyStorage());
+    $payloads = [];
+    payloadCapturingApi($payloads, orderBody('valid'))->order()->finalize(readyOrderData(), $csrPem);
 
-    $api->order()->finalize(readyOrderData(), $csrPem);
-    expect(true)->toBeTrue();
+    preg_match('~-----BEGIN CERTIFICATE REQUEST-----(.*)-----END CERTIFICATE REQUEST-----~s', $csrPem, $m);
+    expect($payloads['https://acme.example/finalize/1']['csr'])->toBe(Base64::urlSafeEncode(base64_decode($m[1])));
 });
 
 it('Order::new() throws RateLimitException on 429', function () {
@@ -968,23 +976,19 @@ it('Certificate::revoke() throws when PEM header is present but body is not a va
         ->toThrow(AcmeException::class, 'Could not parse the certificate');
 });
 
-it('Certificate::revoke() succeeds without throwing on 200', function () {
-    $storage = withKeyStorage();
-    $key     = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
-    $csr     = openssl_csr_new(['commonName' => 'test.example.com'], $key);
-    $cert    = openssl_csr_sign($csr, null, $key, 365);
+it('Certificate::revoke() sends the DER certificate as base64url with the reason code', function () {
+    $key  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+    $cert = openssl_csr_sign(openssl_csr_new(['commonName' => 'example.com'], $key), null, $key, 365);
     openssl_x509_export($cert, $certPem);
 
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response([], $url, 200, []),
-    );
+    $payloads = [];
+    payloadCapturingApi($payloads)->certificate()->revoke($certPem, \CoyoteCert\Enums\RevocationReason::Superseded);
 
-    makeEndpointApi($mock, $storage)->certificate()->revoke($certPem);
-
-    expect(true)->toBeTrue();
+    preg_match('~-----BEGIN CERTIFICATE-----(.*)-----END CERTIFICATE-----~s', $certPem, $m);
+    expect($payloads['https://acme.example/revoke'])->toBe([
+        'certificate' => Base64::urlSafeEncode(base64_decode($m[1])),
+        'reason'      => 4,
+    ]);
 });
 
 it('Certificate::revoke() throws AcmeException when server rejects revocation', function () {

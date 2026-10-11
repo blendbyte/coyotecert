@@ -19,8 +19,10 @@ it('revokes a previously issued certificate', function () {
         ->storage($storage)
         ->revoke($cert);
 
-    expect(true)->toBeTrue();
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+    // The CA now knows the certificate as revoked, so revoking it again is rejected
+    expect(fn() => CoyoteCert::with(pebble())->storage($storage)->revoke($cert))
+        ->toThrow(\CoyoteCert\Exceptions\AcmeException::class);
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');
 
 it('revokes with a specific reason code', function () {
     $storage = new InMemoryStorage();
@@ -36,8 +38,13 @@ it('revokes with a specific reason code', function () {
         ->storage($storage)
         ->revoke($cert, RevocationReason::KeyCompromise);
 
-    expect(true)->toBeTrue();
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+    try {
+        CoyoteCert::with(pebble())->storage($storage)->revoke($cert);
+        $this->fail('Revoking twice should be rejected');
+    } catch (\CoyoteCert\Exceptions\AcmeException $e) {
+        expect($e->getProblemType())->toBe('urn:ietf:params:acme:error:alreadyRevoked');
+    }
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');
 
 it('throws when revoke is called without storage', function () {
     $storage = new InMemoryStorage();

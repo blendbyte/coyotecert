@@ -155,18 +155,3 @@ it('followCname() stops after 10 hops without querying DNS', function () {
 
     expect($method->invoke(null, 'ns.example.test', '_acme-challenge.example.test', 10))->toBe([]);
 });
-
-// ── getRecords() via reflection ───────────────────────────────────────────────
-
-it('getRecords() returns an array (may be empty for non-existent domain)', function () {
-    $method = new \ReflectionMethod(LocalChallengeTest::class, 'getRecords');
-
-    // Use a nameserver and domain that will return an empty result or throw;
-    // the important thing is that getRecords() either returns [] or throws RuntimeException.
-    try {
-        $records = $method->invoke(null, 'dns.google.com', 'invalid.example.test', DNS_TXT);
-        expect($records)->toBeArray();
-    } catch (\RuntimeException) {
-        expect(true)->toBeTrue(); // DNS lookup failure is acceptable
-    }
-});

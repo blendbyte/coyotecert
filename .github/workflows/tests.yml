@@ -2,14 +2,25 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       PEBBLE_URL: https://localhost:14000/dir
+      # Fail instead of skipping the integration tests when Pebble is not reachable
+      COYOTE_REQUIRE_PEBBLE: "1"
 
     strategy:
       fail-fast: false
@@ -18,13 +29,15 @@ jobs:
 
     services:
       pebble:
-        image: ghcr.io/letsencrypt/pebble:latest
+        # v2.10.1, pinned like the actions; bump deliberately
+        image: ghcr.io/letsencrypt/pebble@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
         ports:
           - 14000:14000
           - 15000:15000
         env:
           PEBBLE_VA_NOSLEEP: "1"
           PEBBLE_VA_ALWAYS_VALID: "1"
+          # Random nonce rejection would make the suite flaky (the client retries badNonce once)
           PEBBLE_WFE_NONCEREJECT: "0"
 
     steps:
@@ -54,3 +67,71 @@ jobs:
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  databases:
+    name: DatabaseStorage (PostgreSQL, MariaDB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COYOTE_TEST_PGSQL_DSN: pgsql:host=127.0.0.1;port=5432;dbname=coyote
+      COYOTE_TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=coyote
+      COYOTE_TEST_DB_USER: coyote
+      COYOTE_TEST_DB_PASSWORD: coyote
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: coyote
+          POSTGRES_PASSWORD: coyote
+          POSTGRES_DB: coyote
+        options: --health-cmd "pg_isready -U coyote" --health-interval 2s --health-retries 30
+      mariadb:
+        image: mariadb:11
+        ports:
+          - 3306:3306
+        env:
+          MARIADB_USER: coyote
+          MARIADB_PASSWORD: coyote
+          MARIADB_DATABASE: coyote
+          MARIADB_RANDOM_ROOT_PASSWORD: "1"
+        options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 2s --health-retries 30
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.4"
+          extensions: curl, json, mbstring, openssl, pdo_pgsql, pdo_mysql
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run database tests
+        run: vendor/bin/pest tests/Integration/DatabaseStorageDriversTest.php tests/Unit/Storage/DatabaseStorageTest.php
+
+  lowest:
+    name: Lowest dependencies (PHP 8.3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.3"
+          extensions: curl, json, mbstring, openssl
+          coverage: none
+
+      - name: Install lowest dependencies
+        run: composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress
+
+      - name: Run unit tests
+        run: vendor/bin/pest tests/Unit

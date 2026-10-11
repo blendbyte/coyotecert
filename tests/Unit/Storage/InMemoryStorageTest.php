@@ -86,8 +86,8 @@ it('deleteCertificate() removes the certificate', function () {
 
 it('deleteCertificate() is a no-op for unknown domain', function () {
     $storage = new InMemoryStorage();
-    $storage->deleteCertificate('unknown.com', KeyType::EC_P256); // must not throw
-    expect(true)->toBeTrue();
+
+    expect(fn() => $storage->deleteCertificate('unknown.com', KeyType::EC_P256))->not->toThrow(\Throwable::class);
 });
 
 it('overwrites an existing certificate', function () {

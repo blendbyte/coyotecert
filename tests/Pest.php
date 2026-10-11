@@ -220,7 +220,7 @@ namespace {
     // Mark the integration test processes so the sleep() override in
     // CoyoteCert\Endpoints stays real (Pebble needs actual wait time between polls).
     pest()->beforeAll(function () {
-        define('COYOTE_INTEGRATION_TESTS', true);
+        defined('COYOTE_INTEGRATION_TESTS') || define('COYOTE_INTEGRATION_TESTS', true);
     })->in('Integration');
 
     // ── Shared key fixtures (pre-generated to avoid macOS EC key generation issues) ──
@@ -282,35 +282,27 @@ namespace {
     // ── Pebble integration test helpers ──────────────────────────────────────────
 
     /**
-     * Returns true when a Pebble CA is reachable at PEBBLE_URL (or the default
-     * localhost address). Used as the ->skip() guard for integration tests so they
-     * run automatically in CI (where Pebble starts as a service) and are skipped
-     * gracefully on developer machines without a local Pebble instance.
+     * Whether a Pebble CA answers at PEBBLE_URL (default https://localhost:14000/dir).
+     * Used as the ->skip() guard for integration tests, so they are skipped on machines
+     * without Pebble. CI sets COYOTE_REQUIRE_PEBBLE so a missing Pebble fails the run
+     * instead of silently skipping the tests.
      */
     function pebbleAvailable(): bool
     {
         static $result = null;
 
         if ($result === null) {
-            $envUrl = getenv('PEBBLE_URL');
+            $ch = curl_init(getenv('PEBBLE_URL') ?: 'https://localhost:14000/dir');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_TIMEOUT        => 3,
+                CURLOPT_CONNECTTIMEOUT => 2,
+            ]);
+            curl_exec($ch);
 
-            if ($envUrl !== false && $envUrl !== '') {
-                // PEBBLE_URL explicitly set (e.g. CI) — trust that Pebble is up
-                $result = true;
-            } else {
-                // No env var — probe the default localhost address
-                $ch = curl_init('https://localhost:14000/dir');
-                curl_setopt_array($ch, [
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_SSL_VERIFYPEER => false,
-                    CURLOPT_SSL_VERIFYHOST => false,
-                    CURLOPT_TIMEOUT        => 3,
-                    CURLOPT_CONNECTTIMEOUT => 2,
-                ]);
-                curl_exec($ch);
-                $code   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                $result = $code > 0;
-            }
+            $result = curl_getinfo($ch, CURLINFO_HTTP_CODE) > 0 || getenv('COYOTE_REQUIRE_PEBBLE') === '1';
         }
 
         return $result;

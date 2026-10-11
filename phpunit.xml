@@ -3,13 +3,13 @@
          xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.5/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
+         failOnWarning="true"
+         failOnDeprecation="true"
+         failOnPhpunitDeprecation="true"
 >
     <testsuites>
         <testsuite name="Unit">
             <directory suffix="Test.php">./tests/Unit</directory>
-        </testsuite>
-        <testsuite name="Feature">
-            <directory suffix="Test.php">./tests/Feature</directory>
         </testsuite>
         <testsuite name="Integration">
             <directory suffix="Test.php">./tests/Integration</directory>
@@ -20,8 +20,4 @@
             <directory suffix=".php">./src</directory>
         </include>
     </source>
-    <php>
-        <!-- Passed explicitly to paratest worker processes so pebbleAvailable() can detect CI -->
-        <env name="PEBBLE_URL" value="https://localhost:14000/dir" force="false"/>
-    </php>
 </phpunit>

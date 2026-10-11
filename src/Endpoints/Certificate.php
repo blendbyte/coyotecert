@@ -89,23 +89,16 @@ class Certificate extends Endpoint
 
     public function revoke(string $pem, RevocationReason $reason = RevocationReason::Unspecified): void
     {
-        if (!str_contains($pem, '-----BEGIN CERTIFICATE-----')) {
+        // openssl_x509_parse() validates without the PHP warning openssl_x509_read() emits
+        if (
+            openssl_x509_parse($pem) === false
+            || !preg_match('~-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----~s', $pem, $matches)
+        ) {
             throw new AcmeException('Could not parse the certificate.');
         }
 
-        if (($data = openssl_x509_read($pem)) === false) {
-            throw new AcmeException('Could not parse the certificate.');
-        }
-
-        if (openssl_x509_export($data, $certificate) === false) {
-            throw new AcmeException('Could not export the certificate.');
-        }
-
-        if (!preg_match('~-----BEGIN\sCERTIFICATE-----(.*)-----END\sCERTIFICATE-----~s', $certificate, $matches)) {
-            throw new AcmeException('Could not extract certificate body.');
-        }
-
-        $certificate = trim(Base64::urlSafeEncode(base64_decode(trim($matches[1]))));
+        // RFC 8555 §7.6: the DER certificate, base64url-encoded
+        $certificate = Base64::urlSafeEncode((string) base64_decode(preg_replace('/\s+/', '', $matches[1]) ?? '', true));
 
         $revokeUrl  = $this->client->directory()->revoke();
         $accountUrl = $this->client->account()->get()->url;

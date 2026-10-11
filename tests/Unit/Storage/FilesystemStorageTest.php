@@ -136,8 +136,7 @@ it('deleteCertificate() removes the stored file', function () {
 });
 
 it('deleteCertificate() is a no-op for unknown domain', function () {
-    $this->storage->deleteCertificate('unknown.com', KeyType::EC_P256); // must not throw
-    expect(true)->toBeTrue();
+    expect(fn() => $this->storage->deleteCertificate('unknown.com', KeyType::EC_P256))->not->toThrow(\Throwable::class);
 });
 
 // ── PEM file output ───────────────────────────────────────────────────────────
