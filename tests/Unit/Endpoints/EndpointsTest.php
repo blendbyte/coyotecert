@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Api;
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\CertificateBundleData;

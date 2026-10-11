@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\StorageException;
 use CoyoteCert\Storage\DatabaseStorage;

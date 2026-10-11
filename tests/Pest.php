@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 // ── Override sleep() in the Endpoints namespace (unit tests only) ────────────
 // Polling loops in DomainValidation::allChallengesPassed() and
 // Order::waitUntilValid() call sleep() without a namespace prefix, so PHP

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoyoteCert\Http;
 
 use CoyoteCert\Exceptions\AcmeException;

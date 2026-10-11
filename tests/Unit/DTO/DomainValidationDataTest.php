@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\DTO\DomainValidationData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Http\Response;

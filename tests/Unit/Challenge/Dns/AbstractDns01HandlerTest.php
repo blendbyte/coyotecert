@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Challenge\Dns\AbstractDns01Handler;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Exceptions\DomainValidationException;

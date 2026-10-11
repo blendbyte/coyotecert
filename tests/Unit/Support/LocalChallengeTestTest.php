@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Exceptions\DomainValidationException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Interfaces\HttpClientInterface;

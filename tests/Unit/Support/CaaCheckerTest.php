@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Exceptions\CaaException;
 use CoyoteCert\Support\CaaChecker;
 use Spatie\Dns\Records\CAA;

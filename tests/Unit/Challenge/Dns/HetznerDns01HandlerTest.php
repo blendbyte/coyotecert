@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Challenge\Dns\HetznerDns01Handler;
 use CoyoteCert\Challenge\Dns\Internal\JsonHttpClient;
 use CoyoteCert\Exceptions\ChallengeException;

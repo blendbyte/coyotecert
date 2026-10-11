@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Provider\CustomProvider;
 use CoyoteCert\Provider\GoogleTrustServices;
 use CoyoteCert\Provider\LetsEncrypt;

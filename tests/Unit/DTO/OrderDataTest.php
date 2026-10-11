@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Http\Response;
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Support\Url;
 
 it('extracts the last path segment as the ID', function () {

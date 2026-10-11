@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Console\Application;
 use Symfony\Component\Console\Tester\ApplicationTester;
 

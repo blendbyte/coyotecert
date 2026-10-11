@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Storage\StoredCertificate;
 
 function makeCert(array $overrides = []): StoredCertificate

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Challenge\Dns\CloudflareDns01Handler;
 use CoyoteCert\Challenge\Dns\ClouDnsDns01Handler;
 use CoyoteCert\Challenge\Dns\DigitalOceanDns01Handler;

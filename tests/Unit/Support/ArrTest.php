@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Support\Arr;
 
 it('accessible returns true for plain arrays', function () {

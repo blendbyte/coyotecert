@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoyoteCert\DTO;
 
 readonly class TlsAlpn01ValidationData

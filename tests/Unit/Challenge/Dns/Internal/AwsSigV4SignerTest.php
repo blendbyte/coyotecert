@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Challenge\Dns\Internal\AwsSigV4Signer;
 
 // ── Shared fixture ─────────────────────────────────────────────────────────────

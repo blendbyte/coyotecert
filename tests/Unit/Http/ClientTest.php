@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Http\Client;
 
 it('setTimeout() updates the internal timeout value', function () {

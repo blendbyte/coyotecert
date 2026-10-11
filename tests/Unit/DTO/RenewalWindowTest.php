@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\DTO\RenewalWindow;
 
 it('isOpen returns true when now is inside the window', function () {

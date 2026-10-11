@@ -2,12 +2,14 @@
 
 $finder = PhpCsFixer\Finder::create()
     ->in([__DIR__ . '/src', __DIR__ . '/tests'])
-    ->name('*.php');
+    ->name('*.php')
+    ->append([__DIR__ . '/bin/coyote']);
 
 return (new PhpCsFixer\Config())
     ->setRules([
         '@PER-CS'                             => true,
         '@PHP83Migration'                     => true,
+        'declare_strict_types'                => true,
         'array_syntax'                        => ['syntax' => 'short'],
         'ordered_imports'                     => ['sort_algorithm' => 'alpha'],
         'no_unused_imports'                   => true,
@@ -23,5 +25,7 @@ return (new PhpCsFixer\Config())
         'phpdoc_scalar'                       => true,
         'phpdoc_trim'                         => true,
     ])
+    ->setRiskyAllowed(true)
+    ->setUnsupportedPhpVersionAllowed(true)
     ->setFinder($finder)
     ->setCacheFile(__DIR__ . '/.php-cs-fixer.cache');

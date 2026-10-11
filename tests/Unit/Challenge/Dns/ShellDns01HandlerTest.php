@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Challenge\Dns\ShellDns01Handler;
 use CoyoteCert\Exceptions\ChallengeException;
 

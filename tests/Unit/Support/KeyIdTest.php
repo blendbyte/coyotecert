@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Support\Base64;
 use CoyoteCert\Support\KeyId;
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env php
 <?php
 
+declare(strict_types=1);
+
 // Support both standalone repo and composer global/local installs
 foreach ([
     __DIR__ . '/../vendor/autoload.php',

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Enums\KeyType;
 
 it('returns the correct JWS algorithm', function (KeyType $type, string $alg) {

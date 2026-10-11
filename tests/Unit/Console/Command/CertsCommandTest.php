@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CoyoteCert\Console\Command\CertsCommand;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Storage\FilesystemStorage;
