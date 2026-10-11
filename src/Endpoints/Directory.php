@@ -44,13 +44,6 @@ class Directory extends Endpoint
         return $this->all()->jsonBody()['newOrder'];
     }
 
-    public function getOrder(): string
-    {
-        $url = str_replace('new-order', 'order', $this->newOrder());
-
-        return rtrim($url, '/') . '/';
-    }
-
     public function revoke(): string
     {
         return $this->all()->jsonBody()['revokeCert'];

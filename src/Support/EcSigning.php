@@ -58,31 +58,4 @@ final class EcSigning
             default      => throw new CryptoException("Unsupported EC curve: {$curveName}"),
         };
     }
-
-    /**
-     * Extract EC JWK parameters (crv, x, y) from an OpenSSL key.
-     *
-     * @param \OpenSSLAsymmetricKey $key
-     * @return array{crv: string, x: string, y: string}
-     */
-    public static function ecParamsFromKey(\OpenSSLAsymmetricKey $key): array
-    {
-        $details = openssl_pkey_get_details($key);
-
-        if ($details === false || $details['type'] !== OPENSSL_KEYTYPE_EC) {
-            throw new CryptoException('Key is not an EC key.');
-        }
-
-        $crv = match ($details['ec']['curve_name']) {
-            'prime256v1' => 'P-256',
-            'secp384r1'  => 'P-384',
-            default      => throw new CryptoException("Unsupported EC curve: {$details['ec']['curve_name']}"),
-        };
-
-        return [
-            'crv' => $crv,
-            'x'   => Base64::urlSafeEncode($details['ec']['x']),
-            'y'   => Base64::urlSafeEncode($details['ec']['y']),
-        ];
-    }
 }

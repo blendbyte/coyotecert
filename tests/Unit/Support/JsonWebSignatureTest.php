@@ -110,44 +110,6 @@ it('ecParams throws CryptoException for unsupported EC curve', function () {
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Unsupported EC curve: secp521r1');
 });
 
-// ── EcSigning::ecParamsFromKey() ──────────────────────────────────────────────
-
-it('EcSigning::ecParamsFromKey() returns crv/x/y for a P-256 key', function () {
-    $key    = openssl_pkey_get_private(ecKeyPem('prime256v1'));
-    $params = \CoyoteCert\Support\EcSigning::ecParamsFromKey($key);
-
-    expect($params['crv'])->toBe('P-256');
-    expect($params)->toHaveKey('x');
-    expect($params)->toHaveKey('y');
-});
-
-it('EcSigning::ecParamsFromKey() returns crv/x/y for a P-384 key', function () {
-    $key    = openssl_pkey_get_private(ecKeyPem('secp384r1'));
-    $params = \CoyoteCert\Support\EcSigning::ecParamsFromKey($key);
-
-    expect($params['crv'])->toBe('P-384');
-});
-
-it('EcSigning::ecParamsFromKey() throws CryptoException for a non-EC key', function () {
-    openssl_pkey_export(
-        openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]),
-        $rsaPem,
-    );
-    $rsaKey = openssl_pkey_get_private($rsaPem);
-
-    expect(fn() => \CoyoteCert\Support\EcSigning::ecParamsFromKey($rsaKey))
-        ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Key is not an EC key.');
-});
-
-it('EcSigning::ecParamsFromKey() throws CryptoException for an unsupported EC curve', function () {
-    $key = openssl_pkey_get_private(ecKeyPem('secp521r1'));
-
-    expect(fn() => \CoyoteCert\Support\EcSigning::ecParamsFromKey($key))
-        ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Unsupported EC curve');
-});
-
-// ── SEC-10: EcSigning::derToRaw() bounds checking ────────────────────────────
-
 it('derToRaw() throws CryptoException for an empty string', function () {
     expect(fn() => \CoyoteCert\Support\EcSigning::derToRaw('', 32))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Malformed DER');

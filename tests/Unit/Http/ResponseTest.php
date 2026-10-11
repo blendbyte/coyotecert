@@ -49,16 +49,6 @@ it('getBody returns string body', function () {
     expect($r->getBody())->toBe('raw text');
 });
 
-it('hasBody returns true when body is non-empty', function () {
-    expect(makeResponse(body: ['x' => 1])->hasBody())->toBeTrue();
-    expect(makeResponse(body: 'hello')->hasBody())->toBeTrue();
-});
-
-it('hasBody returns false for empty body', function () {
-    expect(makeResponse(body: [])->hasBody())->toBeFalse();
-    expect(makeResponse(body: '')->hasBody())->toBeFalse();
-});
-
 it('getRequestedUrl returns the URL', function () {
     $r = makeResponse(url: 'https://acme.example.com/dir');
     expect($r->getRequestedUrl())->toBe('https://acme.example.com/dir');
@@ -83,9 +73,4 @@ it('rawBody returns the string when body is a string', function () {
 
 it('rawBody returns empty string when body is an array', function () {
     expect(makeResponse(body: ['key' => 'val'])->rawBody())->toBe('');
-});
-
-it('isJson returns true for array body and false for string body', function () {
-    expect(makeResponse(body: ['a' => 1])->isJson())->toBeTrue();
-    expect(makeResponse(body: 'text')->isJson())->toBeFalse();
 });

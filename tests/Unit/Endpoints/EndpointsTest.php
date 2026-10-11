@@ -9,7 +9,6 @@ use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\AuthException;
-use CoyoteCert\Exceptions\OrderNotFoundException;
 use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Interfaces\HttpClientInterface;
@@ -87,12 +86,6 @@ it('Directory::all() throws on a 503 response', function () {
         ->toThrow(AcmeException::class, 'Cannot get directory');
 });
 
-it('Directory::getOrder() replaces new-order with order and appends a trailing slash', function () {
-    $api = makeEndpointApi(endpointMock(getBody: directoryBody()));
-
-    expect($api->directory()->getOrder())->toBe('https://acme.example/order/');
-});
-
 it('Directory::renewalInfo() returns null when renewalInfo is absent', function () {
     $api = makeEndpointApi(endpointMock(getBody: directoryBody(withRenewalInfo: false)));
 
@@ -116,7 +109,7 @@ it('Account::get() throws when storage has no keys', function () {
 });
 
 it('Account::create() throws via throwError on a non-201 response', function () {
-    $storage = new InMemoryStorage(); // empty — generateNewKeys() will populate it
+    $storage = new InMemoryStorage(); // empty: create() generates the key
 
     // GET returns the directory body; POST returns a 500 error
     $api = makeEndpointApi(
@@ -164,7 +157,6 @@ it('Order::finalize() throws when the order is not ready (status=pending)', func
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: null,
-        finalized: false,
     );
 
     expect(fn() => $api->order()->finalize($orderData, 'fake-csr'))
@@ -275,7 +267,6 @@ function pendingOrderData(): OrderData
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: null,
-        finalized: false,
     );
 }
 
@@ -292,7 +283,6 @@ function readyOrderData(): OrderData
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: null,
-        finalized: false,
     );
 }
 
@@ -309,7 +299,6 @@ function orderDataWithAuthzUrls(array $urls): OrderData
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: null,
-        finalized: false,
     );
 }
 
@@ -597,83 +586,6 @@ it('Order::finalize() extracts base64 from a PEM-formatted CSR', function () {
     expect(true)->toBeTrue();
 });
 
-it('Order::get() throws OrderNotFoundException on 404', function () {
-    $storage = withKeyStorage();
-
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'new-account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response([], $url, 404, ['detail' => 'Order not found']),
-    );
-
-    expect(fn() => makeEndpointApi($mock, $storage)->order()->get('missing'))
-        ->toThrow(OrderNotFoundException::class, 'Order not found');
-});
-
-it('Order::get() throws RateLimitException on 429', function () {
-    $storage = withKeyStorage();
-
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'new-account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response([], $url, 429, ['detail' => 'Too many requests']),
-    );
-
-    expect(fn() => makeEndpointApi($mock, $storage)->order()->get('spam'))
-        ->toThrow(RateLimitException::class, 'Too many requests');
-});
-
-it('Order::get() throws AcmeException on 500', function () {
-    $storage = withKeyStorage();
-
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'new-account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response([], $url, 500, ['detail' => 'Internal error']),
-    );
-
-    expect(fn() => makeEndpointApi($mock, $storage)->order()->get('fail'))
-        ->toThrow(AcmeException::class, 'Internal error');
-});
-
-it('Order::get() throws RateLimitException with parsed Retry-After seconds', function () {
-    $storage = withKeyStorage();
-
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'new-account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response(['retry-after' => '30'], $url, 429, ['detail' => 'Rate limited']),
-    );
-
-    $caught = null;
-    try {
-        makeEndpointApi($mock, $storage)->order()->get('spam');
-    } catch (RateLimitException $e) {
-        $caught = $e;
-    }
-
-    expect($caught)->toBeInstanceOf(RateLimitException::class);
-    expect($caught->getRetryAfter())->toBe(30);
-});
-
-it('Order::get() throws AuthException on 401', function () {
-    $storage = withKeyStorage();
-
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'new-account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response([], $url, 401, ['detail' => 'Unauthorized']),
-    );
-
-    expect(fn() => makeEndpointApi($mock, $storage)->order()->get('auth-fail'))
-        ->toThrow(AuthException::class, 'Unauthorized');
-});
-
 it('Order::new() throws RateLimitException on 429', function () {
     $api = makeEndpointApi(endpointMock(
         getBody: directoryBody(),
@@ -709,20 +621,6 @@ it('Order::new() attaches RFC 8555 §6.7 subproblems to the thrown exception', f
 
     expect($caught)->toBeInstanceOf(AcmeException::class);
     expect($caught->getSubproblems())->toBe($subproblems);
-});
-
-it('Order::get() returns OrderData on success', function () {
-    $storage = withKeyStorage();
-
-    $mock = closureMock(
-        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
-        postHandler: fn($url) => str_contains($url, 'new-account')
-            ? new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody())
-            : new Response([], $url, 200, orderBody('valid')),
-    );
-
-    $order = makeEndpointApi($mock, $storage)->order()->get('1');
-    expect($order->status)->toBe('valid');
 });
 
 // ── DomainValidation ──────────────────────────────────────────────────────────
@@ -876,7 +774,7 @@ it('DomainValidation::start() sends DNS challenge with localTest=false', functio
 
 it('DomainValidation::start() with localTest=true passes HTTP local check when body matches', function () {
     $storage    = withKeyStorage();
-    $thumbprint = \CoyoteCert\Support\Thumbprint::make($storage->getAccountKey(testProvider()->getSlug()));
+    $thumbprint = \CoyoteCert\Support\JsonWebKey::thumbprint(\CoyoteCert\Support\JsonWebKey::compute($storage->getAccountKey(testProvider()->getSlug())));
     $token      = 'local-test-token';
     $keyAuth    = $token . '.' . $thumbprint;
 
@@ -1024,7 +922,6 @@ it('Certificate::getBundle() returns CertificateBundleData on 200', function () 
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: 'https://acme.example/cert/1',
-        finalized: true,
     );
 
     $bundle = $api->certificate()->getBundle($order);
@@ -1048,7 +945,6 @@ it('Certificate::getBundle() throws on non-200 response', function () {
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: 'https://acme.example/cert/1',
-        finalized: true,
     );
 
     expect(fn() => $api->certificate()->getBundle($order))
@@ -1298,6 +1194,10 @@ it('Account::keyRollover() retries once on badNonce', function () {
     $mock = closureMock(
         getHandler: fn($url) => new Response([], $url, 200, directoryBodyWithKeyChange()),
         postHandler: function ($url) use (&$calls) {
+            if (!str_contains($url, 'key-change')) {
+                return new Response([], $url, 200, accountBody()); // account read-back
+            }
+
             $calls++;
             if ($calls === 1) {
                 return new Response([], $url, 400, [
@@ -1306,13 +1206,13 @@ it('Account::keyRollover() retries once on badNonce', function () {
                 ]);
             }
 
-            return new Response([], $url, 200, accountBody());
+            return new Response([], $url, 200, '');
         },
     );
 
     $result = makeEndpointApi($mock, $storage)->account()->keyRollover(makeAccountData());
     expect($result->status)->toBe('valid');
-    expect($calls)->toBe(2);
+    expect($calls)->toBe(2); // the key-change request is sent twice, once per nonce
 });
 
 it('Account::keyRollover() throws on non-200 response', function () {
@@ -1482,7 +1382,6 @@ function certOrderData(): OrderData
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: 'https://acme.example/cert/1',
-        finalized: true,
     );
 }
 
@@ -1674,7 +1573,6 @@ it('Certificate::getBundle() throws AcmeException when certificateUrl is null', 
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: null,   // ← triggers the line-15 guard
-        finalized: true,
     );
 
     expect(fn() => $api->certificate()->getBundle($order))
@@ -1967,3 +1865,49 @@ it('typed exceptions carry the ACME problem type and subproblems', function (int
     'auth'       => [403, AuthException::class],
     'rate limit' => [429, RateLimitException::class],
 ]);
+
+it('Account::create() registers the email as a mailto contact', function () {
+    $sent = [];
+    $api  = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url, $jws) use (&$sent) {
+            $sent[] = json_decode(Base64::urlSafeDecode($jws['payload']), true);
+
+            return new Response(['location' => 'https://acme.example/account/1'], $url, 201, accountBody());
+        },
+    ), new InMemoryStorage());
+
+    $api->account()->create('admin@example.com');
+    $api->account()->create(); // no email: no contact
+
+    expect($sent[0]['contact'])->toBe(['mailto:admin@example.com']);
+    expect($sent[1])->not->toHaveKey('contact');
+});
+
+it('Account::keyRollover() signs the inner JWS with the new key and no nonce (RFC 8555 §7.3.5)', function () {
+    $outer = null;
+    $api   = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBodyWithKeyChange()),
+        postHandler: function ($url, $jws) use (&$outer) {
+            if (str_contains($url, 'key-change')) {
+                $outer = $jws;
+
+                return new Response([], $url, 200, ''); // RFC 8555 §7.3.5 needs no body (Pebble sends none)
+            }
+
+            return new Response(['location' => 'https://acme.example/account/1'], $url, 200, accountBody());
+        },
+    ), withKeyStorage());
+
+    $account = $api->account()->keyRollover(makeAccountData());
+    expect($account->url)->toBe('https://acme.example/account/1');
+
+    $inner          = json_decode(Base64::urlSafeDecode($outer['payload']), true);
+    $innerProtected = json_decode(Base64::urlSafeDecode($inner['protected']), true);
+    $innerPayload   = json_decode(Base64::urlSafeDecode($inner['payload']), true);
+
+    expect($innerProtected)->toHaveKeys(['alg', 'jwk', 'url'])->not->toHaveKey('nonce');
+    expect($innerProtected['url'])->toBe('https://acme.example/key-change');
+    expect($innerPayload['account'])->toBe('https://acme.example/account/1');
+    expect($innerPayload)->toHaveKey('oldKey');
+});

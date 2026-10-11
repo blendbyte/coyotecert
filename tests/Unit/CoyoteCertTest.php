@@ -721,7 +721,6 @@ function invokeDeployAndValidate(CoyoteCert $coyote, \CoyoteCert\Api $api, array
         finalizeUrl: 'https://acme.example/finalize/1',
         accountUrl: 'https://acme.example/account/1',
         certificateUrl: null,
-        finalized: false,
     );
     $account = new \CoyoteCert\DTO\AccountData(
         id: '1',

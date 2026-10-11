@@ -12,7 +12,6 @@ use CoyoteCert\Endpoints\RenewalInfo;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Http\Client;
-use CoyoteCert\Interfaces\AcmeAccountInterface;
 use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
 use CoyoteCert\Storage\StorageAccountAdapter;
@@ -55,10 +54,10 @@ class Api
         return $this->accountKeyType;
     }
 
-    public function accountAdapter(): AcmeAccountInterface
+    public function accountAdapter(): StorageAccountAdapter
     {
         if ($this->storage !== null) {
-            return new StorageAccountAdapter($this->storage, $this->provider->getSlug(), $this->accountKeyType);
+            return new StorageAccountAdapter($this->storage, $this->provider->getSlug());
         }
 
         throw new AcmeException(

@@ -60,30 +60,6 @@ it('status helpers return correct boolean values', function () {
     expect(OrderData::fromResponse(makeOrderResponse('invalid'))->isInvalid())->toBeTrue();
 });
 
-it('isFinalized returns true when status is valid', function () {
-    $order = OrderData::fromResponse(makeOrderResponse('valid'));
-    expect($order->isFinalized())->toBeTrue();
-    expect($order->isNotFinalized())->toBeFalse();
-});
-
-it('isFinalized returns true when finalized flag is set', function () {
-    $order = OrderData::fromResponse(makeOrderResponse('processing'))->withFinalized(true);
-    expect($order->isFinalized())->toBeTrue();
-});
-
-it('isNotFinalized returns true for pending/processing', function () {
-    $order = OrderData::fromResponse(makeOrderResponse('pending'));
-    expect($order->isNotFinalized())->toBeTrue();
-});
-
-it('withCertificateUrl updates url and marks finalized', function () {
-    $order = OrderData::fromResponse(makeOrderResponse('processing'))
-        ->withCertificateUrl('https://acme.example.com/cert/99');
-
-    expect($order->certificateUrl)->toBe('https://acme.example.com/cert/99');
-    expect($order->finalized)->toBeTrue();
-});
-
 it('accountUrl is set when passed to fromResponse', function () {
     $order = OrderData::fromResponse(makeOrderResponse(), 'https://acme.example.com/acct/5');
     expect($order->accountUrl)->toBe('https://acme.example.com/acct/5');

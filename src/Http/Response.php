@@ -2,17 +2,17 @@
 
 namespace CoyoteCert\Http;
 
-class Response
+readonly class Response
 {
     /**
      * @param array<string, mixed> $headers
      * @param array<string, mixed>|string $body
      */
     public function __construct(
-        private readonly array $headers,
-        private readonly string $requestedUrl,
-        private readonly ?int $statusCode,
-        private readonly array|string $body,
+        private array $headers,
+        private string $requestedUrl,
+        private ?int $statusCode,
+        private array|string $body,
     ) {}
 
     public function getHeader(string $name, mixed $default = null): mixed
@@ -48,19 +48,9 @@ class Response
         return is_string($this->body) ? $this->body : '';
     }
 
-    public function isJson(): bool
-    {
-        return is_array($this->body);
-    }
-
     public function getRequestedUrl(): string
     {
         return $this->requestedUrl;
-    }
-
-    public function hasBody(): bool
-    {
-        return !empty($this->body);
     }
 
     public function getHttpResponseCode(): ?int

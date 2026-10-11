@@ -5,7 +5,6 @@ namespace CoyoteCert\Endpoints;
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Exceptions\AcmeException;
-use CoyoteCert\Exceptions\OrderNotFoundException;
 use CoyoteCert\Support\Base64;
 
 class Order extends Endpoint
@@ -66,33 +65,6 @@ class Order extends Endpoint
         }
 
         $this->throwError($response, 'Creating new order failed.', ['payload' => $payload]);
-    }
-
-    public function get(string $id): OrderData
-    {
-        $account = $this->client->account()->get();
-
-        $orderUrl = sprintf(
-            '%s%s/%s',
-            $this->client->directory()->getOrder(),
-            $account->id,
-            $id,
-        );
-
-        // RFC 8555 §7.1.2.1: read-only resource access must use POST-as-GET.
-        $response = $this->postSigned($orderUrl, $account->url);
-
-        // Everything below 400 is a success.
-        if ($response->getHttpResponseCode() < 400) {
-            return OrderData::fromResponse($response, $account->url);
-        }
-
-        $this->logResponse('error', 'Getting order failed; bad response code.', $response);
-
-        throw match ($response->getHttpResponseCode()) {
-            404     => new OrderNotFoundException($response->jsonBody()['detail'] ?? 'Order cannot be found.'),
-            default => $this->createException($response, 'Getting order failed.'),
-        };
     }
 
     public function refresh(OrderData $order): OrderData

@@ -322,7 +322,7 @@ class CoyoteCert
             accountKeyType: $this->accountKeyType,
         );
 
-        $api->certificate()->revoke($cert->certificate, $reason->value);
+        $api->certificate()->revoke($cert->certificate, $reason);
     }
 
     // ── Private issue() helpers ───────────────────────────────────────────────
@@ -428,10 +428,13 @@ class CoyoteCert
         $order  = $api->order()->waitUntilValid($order);
         $bundle = $api->certificate()->getBundle($order, $this->preferredChain ?: null);
 
-        $parsed    = openssl_x509_parse($bundle->certificate);
-        $expiresAt = isset($parsed['validTo_time_t'])
-            ? (new DateTimeImmutable())->setTimestamp((int) $parsed['validTo_time_t'])
-            : new DateTimeImmutable('+90 days');
+        $parsed = openssl_x509_parse($bundle->certificate);
+
+        if ($parsed === false || !isset($parsed['validTo_time_t'])) {
+            throw new AcmeException('The CA returned a certificate that cannot be parsed.');
+        }
+
+        $expiresAt = (new DateTimeImmutable())->setTimestamp((int) $parsed['validTo_time_t']);
 
         $api->logger('info', sprintf('Certificate issued, expires %s.', $expiresAt->format('Y-m-d')));
 

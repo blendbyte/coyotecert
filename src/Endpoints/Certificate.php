@@ -4,6 +4,7 @@ namespace CoyoteCert\Endpoints;
 
 use CoyoteCert\DTO\CertificateBundleData;
 use CoyoteCert\DTO\OrderData;
+use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Support\Base64;
 
@@ -86,7 +87,7 @@ class Certificate extends Endpoint
         return strcasecmp(trim($issuer), trim($preferredChain)) === 0;
     }
 
-    public function revoke(string $pem, int $reason = 0): void
+    public function revoke(string $pem, RevocationReason $reason = RevocationReason::Unspecified): void
     {
         if (!str_contains($pem, '-----BEGIN CERTIFICATE-----')) {
             throw new AcmeException('Could not parse the certificate.');
@@ -110,7 +111,7 @@ class Certificate extends Endpoint
         $accountUrl = $this->client->account()->get()->url;
         $response   = $this->postSigned($revokeUrl, $accountUrl, [
             'certificate' => $certificate,
-            'reason'      => $reason,
+            'reason'      => $reason->value,
         ]);
 
         if ($response->getHttpResponseCode() !== 200) {

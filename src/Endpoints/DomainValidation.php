@@ -15,7 +15,6 @@ use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\DnsDigest;
 use CoyoteCert\Support\JsonWebKey;
 use CoyoteCert\Support\LocalChallengeTest;
-use CoyoteCert\Support\Thumbprint;
 
 class DomainValidation extends Endpoint
 {
@@ -58,7 +57,7 @@ class DomainValidation extends Endpoint
      */
     public function getValidationData(array $challenges, ?AuthorizationChallengeEnum $authChallenge = null): array
     {
-        $thumbprint = Thumbprint::make($this->getAccountPrivateKey());
+        $thumbprint = JsonWebKey::thumbprint(JsonWebKey::compute($this->getAccountPrivateKey()));
 
         $authorizations = [];
         foreach ($challenges as $domainValidationData) {

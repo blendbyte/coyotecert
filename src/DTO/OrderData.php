@@ -6,23 +6,22 @@ use CoyoteCert\Http\Response;
 use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\Url;
 
-class OrderData
+readonly class OrderData
 {
     /**
      * @param array<int, array<string, string>> $identifiers
      * @param string[] $domainValidationUrls
      */
     public function __construct(
-        public readonly string  $id,
-        public readonly string  $url,
-        public readonly string  $status,
-        public readonly ?string $expires,
-        public readonly array   $identifiers,
-        public readonly array   $domainValidationUrls,
-        public readonly string  $finalizeUrl,
-        public readonly string  $accountUrl,
-        public readonly ?string $certificateUrl,
-        public readonly bool    $finalized = false,
+        public string  $id,
+        public string  $url,
+        public string  $status,
+        public ?string $expires,
+        public array   $identifiers,
+        public array   $domainValidationUrls,
+        public string  $finalizeUrl,
+        public string  $accountUrl,
+        public ?string $certificateUrl,
     ) {}
 
     public static function fromResponse(Response $response, string $accountUrl = ''): OrderData
@@ -48,38 +47,6 @@ class OrderData
         );
     }
 
-    public function withCertificateUrl(string $url): self
-    {
-        return new self(
-            id: $this->id,
-            url: $this->url,
-            status: $this->status,
-            expires: $this->expires,
-            identifiers: $this->identifiers,
-            domainValidationUrls: $this->domainValidationUrls,
-            finalizeUrl: $this->finalizeUrl,
-            accountUrl: $this->accountUrl,
-            certificateUrl: $url,
-            finalized: true,
-        );
-    }
-
-    public function withFinalized(bool $finalized): self
-    {
-        return new self(
-            id: $this->id,
-            url: $this->url,
-            status: $this->status,
-            expires: $this->expires,
-            identifiers: $this->identifiers,
-            domainValidationUrls: $this->domainValidationUrls,
-            finalizeUrl: $this->finalizeUrl,
-            accountUrl: $this->accountUrl,
-            certificateUrl: $this->certificateUrl,
-            finalized: $finalized,
-        );
-    }
-
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -98,15 +65,5 @@ class OrderData
     public function isInvalid(): bool
     {
         return $this->status === 'invalid';
-    }
-
-    public function isFinalized(): bool
-    {
-        return ($this->finalized || $this->isValid());
-    }
-
-    public function isNotFinalized(): bool
-    {
-        return !$this->isFinalized();
     }
 }

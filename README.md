@@ -1127,7 +1127,6 @@ AcmeException          - base; always safe to catch
 ├── ChallengeException - challenge validation failed
 ├── CryptoException    - local key or certificate operation failed
 ├── DomainValidationException - pre-flight self-check failed, or the CA marked a challenge invalid
-├── OrderNotFoundException   - order ID not found on the CA
 └── StorageException   - storage backend error
 ```
 
@@ -1489,6 +1488,7 @@ For advanced use cases like custom account management, manual order orchestratio
 ```php
 use CoyoteCert\Api;
 use CoyoteCert\Enums\KeyType;
+use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Provider\LetsEncrypt;
 use CoyoteCert\Storage\FilesystemStorage;
 
@@ -1506,9 +1506,9 @@ $account = $api->account()->keyRollover($account);  // rotate account key in pla
 
 // Order lifecycle
 $order = $api->order()->new($account, ['example.com', 'www.example.com']);
-$order = $api->order()->refresh($order);
-$order = $api->order()->waitUntilValid($order);
-$order = $api->order()->finalize($order, $csrPem);
+$order = $api->order()->refresh($order);              // status becomes "ready" once challenges pass
+$api->order()->finalize($order, $csrPem);              // submits the CSR, returns nothing
+$order = $api->order()->waitUntilValid($order);       // polls until the certificate is issued
 
 // Domain validation
 $statuses = $api->domainValidation()->status($order);
@@ -1518,7 +1518,7 @@ $api->domainValidation()->allChallengesPassed($order); // polls with retry
 
 // Certificate
 $bundle = $api->certificate()->getBundle($order);
-$api->certificate()->revoke($certPem, reason: 1);
+$api->certificate()->revoke($certPem, RevocationReason::KeyCompromise);
 
 // ARI
 $window = $api->renewalInfo()->get($certPem);

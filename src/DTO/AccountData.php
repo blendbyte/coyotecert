@@ -38,7 +38,7 @@ readonly class AccountData
         return new self(
             id: Url::extractId($url),
             url: $url,
-            key: $body['key'],
+            key: $body['key'] ?? [], // optional in RFC 8555 account objects
             status: $body['status'],
             agreement: $body['agreement'] ?? '',
             createdAt: $body['createdAt'] ?? null,

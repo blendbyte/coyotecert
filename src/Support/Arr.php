@@ -3,6 +3,7 @@
 namespace CoyoteCert\Support;
 
 use ArrayAccess;
+use Closure;
 
 class Arr
 {
@@ -36,7 +37,7 @@ class Arr
     public static function get(mixed $array, int|string|null $key, mixed $default = null): mixed
     {
         if (!static::accessible($array)) {
-            return value($default);
+            return $default instanceof Closure ? $default() : $default;
         }
 
         if (is_null($key)) {
@@ -47,32 +48,6 @@ class Arr
             return $array[$key];
         }
 
-        return value($default);
-    }
-
-    /**
-     * @param array<mixed> $array
-     * @param mixed $default
-     * @return mixed
-     */
-    public static function first(array $array, ?callable $callback = null, mixed $default = null): mixed
-    {
-        if (is_null($callback)) {
-            if (empty($array)) {
-                return value($default);
-            }
-
-            foreach ($array as $item) {
-                return $item;
-            }
-        }
-
-        foreach ($array as $key => $value) {
-            if ($callback($value, $key)) {
-                return $value;
-            }
-        }
-
-        return value($default);
+        return $default instanceof Closure ? $default() : $default;
     }
 }

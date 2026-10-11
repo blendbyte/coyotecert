@@ -10,7 +10,6 @@ use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Support\Base64;
-use CoyoteCert\Support\EcSigning;
 use CoyoteCert\Support\JsonWebKey;
 use CoyoteCert\Support\JsonWebSignature;
 use CoyoteCert\Support\KeyId;
@@ -37,6 +36,10 @@ class Account extends Endpoint
             : OpenSsl::openSslKeyToString(OpenSsl::generateKey($newKeyType));
 
         $payload = ['termsOfServiceAgreed' => true];
+
+        if ($email !== '') {
+            $payload['contact'] = ['mailto:' . $email];
+        }
 
         if ($this->client->getProvider()->isEabRequired()) {
             $eab = $this->client->getProvider()->getEabCredentials($email);
@@ -183,7 +186,9 @@ class Account extends Endpoint
         if ($response->getHttpResponseCode() === 200) {
             $this->client->accountAdapter()->savePrivateKey($newKeyPem, $keyType);
 
-            return AccountData::fromBody($account->url, $response->jsonBody());
+            // RFC 8555 §7.3.5 doesn't require an account object in the response (Pebble sends
+            // none), so read the account back with the new key, which also confirms the change
+            return $this->get();
         }
 
         $this->throwError($response, 'Key rollover failed');
@@ -238,11 +243,9 @@ class Account extends Endpoint
     }
 
     /**
-     * Build the inner JWS for key rollover (RFC 8555 §7.3.5).
+     * The inner JWS for key rollover (RFC 8555 §7.3.5): signed by the NEW key with a JWK
+     * header and no nonce (the outer JWS carries it).
      *
-     * Signed by the NEW key with JWK header; no nonce (outer JWS carries it).
-     */
-    /**
      * @param array<string, string> $oldJwk
      * @return array<string, string>
      */
@@ -252,56 +255,7 @@ class Account extends Endpoint
         string $accountUrl,
         string $keyChangeUrl,
     ): array {
-        $privateKey = openssl_pkey_get_private($newKeyPem);
-
-        if ($privateKey === false) {
-            throw new CryptoException('Cannot load new private key.');
-        }
-
-        $details = openssl_pkey_get_details($privateKey);
-
-        if ($details === false) {
-            throw new CryptoException('Failed to get key details.');
-        }
-
-        $isEc = $details['type'] === OPENSSL_KEYTYPE_EC;
-
-        if ($isEc) {
-            [$alg, $digest, $sigLen] = match ($details['ec']['curve_name']) {
-                'prime256v1' => ['ES256', 'SHA256', 32],
-                'secp384r1'  => ['ES384', 'SHA384', 48],
-                default      => throw new CryptoException("Unsupported EC curve: {$details['ec']['curve_name']}"),
-            };
-        } else {
-            $alg    = 'RS256';
-            $digest = 'SHA256';
-            $sigLen = null;
-        }
-
-        $protected64 = Base64::urlSafeEncode(json_encode([
-            'alg' => $alg,
-            'jwk' => JsonWebKey::compute($newKeyPem),
-            'url' => $keyChangeUrl,
-        ], JSON_THROW_ON_ERROR));
-
-        $payload64 = Base64::urlSafeEncode(json_encode([
-            'account' => $accountUrl,
-            'oldKey'  => $oldJwk,
-        ], JSON_THROW_ON_ERROR));
-
-        if (!openssl_sign($protected64 . '.' . $payload64, $signed, $privateKey, $digest)) {
-            throw new CryptoException('Failed to sign key-change payload.');
-        }
-
-        if ($isEc) {
-            $signed = EcSigning::derToRaw($signed, $sigLen);
-        }
-
-        return [
-            'protected' => $protected64,
-            'payload'   => $payload64,
-            'signature' => Base64::urlSafeEncode($signed),
-        ];
+        return JsonWebSignature::generate(['account' => $accountUrl, 'oldKey' => $oldJwk], $keyChangeUrl, null, $newKeyPem);
     }
 
     /**
