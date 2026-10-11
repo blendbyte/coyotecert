@@ -1711,9 +1711,17 @@ it('RenewalInfo::certId() throws CryptoException when certPem is not a valid cer
 });
 
 it('RenewalInfo::certId() throws CryptoException when the certificate has no Authority Key Identifier', function () {
+    // Explicit config: the system openssl.cnf on some distros adds an AKI to self-signed certs
+    $cnf = tempnam(sys_get_temp_dir(), 'cc-cnf');
+    file_put_contents($cnf, "[req]\ndistinguished_name = dn\n[dn]\n[v3_plain]\nbasicConstraints = CA:FALSE\n");
+
+    $opts = ['config' => $cnf, 'x509_extensions' => 'v3_plain', 'digest_alg' => 'sha256'];
     $key  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
-    $cert = openssl_csr_sign(openssl_csr_new(['commonName' => 'self.example.com'], $key), null, $key, 30, serial: 1);
+    $cert = openssl_csr_sign(openssl_csr_new(['commonName' => 'self.example.com'], $key, $opts), null, $key, 30, $opts, 1);
     openssl_x509_export($cert, $pem);
+    unlink($cnf);
+
+    expect(openssl_x509_parse($pem)['extensions'])->not->toHaveKey('authorityKeyIdentifier');
 
     $mock = closureMock(getHandler: fn($url) => new Response([], $url, 200, directoryBody(withRenewalInfo: true)));
 
