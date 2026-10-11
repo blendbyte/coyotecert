@@ -12,7 +12,7 @@ use CoyoteCert\Exceptions\HttpChallengeException;
  * DNS-01 challenge handler for AWS Route53.
  *
  * Creates and removes _acme-challenge TXT records via the Route53 REST API using
- * AWS Signature Version 4 authentication. No AWS SDK dependency — signing is
+ * AWS Signature Version 4 authentication. No AWS SDK dependency: signing is
  * implemented inline using hash_hmac() / hash().
  *
  * If $zoneId is omitted the hosted zone is resolved automatically by walking the

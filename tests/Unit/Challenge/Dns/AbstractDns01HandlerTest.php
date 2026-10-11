@@ -175,7 +175,7 @@ it('propagationDelay executes the sleep branch when the delay is positive', func
     $handler = (new TestDns01Handler())->propagationDelay(5);
     $handler->deploy('example.com', 'tok', 'keyauth');
 
-    // sleep() is a no-op in the test namespace — verifies the branch runs cleanly.
+    // sleep() is a no-op in the test namespace, so this verifies the branch runs cleanly.
     expect($handler->deployed)->toHaveCount(1);
 });
 
@@ -189,7 +189,7 @@ it('real pollForTxtRecords fails open when the DNS lookup cannot be satisfied', 
         public function cleanup(string $domain, string $token): void {}
     };
 
-    // Does not override pollForTxtRecords() — exercises the real implementation.
+    // Does not override pollForTxtRecords(), so it exercises the real implementation.
     // DNS fails for .invalid; propagationTimeout(1) keeps the poll window short.
     // Fails open: no exception is thrown when the timeout is reached.
     expect(
@@ -234,7 +234,7 @@ it('pollForTxtRecords returns immediately when areTxtRecordsVisible returns true
 it('pollForTxtRecords sleeps between poll attempts when the deadline has not passed', function () {
     // Freeze fake time so the deadline check is deterministic regardless of real DNS speed.
     // sleep() in this namespace advances __test_time, so after sleep(5) the fake clock
-    // reads start+5, which is past the start+1 deadline — loop exits after one sleep call.
+    // reads start+5, which is past the start+1 deadline, so the loop exits after one sleep call.
     $GLOBALS['__test_time'] = \time();
 
     $handler = new class extends AbstractDns01Handler {

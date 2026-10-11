@@ -123,7 +123,7 @@ class DigitalOceanDns01Handler extends AbstractDns01Handler
                 return $candidate;
             } catch (HttpChallengeException $e) {
                 if ($e->httpStatus !== 404) {
-                    throw $e; // 401, 403, 500, etc. — propagate; only 404 means "not found here"
+                    throw $e; // 401, 403, 500, etc. propagate; only 404 means "not found here"
                 }
             }
         }

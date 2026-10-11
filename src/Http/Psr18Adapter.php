@@ -17,12 +17,12 @@ use Psr\Http\Message\StreamFactoryInterface;
  *
  * Usage:
  *
- *   // Symfony — client implements all three interfaces
+ *   // Symfony: the client implements all three interfaces
  *   CoyoteCert::with(new LetsEncrypt())
  *       ->httpClient(new \Symfony\Component\HttpClient\Psr18Client())
  *       ->issue();
  *
- *   // Guzzle — separate factory required
+ *   // Guzzle: a separate factory is required
  *   CoyoteCert::with(new LetsEncrypt())
  *       ->httpClient(new \GuzzleHttp\Client(), new \GuzzleHttp\Psr7\HttpFactory())
  *       ->issue();

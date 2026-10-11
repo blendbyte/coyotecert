@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        CA compatibility issues are different from library bugs — they're often caused by CA-specific quirks, non-standard error responses, or undocumented extensions to RFC 8555. Providing the raw CA response is the most important thing you can include here.
+        CA compatibility issues are different from library bugs. They're often caused by CA-specific quirks, non-standard error responses, or undocumented extensions to RFC 8555. Providing the raw CA response is the most important thing you can include here.
 
   - type: input
     id: ca_name
@@ -65,7 +65,7 @@ body:
     id: ca_response
     attributes:
       label: Raw CA error response
-      description: Paste the full JSON body returned by the CA. This is the most useful piece of information — please do not summarise it.
+      description: Paste the full JSON body returned by the CA. This is the most useful piece of information, so please do not summarise it.
       render: json
     validations:
       required: true

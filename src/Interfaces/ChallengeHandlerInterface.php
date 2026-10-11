@@ -18,13 +18,13 @@ interface ChallengeHandlerInterface
      *
      * Semantics differ by challenge type:
      *
-     *   http-01  — $token is the filename under /.well-known/acme-challenge/,
+     *   http-01:  $token is the filename under /.well-known/acme-challenge/,
      *              $keyAuthorization is the full file contents to serve.
      *
-     *   dns-01   — $token is unused; $keyAuthorization is the base64url-encoded
+     *   dns-01:   $token is unused; $keyAuthorization is the base64url-encoded
      *              SHA-256 digest to publish as the _acme-challenge TXT record.
      *
-     *   tls-alpn-01 — $token is the ACME token; $keyAuthorization is the full key
+     *   tls-alpn-01: $token is the ACME token; $keyAuthorization is the full key
      *                 authorization (token.thumbprint). Use TlsAlpn01Handler::generateAcmeCertificate()
      *                 to generate the RFC 8737 validation certificate, then serve it on
      *                 port 443 for the "acme-tls/1" ALPN protocol.

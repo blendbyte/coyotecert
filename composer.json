@@ -1,7 +1,18 @@
 {
   "name": "blendbyte/coyotecert",
-  "description": "Full-featured ACME v2 (RFC 8555) PHP 8.3+ client for issuing, renewing, and revoking TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, or any standards-compliant CA — with ARI smart renewal, ECDSA/RSA key support, EAB, and PSR-18 HTTP client integration.",
-  "keywords": ["acme", "letsencrypt", "ssl", "tls", "certificate", "psr-18"],
+  "description": "ACME v2 (RFC 8555) client for PHP 8.3+ that issues, renews, and revokes TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, or any standards-compliant CA, with ARI renewal windows, ECDSA/RSA keys, EAB, DNS-01 providers, and PSR-18 HTTP client support.",
+  "keywords": [
+    "acme",
+    "rfc8555",
+    "letsencrypt",
+    "zerossl",
+    "ssl",
+    "tls",
+    "certificate",
+    "dns-01",
+    "ari",
+    "psr-18"
+  ],
   "type": "library",
   "license": "MIT",
   "authors": [
@@ -12,6 +23,11 @@
       "role": "Developer"
     }
   ],
+  "support": {
+    "issues": "https://github.com/blendbyte/coyotecert/issues",
+    "source": "https://github.com/blendbyte/coyotecert",
+    "security": "https://github.com/blendbyte/coyotecert/security/policy"
+  },
   "require": {
     "php": "^8.3",
     "ext-curl": "*",
@@ -32,6 +48,10 @@
     "pestphp/pest": "^4.0",
     "phpstan/phpstan": "^2.1",
     "phpunit/phpunit": "^12.5"
+  },
+  "suggest": {
+    "ext-pdo": "Needed for DatabaseStorage (with pdo_mysql, pdo_pgsql or pdo_sqlite)",
+    "psr/http-client-implementation": "Use your own PSR-18 HTTP client instead of the built-in curl client"
   },
   "autoload": {
     "psr-4": {

@@ -21,7 +21,7 @@ use CoyoteCert\Exceptions\ChallengeException;
  * After creating the record, deploy() fetches /dns/records.json filtered by host
  * and type to locate the record and obtain its ID for use in cleanup().
  *
- * All operations use GET requests with credentials passed as query parameters —
+ * All operations use GET requests with credentials passed as query parameters:
  * the standard supported mode for the ClouDNS REST API.
  *
  * Usage:

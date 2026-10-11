@@ -154,7 +154,7 @@ class DomainValidation extends Endpoint
         return $response;
     }
 
-    /** @throws \CoyoteCert\Exceptions\DomainValidationException immediately when the CA marks a challenge invalid — that status is terminal, so it's not worth burning the retry budget on. */
+    /** @throws \CoyoteCert\Exceptions\DomainValidationException immediately when the CA marks a challenge invalid; that status is terminal, so it's not worth burning the retry budget on. */
     public function allChallengesPassed(
         OrderData $orderData,
         int $maxAttempts = 10,

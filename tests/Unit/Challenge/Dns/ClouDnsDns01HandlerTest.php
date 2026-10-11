@@ -297,7 +297,7 @@ it('deploy throws when add-record returns a Failed status', function () {
 it('deploy throws when the record cannot be found in the records list after creation', function () {
     [$client, $handler] = clouDnsHandler('id', 'pw', 'example.com', [
         clouDnsRecordCreated(),
-        [],  // empty records list — record not found
+        [],  // empty records list: record not found
     ]);
 
     expect(fn() => $handler->deploy('example.com', '', 'key'))

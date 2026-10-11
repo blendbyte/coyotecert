@@ -122,7 +122,7 @@ class Account extends Endpoint
 
     /**
      * Deactivate an account (RFC 8555 §7.3.6).
-     * This is irreversible — a deactivated account cannot be reactivated.
+     * This is irreversible: a deactivated account cannot be reactivated.
      */
     public function deactivate(AccountData $account): AccountData
     {
@@ -139,7 +139,7 @@ class Account extends Endpoint
      * Roll over the account key (RFC 8555 §7.3.5).
      *
      * Generates a new key of the same type as the current account key,
-     * sends a signed key-change request, and — on success — persists the
+     * sends a signed key-change request, and, on success, persists the
      * new key via the account interface so future requests use it.
      */
     public function keyRollover(AccountData $account): AccountData

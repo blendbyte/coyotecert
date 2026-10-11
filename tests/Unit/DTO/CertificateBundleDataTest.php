@@ -38,7 +38,7 @@ it('throws when no certificate is found in the response', function () {
         ->toThrow(\CoyoteCert\Exceptions\AcmeException::class);
 });
 
-it('is readonly — properties cannot be changed', function () use ($certA) {
+it('is readonly: properties cannot be changed', function () use ($certA) {
     $r      = new Response([], '', 200, $certA);
     $bundle = CertificateBundleData::fromResponse($r);
 

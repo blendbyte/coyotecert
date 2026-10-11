@@ -11,7 +11,7 @@ it('stores kid and hmacKey', function () {
     expect($creds->hmacKey)->toBe('my-hmac');
 });
 
-it('is readonly — properties cannot be changed', function () {
+it('is readonly: properties cannot be changed', function () {
     $creds = new EabCredentials('kid', 'hmac');
 
     expect(fn() => $creds->kid = 'other')

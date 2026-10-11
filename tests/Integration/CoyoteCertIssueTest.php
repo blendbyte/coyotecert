@@ -22,7 +22,7 @@ it('issues a certificate with default key types (RSA account, EC_P256 cert)', fu
     expect($cert->fullchain)->toContain('-----BEGIN CERTIFICATE-----');
     expect($cert->domains)->toBe(['test.example.com']);
     expect(openssl_x509_parse($cert->certificate))->toBeArray();
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');
 
 it('issues a certificate with an EC P-256 account key', function () {
     $cert = CoyoteCert::with(pebble())
@@ -34,7 +34,7 @@ it('issues a certificate with an EC P-256 account key', function () {
         ->issue();
 
     expect($cert->certificate)->toContain('-----BEGIN CERTIFICATE-----');
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');
 
 it('reuses an existing account on a second issue', function () {
     $storage = new InMemoryStorage();
@@ -56,7 +56,7 @@ it('reuses an existing account on a second issue', function () {
 
     expect($first->certificate)->not->toBe($second->certificate);
     expect($second->certificate)->toContain('-----BEGIN CERTIFICATE-----');
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');
 
 it('issueOrRenew returns the cached cert when still valid', function () {
     $storage = new InMemoryStorage();
@@ -76,7 +76,7 @@ it('issueOrRenew returns the cached cert when still valid', function () {
         ->issueOrRenew(daysBeforeExpiry: 1);
 
     expect($returned->certificate)->toBe($issued->certificate);
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');
 
 it('issues a certificate with the shortlived profile', function () {
     $cert = CoyoteCert::with(pebble())
@@ -88,4 +88,4 @@ it('issues a certificate with the shortlived profile', function () {
         ->issue();
 
     expect($cert->certificate)->toContain('-----BEGIN CERTIFICATE-----');
-})->skip(fn() => !pebbleAvailable(), 'Pebble not running — skipping integration tests');
+})->skip(fn() => !pebbleAvailable(), 'Pebble not running, skipping integration tests');

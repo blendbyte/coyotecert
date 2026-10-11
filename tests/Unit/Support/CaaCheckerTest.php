@@ -137,7 +137,7 @@ it('walks up to the parent domain when no records exist on the subdomain', funct
 });
 
 it('stops walking when records are found at the subdomain level', function () {
-    // sub.example.com permits the CA; example.com blocks it — subdomain wins
+    // sub.example.com permits the CA; example.com blocks it, subdomain wins
     $checker = makeChecker([
         'sub.example.com' => [makeCaaRecord('issue', 'letsencrypt.org')],
         'example.com'     => [makeCaaRecord('issue', 'digicert.com')],

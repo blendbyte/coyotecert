@@ -40,7 +40,7 @@ it('get returns a top-level value', function () {
     expect(Arr::get(['a' => 1], 'a'))->toBe(1);
 });
 
-it('get returns null key — the whole array', function () {
+it('get with a null key returns the whole array', function () {
     $arr = ['a' => 1];
     expect(Arr::get($arr, null))->toBe($arr);
 });

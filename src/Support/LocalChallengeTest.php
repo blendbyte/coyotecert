@@ -38,7 +38,7 @@ class LocalChallengeTest
         $challenge   = sprintf('%s.%s', $name, $domain);
         $nameservers = self::getNameservers($domain);
 
-        // All authoritative nameservers must have the record — ACME validators check each one.
+        // All authoritative nameservers must have the record: ACME validators check each one.
         foreach ($nameservers as $nameserver) {
             $foundTxt    = [];
             $lookupError = null;

@@ -8,7 +8,7 @@ use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\StorageException;
 
 /**
- * Volatile in-memory storage — useful for testing and one-shot scripts.
+ * Volatile in-memory storage, useful for testing and one-shot scripts.
  * Nothing is persisted between requests.
  */
 class InMemoryStorage implements StorageInterface

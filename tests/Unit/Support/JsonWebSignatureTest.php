@@ -105,7 +105,7 @@ it('throws CryptoException when the private key PEM is invalid', function () {
 });
 
 it('ecParams throws CryptoException for unsupported EC curve', function () {
-    // secp521r1 is not in the match — triggers the default RuntimeException branch
+    // secp521r1 is not in the match, triggering the default RuntimeException branch
     $pem = ecKeyPem('secp521r1');
 
     expect(fn() => JsonWebSignature::generate([], 'https://example.com', 'nonce', $pem))
@@ -123,7 +123,7 @@ it('derToRaw() throws CryptoException when first byte is not 0x30', function () 
 });
 
 it('derToRaw() throws CryptoException when R tag byte is not 0x02', function () {
-    // 0x30 [seq-len] 0x99 [r-len] ... — wrong R tag
+    // 0x30 [seq-len] 0x99 [r-len] ...: wrong R tag
     expect(fn() => \CoyoteCert\Support\EcSigning::derToRaw("\x30\x06\x99\x01\x01\x02\x01\x01", 32))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Malformed DER');
 });

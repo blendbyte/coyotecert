@@ -279,7 +279,7 @@ class CoyoteCert
 
         $this->deployAndValidate($api, $order, $account, $challengeHandler);
 
-        // Refresh order — status transitions pending → ready after all challenges pass
+        // Refresh order: status transitions pending → ready after all challenges pass
         $order = $api->order()->refresh($order);
 
         $stored = $this->fetchAndStoreCertificate($api, $order);
@@ -300,7 +300,7 @@ class CoyoteCert
         return $this->issue();
     }
 
-    /** Requires storage — the account key is used to sign the revocation request. */
+    /** Requires storage: the account key is used to sign the revocation request. */
     public function revoke(StoredCertificate $cert, RevocationReason $reason = RevocationReason::Unspecified): void
     {
         if ($this->storage === null) {
@@ -430,7 +430,7 @@ class CoyoteCert
 
         if (!$allPassed) {
             throw new AcmeException(
-                'Domain validation failed — one or more challenges did not pass.',
+                'Domain validation failed: one or more challenges did not pass.',
             );
         }
     }

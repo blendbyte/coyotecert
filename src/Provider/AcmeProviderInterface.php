@@ -13,7 +13,7 @@ interface AcmeProviderInterface
     /**
      * Short, filesystem-safe identifier (e.g. "letsencrypt", "zerossl").
      * Namespaces account keys in storage so different CAs never share a key.
-     * Must match [a-z0-9][a-z0-9-]*[a-z0-9] — no leading/trailing hyphens.
+     * Must match [a-z0-9][a-z0-9-]*[a-z0-9] (no leading or trailing hyphens).
      */
     public function getSlug(): string;
 

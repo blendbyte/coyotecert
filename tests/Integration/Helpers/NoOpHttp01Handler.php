@@ -9,7 +9,7 @@ use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 
 /**
  * Challenge handler used in integration tests.
- * Does nothing — Pebble runs with PEBBLE_VA_ALWAYS_VALID=1 so no real file is needed.
+ * Does nothing: Pebble runs with PEBBLE_VA_ALWAYS_VALID=1 so no real file is needed.
  */
 class NoOpHttp01Handler implements ChallengeHandlerInterface
 {

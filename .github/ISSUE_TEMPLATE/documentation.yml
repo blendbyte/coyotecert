@@ -7,15 +7,15 @@ body:
     attributes:
       label: Where is the issue?
       options:
-        - README — quick start / installation
-        - README — provider documentation
-        - README — challenge handlers
-        - README — storage backends
-        - README — issuance / renewal
-        - README — revocation
-        - README — StoredCertificate reference
-        - README — low-level API
-        - README — other section
+        - README: quick start / installation
+        - README: provider documentation
+        - README: challenge handlers
+        - README: storage backends
+        - README: issuance / renewal
+        - README: revocation
+        - README: StoredCertificate reference
+        - README: low-level API
+        - README: other section
         - Source docblocks / inline comments
         - Other
     validations:

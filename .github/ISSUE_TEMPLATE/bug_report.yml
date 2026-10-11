@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug. Please fill in as much detail as you can — the more context you provide, the faster it can be diagnosed.
+        Thanks for taking the time to report a bug. Please fill in as much detail as you can: the more context you provide, the faster it can be diagnosed.
 
   - type: dropdown
     id: ca

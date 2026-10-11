@@ -437,7 +437,7 @@ it('CoyoteCert registers a stored key the CA does not know instead of failing', 
 });
 
 it('Account::create() succeeds without EAB when server returns 201 with location header', function () {
-    // Non-EAB provider (Pebble) — covers the non-EAB create() success path
+    // Non-EAB provider (Pebble) covers the non-EAB create() success path
     $api = new Api(
         provider: new \CoyoteCert\Provider\Pebble(),
         storage: new InMemoryStorage(),
@@ -818,7 +818,7 @@ it('DomainValidation::start() throws DomainValidationException when challenge da
         status: 'pending',
         expires: '2099-01-01T00:00:00Z',
         file: [],
-        dns: [],  // empty — no DNS challenge available
+        dns: [],  // empty: no DNS challenge available
         validationRecord: [],
     );
 
@@ -1318,7 +1318,7 @@ it('Order::waitUntilValid() uses exponential back-off when Retry-After is absent
         postHandler: function ($url) use (&$callCount) {
             $callCount++;
 
-            // Two processing rounds then valid — no Retry-After header
+            // Two processing rounds then valid, no Retry-After header
             return $callCount < 3
                 ? new Response([], $url, 200, orderBody('processing'))
                 : new Response([], $url, 200, orderBody('valid'));

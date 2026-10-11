@@ -186,7 +186,7 @@ it('authorityKeyId() returns an uppercase colon-separated hex string when presen
     $aki = $cert->authorityKeyId();
 
     expect($aki)->toBeString();
-    // Format: "XX:XX:XX:..." — each octet is two hex digits, separated by colons
+    // Format: "XX:XX:XX:...", each octet is two hex digits, separated by colons
     expect($aki)->toMatch('/^[0-9A-F]{2}(:[0-9A-F]{2})+$/');
 });
 
@@ -233,7 +233,7 @@ it('authorityKeyId() returns null for a cert without AKI extension', function ()
     $pem  = makeStoredCertPem(withAki: false); // no authorityKeyIdentifier
     $cert = makeCert(['certificate' => $pem]);
 
-    // Not all self-signed certs include AKI — expect null when the ext is absent
+    // Not all self-signed certs include AKI, so expect null when the ext is absent
     $aki = $cert->authorityKeyId();
     expect($aki)->toBeNull();
 });

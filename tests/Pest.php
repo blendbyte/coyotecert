@@ -9,7 +9,7 @@ declare(strict_types=1);
 // Defining one here turns every sleep() call in that namespace into a no-op,
 // keeping unit tests fast.
 //
-// We only do this when the Unit testsuite is active — integration tests must
+// We only do this when the Unit testsuite is active; integration tests must
 // use the real sleep() so Pebble has time to process validations between polls.
 
 namespace CoyoteCert\Endpoints {
@@ -34,7 +34,7 @@ namespace CoyoteCert\Endpoints {
 // advance the clock without real sleeps. Unset the global to restore real time.
 //
 // curl_* stubs follow the same $GLOBALS['__test_curl'] pattern as the Internal
-// namespace stubs below — they cover Route53Dns01Handler::send().
+// namespace stubs below; they cover Route53Dns01Handler::send().
 
 namespace CoyoteCert\Challenge\Dns {
     function time(): int

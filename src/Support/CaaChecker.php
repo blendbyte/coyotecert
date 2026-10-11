@@ -65,7 +65,7 @@ class CaaChecker
         }
 
         if (empty($tagRecords)) {
-            return; // Only iodef or unknown tags — no restriction on issuance
+            return; // Only iodef or unknown tags: no restriction on issuance
         }
 
         foreach ($tagRecords as $record) {

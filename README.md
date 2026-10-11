@@ -55,7 +55,7 @@ ACME (Automatic Certificate Management Environment) is the protocol behind free,
 
 ### How it stacks up
 
-Every other crate in the ACME catalogue makes you do at least one of these manually: fetch EAB credentials, wire up a DNS provider, write the CLI wrapper, figure out ARI yourself. This one comes pre-loaded.
+Every other PHP ACME library makes you do at least one of these manually: fetch EAB credentials, wire up a DNS provider, write the CLI wrapper, figure out ARI yourself. This one comes pre-loaded.
 
 | Feature | **CoyoteCert** | [ACMECert](https://github.com/skoerfgen/ACMECert) | [acmephp](https://github.com/acmephp/acmephp) | [kelunik/acme](https://github.com/kelunik/acme) | [yaac](https://github.com/afosto/yaac) |
 |---|:---:|:---:|:---:|:---:|:---:|
@@ -63,9 +63,9 @@ Every other crate in the ACME catalogue makes you do at least one of these manua
 | EAB auto-provisioning ¹ | ✅ | manual | manual | ❌ | ❌ |
 | IP SANs (RFC 8738) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | TLS-ALPN-01 | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Built-in DNS providers | **6** | — | 3 | — | — |
-| CLI shipped with package | ✅ | — | ✅ | — | — |
-| Laravel integration | ✅ | — | — | — | — |
+| Built-in DNS providers | **6** | ❌ | 3 | ❌ | ❌ |
+| CLI shipped with package | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Laravel integration | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 <sup>¹ "auto-provisioning" means CoyoteCert fetches EAB credentials directly from the ZeroSSL API key (no copy-pasting tokens). "manual" means EAB is supported but credentials are your problem.</sup>
 
@@ -111,7 +111,7 @@ CoyoteCert has no default CA. Every call requires an explicit provider. Trust st
 
 **ECDSA-first:** keys default to EC P-256; EC P-384, RSA-2048, and RSA-4096 are all there.
 
-**IP address certificates** (RFC 8738): pass an IP to `->identifiers()` and it works. `type: ip` on the order, `IP:` SANs in the CSR, no extra setup.
+**IP address certificates** (RFC 8738): pass an IP to `->identifiers()` and it works. `type: ip` on the order, `IP:` SANs in the CSR, no extra setup (with Let's Encrypt, use the `shortlived` profile).
 
 **PSR-18 HTTP client:** the built-in curl client needs no extra dependencies; swap it for any PSR-18 client with one builder call.
 
@@ -127,6 +127,8 @@ CoyoteCert has no default CA. Every call requires an explicit provider. Trust st
 
 PHP ^8.3 with `ext-curl`, `ext-json`, and `ext-openssl`.
 
+The DNS checks (CAA pre-check, DNS-01 propagation check) use the `dig` binary through `spatie/dns` (on Debian/Ubuntu: `apt install dnsutils`, on Alpine: `apk add bind-tools`). Without it they fall back to PHP's `dns_get_record()`, which can only ask the system resolver, so the propagation check can't query each authoritative nameserver directly.
+
 ---
 
 ## Installation
@@ -134,6 +136,8 @@ PHP ^8.3 with `ext-curl`, `ext-json`, and `ext-openssl`.
 ```bash
 composer require blendbyte/coyotecert
 ```
+
+Upgrading from 1.x? See [UPGRADING.md](UPGRADING.md) for the breaking changes in 2.0.
 
 ---
 
@@ -483,7 +487,7 @@ The CA's own directory has the last word: CAA identities it lists (`meta.caaIden
 
 ### Let's Encrypt
 
-Production for real certs, staging for development. No rate limits on staging, but staging certificates aren't browser-trusted.
+Production for real certs, staging for development. Staging has far higher rate limits than production, but its certificates aren't browser-trusted.
 
 ```php
 use CoyoteCert\Provider\LetsEncrypt;
@@ -1178,7 +1182,7 @@ CoyoteCert::with(new LetsEncrypt())
     ->issueOrRenew();
 ```
 
-IP SANs are validated via HTTP-01 (the CA connects to the IP directly). Wildcards can't be combined with IP identifiers. Not all CAs support IP SANs, so check yours. Let's Encrypt supports them on both `classic` and `shortlived` profiles.
+IP SANs are validated via HTTP-01 or TLS-ALPN-01 (the CA connects to the IP directly). Not all CAs support IP SANs, so check yours. Let's Encrypt only issues them on the `shortlived` profile.
 
 ---
 
@@ -1235,7 +1239,7 @@ No configuration needed. It just works.
 
 ## ACME profiles
 
-Profiles let you request a specific certificate type from the CA. Let's Encrypt currently supports two:
+Profiles let you request a specific certificate type from the CA. Let's Encrypt offers three:
 
 ```php
 ->profile('classic')    // 90 days, the default when no profile is set
@@ -1243,7 +1247,7 @@ Profiles let you request a specific certificate type from the CA. Let's Encrypt 
 ->profile('shortlived') // about 6 days, up to 25 names; the only one that allows IP addresses
 ```
 
-Short-lived certificates renew more often but eliminate the need for OCSP stapling, CRL checks, and revocation infrastructure. Simpler to operate.
+Short-lived certificates limit how long a leaked key stays useful, at the cost of renewing every few days. `issueOrRenew()` adapts to the lifetime, so a daily cron job works for all of them.
 
 The profile is checked against the CA's directory, which lists the profiles it offers (`meta.profiles`). Requesting one it doesn't list throws an `AcmeException` naming the available profiles, and so does requesting any profile from a CA without profile support. Other CAs have their own names, for example Google Trust Services offers `minimal` and `standard`.
 
@@ -1329,7 +1333,7 @@ $storage->deleteCertificate('example.com', KeyType::EC_P256);
 
 ## Security
 
-Report vulnerabilities privately — see [`SECURITY.md`](SECURITY.md). Do not open a public issue.
+Report vulnerabilities privately, see [`SECURITY.md`](SECURITY.md). Do not open a public issue.
 
 - **Account keys are sensitive:** back them up, never commit them to git. Treat them like passwords.
 - **If the account key is lost,** you can re-register with the CA, but you lose ARI renewal history and any CA-side account associations.
@@ -1593,7 +1597,7 @@ The `^~` prefix stops nginx from even looking at regex locations once this prefi
 
 Sometimes. If the SSL mode is "Full" or "Full (Strict)", Cloudflare terminates TLS itself and the challenge file usually gets through. If Always Use HTTPS is enabled, the 80-to-443 redirect fires before the token is ever served.
 
-Easiest fix: switch to DNS-01. Cloudflare is a [supported DNS provider](#cloudflare-1), so it is a one-line handler swap and the orange cloud stays orange.
+Easiest fix: switch to DNS-01. Cloudflare is a [supported DNS provider](#cloudflare), so it is a one-line handler swap and the orange cloud stays orange.
 
 If you are committed to HTTP-01, grey-cloud the record (DNS only) during issuance, then flip it back. Cloudflare's proxy is not going anywhere, but it can be asked to step aside briefly.
 
@@ -1628,7 +1632,7 @@ Yes, but DNS-01 only. RFC 8555 forbids wildcard validation over HTTP-01 or TLS-A
 
 The value compared against your CAA records is the CA's technical identifier, not its product name. ZeroSSL's CAA identifier is `sectigo.com` (or `comodoca.com`), not `zerossl.com`. Google Trust Services is `pki.goog`.
 
-Check the exact identifier for your CA in the [providers section](#certificate-authorities-1), update your CAA record, and the exception disappears. If you are certain the records are correct and just want to skip the pre-check entirely, `->skipCaaCheck()` exists.
+Check the exact identifier for your CA in the [providers section](#providers), update your CAA record, and the exception disappears. If you are certain the records are correct and just want to skip the pre-check entirely, `->skipCaaCheck()` exists.
 
 ---
 
@@ -1674,7 +1678,7 @@ Three ways out:
 `LetsEncryptStaging`. The certificates are not browser-trusted but the full ACME handshake is byte-for-byte identical to production. Hammer it as many times as you need.
 
 ```php
-$coyote = CoyoteCert::provider(new LetsEncryptStaging())
+$coyote = CoyoteCert::with(new LetsEncryptStaging())
     // ... rest of your config
 ```
 

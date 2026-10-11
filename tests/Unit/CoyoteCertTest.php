@@ -364,7 +364,7 @@ it('needsRenewal() returns null from ariWindow when API call throws (catch block
     $storage = new InMemoryStorage();
     $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 90));
 
-    // PSR-18 client that always throws — forces the try/catch in ariWindow().
+    // PSR-18 client that always throws, forcing the try/catch in ariWindow().
     $factory      = new \Nyholm\Psr7\Factory\Psr17Factory();
     $failingPsr18 = new class implements \Psr\Http\Client\ClientInterface {
         public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
@@ -419,7 +419,7 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
                     'revokeCert'  => 'https://acme.example/revoke',
                     'renewalInfo' => 'https://acme.example/ari',
                 ]),
-                // Second call: ARI response — window far in the future (not open)
+                // Second call: ARI response, window far in the future (not open)
                 default => json_encode([
                     'suggestedWindow' => [
                         'start' => '2099-01-01T00:00:00Z',

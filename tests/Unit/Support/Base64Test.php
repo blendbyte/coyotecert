@@ -5,7 +5,7 @@ declare(strict_types=1);
 use CoyoteCert\Support\Base64;
 
 it('encodes to url-safe base64 without padding', function () {
-    // base64_encode('Hello') = 'SGVsbG8=' — padding stripped, no + or /
+    // base64_encode('Hello') = 'SGVsbG8=', padding stripped, no + or /
     expect(Base64::urlSafeEncode('Hello'))->toBe('SGVsbG8');
 });
 
@@ -32,6 +32,6 @@ it('roundtrips encode/decode', function (string $input) {
 ]);
 
 it('decodes with missing padding', function () {
-    // "SGVsbG8" is "Hello" without padding — urlSafeDecode must add it back
+    // "SGVsbG8" is "Hello" without padding; urlSafeDecode must add it back
     expect(Base64::urlSafeDecode('SGVsbG8'))->toBe('Hello');
 });

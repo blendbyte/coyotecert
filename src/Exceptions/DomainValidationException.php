@@ -41,7 +41,7 @@ class DomainValidationException extends AcmeException
             : implode(', ', array_map(fn($v) => '"' . $v . '"', $found));
 
         return new self(sprintf(
-            '%s Queried %s TXT at %s — expected: "%s" — found: %s',
+            '%s Queried %s TXT at %s, expected "%s", found: %s',
             $base,
             $record,
             $nameserver,
