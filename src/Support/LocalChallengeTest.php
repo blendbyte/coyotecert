@@ -17,7 +17,9 @@ class LocalChallengeTest
         string $keyAuthorization,
         HttpClientInterface $httpClient,
     ): void {
-        $response = $httpClient->get('http://' . $domain . '/.well-known/acme-challenge/' . $token, maxRedirects: 1);
+        // IPv6 identifiers (RFC 8738) need brackets in a URL; follow redirects like the CA does (RFC 8555 §8.3)
+        $host     = filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $domain . ']' : $domain;
+        $response = $httpClient->get('http://' . $host . '/.well-known/acme-challenge/' . $token, maxRedirects: 10);
 
         if (trim($response->rawBody()) === $keyAuthorization) {
             return;

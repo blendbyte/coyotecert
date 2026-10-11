@@ -46,10 +46,7 @@ class DomainValidation extends Endpoint
 
             $data[] = DomainValidationData::fromResponse($response);
 
-            $ra = (int) $response->getHeader('retry-after', 0);
-            if ($ra > 0 && $retryAfter === null) {
-                $retryAfter = $ra;
-            }
+            $retryAfter ??= $this->parseRetryAfterSeconds($response);
         }
 
         return [$data, $retryAfter];
@@ -157,16 +154,26 @@ class DomainValidation extends Endpoint
     }
 
     /** @throws \CoyoteCert\Exceptions\DomainValidationException immediately when the CA marks a challenge invalid — that status is terminal, so it's not worth burning the retry budget on. */
-    public function allChallengesPassed(OrderData $orderData, int $maxAttempts = 10): bool
-    {
+    public function allChallengesPassed(
+        OrderData $orderData,
+        int $maxAttempts = 10,
+        ?AuthorizationChallengeEnum $challengeType = null,
+    ): bool {
+        // Debug-log what the authoritative nameservers serve while a dns-01 challenge is pending
+        $logDns = $challengeType === AuthorizationChallengeEnum::DNS && $this->client->hasLogger();
+
         for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
             [$statuses, $retryAfter] = $this->statusWithRetryHint($orderData);
 
-            if ($this->challengeSucceeded($statuses)) {
+            if ($this->challengeSucceeded($statuses, $logDns)) {
                 return true;
             }
 
-            $delay = $retryAfter ?? (int) min(5 * (2 ** $attempt), 64);
+            if ($attempt === $maxAttempts - 1) {
+                break;
+            }
+
+            $delay = $this->pollDelay($retryAfter, $attempt, 5);
             $this->client->logger('info', "Challenge is not valid yet. Another attempt in {$delay} seconds.");
             sleep($delay);
         }
@@ -178,7 +185,7 @@ class DomainValidation extends Endpoint
      * @param DomainValidationData[] $domainValidation
      * @throws \CoyoteCert\Exceptions\DomainValidationException
      */
-    private function challengeSucceeded(array $domainValidation): bool
+    private function challengeSucceeded(array $domainValidation, bool $logDns = false): bool
     {
         foreach ($domainValidation as $status) {
             $this->client->logger(
@@ -199,7 +206,7 @@ class DomainValidation extends Endpoint
                 throw DomainValidationException::challengeInvalid($status->identifier['value'], $status->getErrors());
             }
 
-            if (!$status->isValid() && $status->identifier['type'] === 'dns') {
+            if ($logDns && !$status->isValid()) {
                 foreach (LocalChallengeTest::lookupTxt($status->identifier['value']) as $result) {
                     $this->client->logger('debug', sprintf(
                         'DNS check via %s (%s) → _acme-challenge.%s TXT = %s%s',

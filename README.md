@@ -224,7 +224,7 @@ CoyoteCert::with(new LetsEncrypt())
     ->issueOrRenew();
 ```
 
-On first run this creates the ACME account and issues the certificate. On subsequent runs it does nothing until renewal is due (30 days before expiry by default), then issues a new certificate and reloads nginx automatically.
+On first run this creates the ACME account and issues the certificate. On subsequent runs it does nothing until renewal is due (when the CA's ARI window opens, or once a third of the certificate's lifetime remains), then issues a new certificate and reloads nginx automatically.
 
 Files written to `/etc/certs/`:
 
@@ -334,7 +334,7 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 | `--dns-skip-propagation` | | | Skip the post-deploy DNS propagation check entirely (split-horizon or internal DNS) |
 | `--provider` | `-p` | | CA to use. See provider table below. **Required** |
 | `--storage` | `-s` | `./certs` | Directory to read/write certificates and account keys |
-| `--days` | | `30` | Renew when fewer than this many days remain before expiry |
+| `--days` | | | Renew when fewer than this many days remain. Default: the CA's ARI window, or a third of the lifetime |
 | `--key-type` | | `ec256` | Certificate key type: `ec256`, `ec384`, `rsa2048`, `rsa4096` |
 | `--force` | `-f` | | Issue a fresh certificate even if the current one is still valid |
 | `--skip-caa` | | | Skip CAA DNS pre-check |
@@ -410,7 +410,7 @@ Each row shows the domain(s), key type, status, and expiry date. The status icon
 0 3 * * * sleep $((RANDOM % 3600)) && coyote issue --identifier example.com --webroot /var/www/html --storage /etc/certs --email admin@example.com
 ```
 
-The command is idempotent: it does nothing until fewer than `--days` (default 30) remain, so running it daily is safe. Randomizing the start time within the hour avoids stampeding the CA at the same minute as everyone else's cron job. Let's Encrypt explicitly requests this. Set it and forget it. Unlike certain Road Runner traps, this actually works unattended. There is no separate `coyote renew` command; `issue` handles both initial issuance and renewal.
+The command is idempotent: it does nothing until renewal is due, so running it daily is safe. Randomizing the start time within the hour avoids stampeding the CA at the same minute as everyone else's cron job. Let's Encrypt explicitly requests this. Set it and forget it. Unlike certain Road Runner traps, this actually works unattended. There is no separate `coyote renew` command; `issue` handles both initial issuance and renewal.
 
 ### `coyote revoke`
 
@@ -925,7 +925,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
 
 ### issueOrRenew()
 
-The one you want in production. Returns the existing certificate if it's still valid; issues a new one when it's getting close to expiry. Accepts an optional `$daysBeforeExpiry` threshold (default 30). Safe to call as often as you like. It does nothing when the certificate is still healthy.
+The one you want in production. Returns the existing certificate if it's still valid; issues a new one when renewal is due (see [needsRenewal()](#needsrenewal)). Accepts an optional `$daysBeforeExpiry` threshold that replaces the default lifetime rule. Safe to call as often as you like. It does nothing when the certificate is still healthy.
 
 ```php
 $cert = CoyoteCert::with(new LetsEncrypt())
@@ -933,7 +933,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
     ->identifiers('example.com')
     ->email('admin@example.com')
     ->challenge(new Http01Handler('/var/www/html'))
-    ->issueOrRenew(daysBeforeExpiry: 30);
+    ->issueOrRenew();
 ```
 
 ### needsRenewal()
@@ -945,7 +945,7 @@ $coyote = CoyoteCert::with(new LetsEncrypt())
     ->storage(new FilesystemStorage('/var/certs'))
     ->identifiers('example.com');
 
-if ($coyote->needsRenewal(30)) {
+if ($coyote->needsRenewal()) {
     // issue or alert
 }
 ```
@@ -954,8 +954,9 @@ Returns `true` when:
 
 - no storage is configured
 - no certificate is stored for the primary domain
-- the stored certificate expires within `$daysBeforeExpiry` days
-- an ARI renewal window is open (see [ARI](#ari-ca-guided-renewal-windows))
+- the stored certificate has expired, can't be read, or doesn't cover every configured identifier
+- the CA's ARI renewal window has opened (see [ARI](#ari-ca-guided-renewal-windows))
+- without ARI: a third or less of the certificate's lifetime remains (30 days for a 90-day certificate, 15 for 45 days, 2 for a 6-day `shortlived` one), or fewer than `$daysBeforeExpiry` days when you pass a threshold
 
 ---
 
@@ -1101,18 +1102,19 @@ try {
 }
 ```
 
-`getSubproblems()` returns an empty array when the server returned a single top-level error with no per-identifier breakdown.
+`getSubproblems()` returns an empty array when the server returned a single top-level error with no per-identifier breakdown. `getProblemType()` returns the CA's ACME error type (for example `urn:ietf:params:acme:error:caa` or `...:rejectedIdentifier`), or `null` for errors raised locally.
 
 ### Exception hierarchy
 
 ```
 AcmeException          - base; always safe to catch
+├── AccountNotFoundException - the CA has no account for the stored key (registered automatically by issue())
 ├── AuthException      - 401/403 (bad credentials, revoked account)
 ├── RateLimitException - 429 (too many requests); carries getRetryAfter()
 ├── CaaException       - CAA DNS record blocks issuance
 ├── ChallengeException - challenge validation failed
 ├── CryptoException    - local key or certificate operation failed
-├── DomainValidationException - pre-flight HTTP/DNS self-check failed
+├── DomainValidationException - pre-flight self-check failed, or the CA marked a challenge invalid
 ├── OrderNotFoundException   - order ID not found on the CA
 └── StorageException   - storage backend error
 ```
@@ -1192,7 +1194,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
     ->challenge(new Http01Handler('/var/www/html'))
     ->logger($logger)
     ->onRenewed(fn($cert) => exec('systemctl reload nginx'))
-    ->issueOrRenew(daysBeforeExpiry: 30);
+    ->issueOrRenew();
 ```
 
 Add to crontab. Daily is fine; `issueOrRenew()` does nothing until renewal is actually due:
@@ -1210,9 +1212,8 @@ Randomizing the start time within the hour avoids stampeding the CA at the same 
 
 [RFC 9773](https://datatracker.ietf.org/doc/html/rfc9773) lets a CA tell you exactly when it wants you to renew: a specific window, not just "X days before expiry." CoyoteCert checks the ARI endpoint automatically whenever `needsRenewal()` or `issueOrRenew()` is called.
 
-- If the CA exposes a `renewalInfo` URL and the window is open, `needsRenewal()` returns `true` even if the certificate has more than `$daysBeforeExpiry` days left.
-- If the ARI request fails, CoyoteCert falls back to the `$daysBeforeExpiry` threshold silently.
-- If the CA doesn't support ARI, the threshold is used exclusively.
+- If the CA exposes a `renewalInfo` URL, its window decides: `needsRenewal()` returns `true` once the window has started, including when it has already passed (the CA may be about to revoke the certificate).
+- If the ARI request fails or the CA doesn't support ARI, CoyoteCert falls back to the lifetime rule, or to `$daysBeforeExpiry` when you pass one.
 
 No configuration needed. It just works.
 
@@ -1237,7 +1238,7 @@ Profiles are forwarded to the CA only if the provider reports `supportsProfiles(
 
 Some CAs offer multiple certificate chains via `Link: rel="alternate"` headers (RFC 8555 §7.4.2). Let's Encrypt uses this to serve both the ISRG Root X1 chain and older cross-signed chains.
 
-Use `->preferredChain()` to request a chain by matching against the Common Name or Organisation of the intermediate certificates. The match is a case-insensitive substring, so partial names work fine. If no alternate chain matches, CoyoteCert falls back to the default chain, always safe to include.
+Use `->preferredChain()` to pick the chain that leads to a given root: it matches when the topmost certificate in the chain was issued by that Common Name (case-insensitive, exact name, same as certbot's `--preferred-chain`). The default chain is checked first, then the alternates. If none matches, CoyoteCert falls back to the default chain, always safe to include.
 
 ```php
 CoyoteCert::with(new LetsEncrypt())
@@ -1456,7 +1457,7 @@ CoyoteCert::with(AcmeProviderInterface $provider)  // factory: pick your CA
 | `->httpClient(ClientInterface, ...)` | fluent | built-in curl | PSR-18 HTTP client |
 | `->withHttpTimeout(int)` | fluent | `10` | Curl timeout in seconds |
 | `->logger(LoggerInterface)` | fluent | none | PSR-3 logger |
-| `->preferredChain(string)` | fluent | `''` | Preferred chain issuer CN/O (RFC 8555 §7.4.2); falls back to default if no match |
+| `->preferredChain(string)` | fluent | `''` | Common Name of the root the chain should lead to (RFC 8555 §7.4.2); falls back to default if no match |
 | `->pollAttempts(int)` | fluent | `10` | Maximum challenge validation poll attempts |
 | `->skipLocalTest()` | fluent | off | Disable pre-flight HTTP/DNS self-check |
 | `->skipCaaCheck()` | fluent | off | Disable CAA DNS pre-check |

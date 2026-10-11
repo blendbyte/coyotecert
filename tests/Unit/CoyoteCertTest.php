@@ -17,16 +17,29 @@ function makeCoyote(): CoyoteCert
     return CoyoteCert::with(new Pebble());
 }
 
-function makeCoyoteCert(string $caBundle = '', int $expiresInDays = 90): StoredCertificate
-{
+/**
+ * A stored certificate for $domains (real PEM with matching SANs). The validity dates are
+ * taken from the arguments, so lifetime-based renewal can be tested without waiting.
+ *
+ * @param string[] $domains
+ */
+function makeCoyoteCert(
+    string $caBundle = '',
+    int|float $expiresInDays = 90,
+    int|float $issuedDaysAgo = 0,
+    array $domains = ['example.com'],
+): StoredCertificate {
+    static $pems = [];
+    $pems[implode(',', $domains)] ??= caSignedLeaf(1, $domains)[0];
+
     return new StoredCertificate(
-        certificate: 'cert-pem',
+        certificate: $pems[implode(',', $domains)],
         privateKey: 'key-pem',
         fullchain: 'fullchain-pem',
         caBundle: $caBundle,
-        issuedAt: new DateTimeImmutable(),
-        expiresAt: new DateTimeImmutable("+{$expiresInDays} days"),
-        domains: ['example.com'],
+        issuedAt: new DateTimeImmutable('@' . (time() - (int) ($issuedDaysAgo * 86400))),
+        expiresAt: new DateTimeImmutable('@' . (time() + (int) ($expiresInDays * 86400))),
+        domains: $domains,
         keyType: KeyType::EC_P256,
     );
 }
@@ -172,6 +185,26 @@ it('identifiers() throws AcmeException for a double wildcard', function () {
 
 // ── detectChallengeType() ─────────────────────────────────────────────────────
 
+it('issue() rejects wildcard identifiers up front when the handler cannot do dns-01', function () {
+    expect(fn() => makeCoyote()->identifiers(['example.com', '*.example.com'])->challenge(makeNoOpHandler())->issue())
+        ->toThrow(AcmeException::class, 'Wildcard identifiers need a dns-01 challenge handler');
+});
+
+it('detectChallengeType() prefers dns-01 for wildcards when the handler supports several types', function () {
+    $both = new class implements ChallengeHandlerInterface {
+        public function supports(AuthorizationChallengeEnum $t): bool
+        {
+            return $t !== AuthorizationChallengeEnum::TLS_ALPN;
+        }
+        public function deploy(string $d, string $tok, string $auth): void {}
+        public function cleanup(string $d, string $tok): void {}
+    };
+    $method = new \ReflectionMethod(CoyoteCert::class, 'detectChallengeType');
+
+    expect($method->invoke(makeCoyote()->identifiers('*.example.com')->challenge($both)))->toBe(AuthorizationChallengeEnum::DNS);
+    expect($method->invoke(makeCoyote()->identifiers('example.com')->challenge($both)))->toBe(AuthorizationChallengeEnum::HTTP);
+});
+
 it('detectChallengeType() throws when the handler supports no known challenge type', function () {
     $noneHandler = new class implements ChallengeHandlerInterface {
         public function supports(AuthorizationChallengeEnum $t): bool
@@ -240,6 +273,48 @@ it('needsRenewal() returns true when certificate expires within the threshold', 
     )->toBeTrue();
 });
 
+it('needsRenewal() renews once a third of the lifetime remains by default', function (int|float $issuedDaysAgo, int|float $expiresInDays, bool $expected) {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: $expiresInDays, issuedDaysAgo: $issuedDaysAgo));
+
+    expect(makeCoyote()->identifiers('example.com')->storage($storage)->needsRenewal())->toBe($expected);
+})->with([
+    '90-day cert, 40 days left' => [50, 40, false],
+    '90-day cert, 25 days left' => [65, 25, true],
+    '6-day cert, 3 days left'   => [3, 3, false],
+    '6-day cert, 1.5 days left' => [4.5, 1.5, true],
+]);
+
+it('needsRenewal() uses an explicit day threshold instead of the lifetime rule', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 25, issuedDaysAgo: 65));
+
+    expect(makeCoyote()->identifiers('example.com')->storage($storage)->needsRenewal(10))->toBeFalse();
+});
+
+it('needsRenewal() returns true when the certificate has expired', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: -1, issuedDaysAgo: 91));
+
+    expect(makeCoyote()->identifiers('example.com')->storage($storage)->needsRenewal(0))->toBeTrue();
+});
+
+it('needsRenewal() returns true when an identifier was added since the certificate was issued', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeCoyoteCert());
+
+    expect(
+        makeCoyote()->identifiers(['example.com', 'www.example.com'])->storage($storage)->needsRenewal(),
+    )->toBeTrue();
+});
+
+it('identifiers() lower-cases names so storage lookups are case-insensitive', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeCoyoteCert());
+
+    expect(makeCoyote()->identifiers('Example.COM')->storage($storage)->needsRenewal())->toBeFalse();
+});
+
 // ── issueOrRenew() ────────────────────────────────────────────────────────────
 
 it('issueOrRenew() returns existing cert when renewal is not needed', function () {
@@ -253,7 +328,7 @@ it('issueOrRenew() returns existing cert when renewal is not needed', function (
         ->challenge(makeNoOpHandler())
         ->issueOrRenew(30);
 
-    expect($result->certificate)->toBe('cert-pem');
+    expect($result->certificate)->toBe($cert->certificate);
 });
 
 it('issueOrRenew() calls issue() when renewal is needed', function () {
@@ -265,22 +340,27 @@ it('issueOrRenew() calls issue() when renewal is needed', function () {
 
 // ── ariWindow() (tested via needsRenewal()) ───────────────────────────────────
 
-it('needsRenewal() falls back to remainingDays when the certificate cannot be parsed for ARI', function () {
-    // certId() throws on the unparsable certificate, so ariWindow() returns null
+it('needsRenewal() returns true when the stored certificate cannot be parsed', function () {
+    $valid   = makeCoyoteCert();
     $storage = new InMemoryStorage();
-    $storage->saveCertificate('example.com', makeCoyoteCert(caBundle: 'not-a-pem', expiresInDays: 90));
+    $storage->saveCertificate('example.com', new StoredCertificate(
+        certificate: 'not-a-pem',
+        privateKey: 'key-pem',
+        fullchain: 'fullchain-pem',
+        caBundle: '',
+        issuedAt: $valid->issuedAt,
+        expiresAt: $valid->expiresAt,
+        domains: ['example.com'],
+        keyType: KeyType::EC_P256,
+    ));
 
-    expect(
-        makeCoyote()->identifiers('example.com')->storage($storage)->needsRenewal(30),
-    )->toBeFalse();
+    expect(makeCoyote()->identifiers('example.com')->storage($storage)->needsRenewal())->toBeTrue();
 });
 
 it('needsRenewal() returns null from ariWindow when API call throws (catch block)', function () {
     // A failing HTTP client causes the directory GET to throw, which ariWindow() catches.
-    $fakeCaBundle = "-----BEGIN CERTIFICATE-----\nMIIBtest==\n-----END CERTIFICATE-----";
-
     $storage = new InMemoryStorage();
-    $storage->saveCertificate('example.com', makeCoyoteCert(caBundle: $fakeCaBundle, expiresInDays: 90));
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 90));
 
     // PSR-18 client that always throws — forces the try/catch in ariWindow().
     $factory      = new \Nyholm\Psr7\Factory\Psr17Factory();
@@ -558,15 +638,15 @@ it('extractTokenAndKeyAuth() returns [token, keyAuthorization] for TlsAlpn01Vali
  * Mock ACME server with one pending http-01 authorization per domain. Challenge
  * submissions answer with $challengeCode; once submitted, the authorization is valid.
  */
-function cleanupTestApi(array $domains, int $challengeCode): \CoyoteCert\Api
+function cleanupTestApi(array $domains, int $challengeCode, array $alreadyValid = []): \CoyoteCert\Api
 {
     $storage = new InMemoryStorage();
     $storage->saveAccountKey((new Pebble())->getSlug(), rsaKeyPem(), KeyType::RSA_2048);
 
-    $http = new class ($domains, $challengeCode) implements \CoyoteCert\Interfaces\HttpClientInterface {
+    $http = new class ($domains, $challengeCode, $alreadyValid) implements \CoyoteCert\Interfaces\HttpClientInterface {
         private bool $submitted = false;
 
-        public function __construct(private array $domains, private int $challengeCode) {}
+        public function __construct(private array $domains, private int $challengeCode, private array $alreadyValid) {}
 
         public function head(string $url): \CoyoteCert\Http\Response
         {
@@ -590,7 +670,7 @@ function cleanupTestApi(array $domains, int $challengeCode): \CoyoteCert\Api
 
             return new \CoyoteCert\Http\Response([], $url, 200, [
                 'identifier' => ['type' => 'dns', 'value' => $this->domains[$i]],
-                'status'     => $this->submitted ? 'valid' : 'pending',
+                'status'     => $this->submitted || in_array($this->domains[$i], $this->alreadyValid, true) ? 'valid' : 'pending',
                 'expires'    => '2099-01-01T00:00:00Z',
                 'challenges' => [['type' => 'http-01', 'token' => "tok{$i}", 'url' => "https://acme.example/chall/{$i}"]],
             ]);
@@ -714,4 +794,15 @@ it('issue() works without storage and registers an account with a throwaway key'
 
     expect(fn() => $coyote->issue())->toThrow(\CoyoteCert\Exceptions\AuthException::class, 'stop here');
     expect($client->posted)->toBe(['https://acme.example/new-account']);
+});
+
+it('deployAndValidate() does not deploy challenges for authorizations that are already valid', function () {
+    $domains = ['a.example.com', 'b.example.com'];
+    $handler = recordingHandler();
+    $coyote  = makeCoyote()->identifiers($domains)->challenge($handler)->skipLocalTest();
+
+    invokeDeployAndValidate($coyote, cleanupTestApi($domains, 200, alreadyValid: ['a.example.com']), $domains);
+
+    expect($handler->deployed)->toBe(['b.example.com']);
+    expect($handler->cleaned)->toBe(['b.example.com']);
 });

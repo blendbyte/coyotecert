@@ -76,7 +76,7 @@ class Psr18Adapter implements HttpClientInterface
                 continue;
             }
             [$name, $value] = explode(':', $header, 2);
-            $request        = $request->withAddedHeader(trim($name), trim($value));
+            $request        = $request->withHeader(trim($name), trim($value));
         }
 
         return $this->send($request, $url);
@@ -100,7 +100,7 @@ class Psr18Adapter implements HttpClientInterface
                 continue;
             }
             [$name, $value] = explode(':', $header, 2);
-            $request        = $request->withAddedHeader(trim($name), trim($value));
+            $request        = $request->withHeader(trim($name), trim($value));
         }
 
         return $this->send($request, $url);

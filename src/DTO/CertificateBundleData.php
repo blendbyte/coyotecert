@@ -25,16 +25,12 @@ readonly class CertificateBundleData
 
         $certificate  = $matches[0][0];
         $matchesCount = count($matches[0]);
-        $fullchain    = '';
+        $fullchain    = $certificate . "\n";
         $caBundle     = '';
 
-        if ($matchesCount > 1) {
-            $fullchain = $matches[0][0] . "\n";
-
-            for ($i = 1; $i < $matchesCount; $i++) {
-                $caBundle  .= $matches[0][$i] . "\n";
-                $fullchain .= $matches[0][$i] . "\n";
-            }
+        for ($i = 1; $i < $matchesCount; $i++) {
+            $caBundle  .= $matches[0][$i] . "\n";
+            $fullchain .= $matches[0][$i] . "\n";
         }
 
         return new self(certificate: $certificate, fullchain: $fullchain, caBundle: $caBundle);

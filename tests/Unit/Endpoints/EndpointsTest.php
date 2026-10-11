@@ -2,6 +2,7 @@
 
 use CoyoteCert\Api;
 use CoyoteCert\DTO\AccountData;
+use CoyoteCert\DTO\CertificateBundleData;
 use CoyoteCert\DTO\DomainValidationData;
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
@@ -1728,3 +1729,241 @@ it('RenewalInfo::certId() throws CryptoException when the certificate has no Aut
     expect(fn() => makeEndpointApi($mock, withKeyStorage())->renewalInfo()->certId($pem))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Authority Key Identifier');
 });
+
+// ── Order robustness ──────────────────────────────────────────────────────────
+
+function replacesRetryApi(int $code, string $type, array &$sent): Api
+{
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url, $jws) use ($code, $type, &$sent) {
+            $payload = json_decode(Base64::urlSafeDecode($jws['payload']), true);
+            $sent[]  = $payload;
+
+            return isset($payload['replaces'])
+                ? new Response([], $url, $code, ['type' => $type, 'detail' => 'rejected'])
+                : new Response(['location' => 'https://acme.example/order/1'], $url, 201, orderBody('pending'));
+        },
+    );
+
+    return makeEndpointApi($mock, withKeyStorage());
+}
+
+it('Order::new() retries without replaces when the CA reports it already replaced', function () {
+    $sent = [];
+    $api  = replacesRetryApi(409, 'urn:ietf:params:acme:error:alreadyReplaced', $sent);
+
+    $order = $api->order()->new(makeAccountData(), ['example.com'], '', 'aki.serial');
+
+    expect($order->status)->toBe('pending');
+    expect($sent)->toHaveCount(2);
+    expect($sent[1])->not->toHaveKey('replaces');
+});
+
+it('Order::new() does not retry without replaces for errors about the order itself', function () {
+    $sent = [];
+    $api  = replacesRetryApi(400, 'urn:ietf:params:acme:error:rejectedIdentifier', $sent);
+
+    expect(fn() => $api->order()->new(makeAccountData(), ['example.com'], '', 'aki.serial'))
+        ->toThrow(AcmeException::class, 'rejected');
+    expect($sent)->toHaveCount(1);
+});
+
+it('Order::refresh() throws on an error response instead of building an OrderData from it', function () {
+    $api = makeEndpointApi(endpointMock(
+        getBody: directoryBody(),
+        postBody: ['type' => 'urn:ietf:params:acme:error:serverInternal', 'detail' => 'Boom'],
+        postCode: 500,
+    ), withKeyStorage());
+
+    expect(fn() => $api->order()->refresh(pendingOrderData()))->toThrow(AcmeException::class, 'Boom');
+});
+
+it('Order::waitUntilValid() throws on an error response', function () {
+    $api = makeEndpointApi(endpointMock(
+        getBody: directoryBody(),
+        postBody: ['detail' => 'Not found'],
+        postCode: 404,
+    ), withKeyStorage());
+
+    expect(fn() => $api->order()->waitUntilValid(pendingOrderData(), 3, 0))
+        ->toThrow(AcmeException::class, 'Not found');
+});
+
+it('Order::waitUntilValid() includes the order error detail when it becomes invalid', function () {
+    $api = makeEndpointApi(endpointMock(
+        getBody: directoryBody(),
+        postBody: orderBody('invalid') + ['error' => ['detail' => 'CSR is missing a SAN']],
+        postCode: 200,
+    ), withKeyStorage());
+
+    expect(fn() => $api->order()->waitUntilValid(pendingOrderData(), 1, 0))
+        ->toThrow(AcmeException::class, 'CSR is missing a SAN');
+});
+
+it('OrderData::fromResponse() accepts an order without expires', function () {
+    $body = orderBody('valid');
+    unset($body['expires']);
+
+    $order = OrderData::fromResponse(new Response([], 'https://acme.example/order/1', 200, $body));
+
+    expect($order->expires)->toBeNull();
+});
+
+it('parseRetryAfterSeconds() reads delay-seconds and HTTP-dates', function () {
+    $endpoint = makeEndpointApi(endpointMock())->order();
+    $parse    = new \ReflectionMethod($endpoint, 'parseRetryAfterSeconds');
+
+    $inTwoMinutes = gmdate('D, d M Y H:i:s \G\M\T', time() + 120);
+
+    expect($parse->invoke($endpoint, new Response(['retry-after' => '30'], '', 200, '')))->toBe(30);
+    expect($parse->invoke($endpoint, new Response(['retry-after' => $inTwoMinutes], '', 200, '')))->toBeBetween(118, 120);
+    expect($parse->invoke($endpoint, new Response(['retry-after' => 'garbage'], '', 200, '')))->toBeNull();
+    expect($parse->invoke($endpoint, new Response([], '', 200, '')))->toBeNull();
+});
+
+it('pollDelay() caps Retry-After and falls back to exponential back-off', function () {
+    $endpoint = makeEndpointApi(endpointMock())->order();
+    $delay    = new \ReflectionMethod($endpoint, 'pollDelay');
+
+    expect($delay->invoke($endpoint, 86400, 0, 2))->toBe(120);
+    expect($delay->invoke($endpoint, 3, 0, 2))->toBe(3);
+    expect($delay->invoke($endpoint, null, 2, 2))->toBe(8);
+    expect($delay->invoke($endpoint, null, 10, 2))->toBe(64);
+});
+
+it('RenewalInfo::get() ignores a window that ends before it starts', function () {
+    [$leafPem] = caSignedLeaf();
+
+    $mock = closureMock(
+        getHandler: fn($url) => str_contains($url, 'ari/')
+            ? new Response([], $url, 200, ['suggestedWindow' => ['start' => '2026-05-02T00:00:00Z', 'end' => '2026-05-01T00:00:00Z']])
+            : new Response([], $url, 200, directoryBody(withRenewalInfo: true)),
+    );
+
+    expect(makeEndpointApi($mock, withKeyStorage())->renewalInfo()->get($leafPem))->toBeNull();
+});
+
+it('Api fetches the directory once and reuses it', function () {
+    $gets = 0;
+    $api  = makeEndpointApi(closureMock(getHandler: function ($url) use (&$gets) {
+        $gets++;
+
+        return new Response([], $url, 200, directoryBody());
+    }));
+
+    $api->directory()->newAccount();
+    $api->directory()->newOrder();
+    $api->directory()->newNonce();
+
+    expect($gets)->toBe(1);
+});
+
+it('Nonce::getNew() throws when the CA returns no Replay-Nonce', function () {
+    $api = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        headHeaders: [],
+    ));
+
+    expect(fn() => $api->nonce()->getNew())->toThrow(AcmeException::class, 'no Replay-Nonce');
+});
+
+it('Certificate::getBundle() asks for a PEM certificate chain', function () {
+    $mock = new class implements HttpClientInterface {
+        public array $headers = [];
+
+        public function head(string $url): Response
+        {
+            return new Response(['replay-nonce' => 'nonce'], $url, 200, '');
+        }
+
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, directoryBody());
+        }
+
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
+        {
+            $this->headers = $headers;
+
+            return new Response([], $url, 200, "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n");
+        }
+    };
+
+    $order = new OrderData(
+        id: '1',
+        url: 'https://acme.example/order/1',
+        status: 'valid',
+        expires: null,
+        identifiers: [],
+        domainValidationUrls: [],
+        finalizeUrl: 'https://acme.example/finalize/1',
+        accountUrl: 'https://acme.example/account/1',
+        certificateUrl: 'https://acme.example/cert/1',
+    );
+
+    makeEndpointApi($mock, withKeyStorage())->certificate()->getBundle($order);
+
+    expect($mock->headers)->toBe(['Accept: application/pem-certificate-chain']);
+});
+
+/**
+ * The chain a CA serves for a leaf: $cas runs from the (unserved) root down to the
+ * issuing intermediate, so the topmost served certificate is issued by $cas[0].
+ */
+function servedChain(string ...$cas): string
+{
+    $issuerKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+    $issuerCert = openssl_csr_sign(openssl_csr_new(['commonName' => $cas[0]], $issuerKey), null, $issuerKey, 30);
+    $served     = [];
+
+    foreach ([...array_slice($cas, 1), 'leaf.example.com'] as $cn) {
+        $key  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $cert = openssl_csr_sign(openssl_csr_new(['commonName' => $cn], $key), $issuerCert, $issuerKey, 30);
+        openssl_x509_export($cert, $pem);
+        array_unshift($served, $pem);
+        [$issuerKey, $issuerCert] = [$key, $cert];
+    }
+
+    return implode("\n", $served);
+}
+
+it('Certificate::getBundle() picks the chain leading to the preferred root, not one merely containing it', function () {
+    // Default chain: leaf <- E7 <- ISRG Root X2. Alternate: leaf <- E7 <- X2 cross-signed by ISRG Root X1.
+    // Both contain an "ISRG Root X2" name somewhere, only the default one is issued by it at the top.
+    $primary   = servedChain('ISRG Root X2', 'E7');
+    $alternate = servedChain('ISRG Root X1', 'ISRG Root X2', 'E7');
+
+    $mock = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn($url) => str_contains($url, '/alt')
+            ? new Response([], $url, 200, $alternate)
+            : new Response(['link' => '<https://acme.example/cert/1/alt>;rel="alternate"'], $url, 200, $primary),
+    );
+    $certificate = makeEndpointApi($mock, withKeyStorage())->certificate();
+
+    expect($certificate->getBundle(certOrderData(), 'ISRG Root X2')->fullchain)->toBe(CertificateBundleData::fromResponse(new Response([], '', 200, $primary))->fullchain);
+    expect($certificate->getBundle(certOrderData(), 'isrg root x1')->fullchain)->toBe(CertificateBundleData::fromResponse(new Response([], '', 200, $alternate))->fullchain);
+});
+
+it('typed exceptions carry the ACME problem type and subproblems', function (int $code, string $class) {
+    $sub = [['type' => 'urn:ietf:params:acme:error:rejectedIdentifier', 'detail' => 'nope', 'identifier' => ['type' => 'dns', 'value' => 'x.test']]];
+    $api = makeEndpointApi(endpointMock(
+        getBody: directoryBody(),
+        postBody: ['type' => 'urn:ietf:params:acme:error:example', 'detail' => 'Problem', 'subproblems' => $sub],
+        postCode: $code,
+    ), withKeyStorage());
+
+    try {
+        $api->order()->refresh(pendingOrderData());
+        $this->fail('Expected an exception');
+    } catch (AcmeException $e) {
+        expect($e)->toBeInstanceOf($class);
+        expect($e->getProblemType())->toBe('urn:ietf:params:acme:error:example');
+        expect($e->getSubproblems())->toBe($sub);
+    }
+})->with([
+    'generic'    => [400, AcmeException::class],
+    'auth'       => [403, AuthException::class],
+    'rate limit' => [429, RateLimitException::class],
+]);

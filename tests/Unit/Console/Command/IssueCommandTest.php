@@ -139,7 +139,7 @@ class StubIssueCommand extends IssueCommand
         $this->result = $result;
     }
 
-    protected function performIssue(CoyoteCert $builder, bool $force, int $days): array
+    protected function performIssue(CoyoteCert $builder, bool $force, ?int $days): array
     {
         if ($this->result instanceof \Throwable) {
             throw $this->result;

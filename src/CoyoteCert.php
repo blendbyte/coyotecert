@@ -14,6 +14,7 @@ use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Exceptions\AccountNotFoundException;
 use CoyoteCert\Exceptions\AcmeException;
+use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Http\Client as HttpClient;
 use CoyoteCert\Http\Psr18Adapter;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
@@ -102,7 +103,8 @@ class CoyoteCert
     /** @param string|string[] $identifiers Domain names and/or IP addresses (RFC 8738). */
     public function identifiers(array|string $identifiers): self
     {
-        $list = is_array($identifiers) ? array_values($identifiers) : [$identifiers];
+        // DNS names are case-insensitive; lower-casing keeps storage keys stable
+        $list = array_map(strtolower(...), is_array($identifiers) ? array_values($identifiers) : [$identifiers]);
 
         foreach ($list as $domain) {
             if (!self::isValidDomain($domain) && !filter_var($domain, FILTER_VALIDATE_IP)) {
@@ -161,8 +163,8 @@ class CoyoteCert
     }
 
     /**
-     * Prefer a chain whose intermediates contain $issuer (case-insensitive substring match).
-     * Falls back to the CA's default chain when no alternate chain matches.
+     * Prefer the chain whose topmost certificate was issued by $issuer, the root's Common Name
+     * (case-insensitive, like certbot's --preferred-chain). Falls back to the CA's default chain.
      */
     public function preferredChain(string $issuer): self
     {
@@ -204,7 +206,13 @@ class CoyoteCert
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
-    public function needsRenewal(int $daysBeforeExpiry = 30): bool
+    /**
+     * Whether the certificate is missing, expired, no longer covers the configured identifiers,
+     * or is due for renewal. The CA's ARI window decides when available. Otherwise renewal is due
+     * once a third of the lifetime remains (30 days for a 90-day certificate, 2 for a 6-day one),
+     * or within $daysBeforeExpiry days when given.
+     */
+    public function needsRenewal(?int $daysBeforeExpiry = null): bool
     {
         if ($this->storage === null || empty($this->domains)) {
             return true;
@@ -212,7 +220,7 @@ class CoyoteCert
 
         $cert = $this->storage->getCertificate($this->domains[0], $this->certKeyType);
 
-        if ($cert === null) {
+        if ($cert === null || $cert->isExpired() || !$this->coversIdentifiers($cert)) {
             return true;
         }
 
@@ -222,7 +230,13 @@ class CoyoteCert
             return $window->isOpen();
         }
 
-        return $cert->remainingDays() <= $daysBeforeExpiry;
+        if ($daysBeforeExpiry !== null) {
+            return $cert->remainingDays() <= $daysBeforeExpiry;
+        }
+
+        $lifetime = $cert->expiresAt->getTimestamp() - $cert->issuedAt->getTimestamp();
+
+        return $cert->expiresAt->getTimestamp() - time() <= intdiv($lifetime, 3);
     }
 
     // ── Terminal actions ──────────────────────────────────────────────────────
@@ -279,8 +293,8 @@ class CoyoteCert
         return $stored;
     }
 
-    /** Issue only when the certificate is absent or expires within $daysBeforeExpiry days. */
-    public function issueOrRenew(int $daysBeforeExpiry = 30): StoredCertificate
+    /** Issue only when needsRenewal() says so, otherwise return the stored certificate. */
+    public function issueOrRenew(?int $daysBeforeExpiry = null): StoredCertificate
     {
         if (!$this->needsRenewal($daysBeforeExpiry)) {
             // needsRenewal() returns false only when storage is set and a cert exists
@@ -339,9 +353,13 @@ class CoyoteCert
             $challengeHandler = $challengeHandler->withLogger($this->logger);
         }
 
-        $challenges     = $api->domainValidation()->status($order);
-        $challengeType  = $this->detectChallengeType();
-        $validationData = $api->domainValidation()->getValidationData($challenges, $challengeType);
+        $challenges    = $api->domainValidation()->status($order);
+        $challengeType = $this->detectChallengeType();
+        // Authorizations the CA reused from an earlier order are already valid: nothing to deploy
+        $validationData = $api->domainValidation()->getValidationData(
+            array_filter($challenges, static fn($authz): bool => !$authz->isValid()),
+            $challengeType,
+        );
 
         // Write every TXT record before waiting on DNS. A wildcard and its base name
         // share one _acme-challenge record set, and publishing the second value only
@@ -372,7 +390,7 @@ class CoyoteCert
                 $api->domainValidation()->start($account, $domainValidation, $challengeType, $this->localTest);
             }
 
-            $allPassed = $api->domainValidation()->allChallengesPassed($order, $this->pollAttempts);
+            $allPassed = $api->domainValidation()->allChallengesPassed($order, $this->pollAttempts, $challengeType);
         } finally {
             foreach ($deployed as $item) {
                 [$token] = $this->extractTokenAndKeyAuth($item);
@@ -452,6 +470,15 @@ class CoyoteCert
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    private function coversIdentifiers(StoredCertificate $cert): bool
+    {
+        try {
+            return $cert->isValidForDomains($this->domains);
+        } catch (CryptoException) {
+            return false; // an unreadable stored certificate is replaced
+        }
+    }
+
     private function ariWindow(StoredCertificate $cert): ?RenewalWindow
     {
         try {
@@ -476,10 +503,20 @@ class CoyoteCert
                 'No challenge handler configured. Call ->challenge() before issuing a certificate.',
             );
         }
+
+        // Fail before any network round-trip when the handler can't validate the identifiers
+        $this->detectChallengeType();
     }
 
     private function detectChallengeType(): AuthorizationChallengeEnum
     {
+        // Wildcard identifiers can only be validated with dns-01 (RFC 8555 §7.1.3)
+        if (array_filter($this->domains, static fn(string $id): bool => str_starts_with($id, '*.')) !== []) {
+            return $this->challengeHandler?->supports(AuthorizationChallengeEnum::DNS)
+                ? AuthorizationChallengeEnum::DNS
+                : throw new AcmeException('Wildcard identifiers need a dns-01 challenge handler.');
+        }
+
         foreach (AuthorizationChallengeEnum::cases() as $type) {
             if ($this->challengeHandler?->supports($type)) {
                 return $type;

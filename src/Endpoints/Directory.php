@@ -7,8 +7,15 @@ use CoyoteCert\Http\Response;
 
 class Directory extends Endpoint
 {
+    /** Fetched once per Api instance: every signed request needs at least one directory URL. */
+    private ?Response $response = null;
+
     public function all(): Response
     {
+        if ($this->response !== null) {
+            return $this->response;
+        }
+
         $response = $this->client
             ->getHttpClient()
             ->get($this->client->getProvider()->getDirectoryUrl());
@@ -19,7 +26,7 @@ class Directory extends Endpoint
             throw new AcmeException('Cannot get directory');
         }
 
-        return $response;
+        return $this->response = $response;
     }
 
     public function newNonce(): string

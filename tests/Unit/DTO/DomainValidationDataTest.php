@@ -120,3 +120,26 @@ it('validationRecord is populated when present', function () {
 
     expect($dv->validationRecord)->toHaveCount(1);
 });
+
+it('getErrors skips offered challenge types that were not attempted', function () {
+    $dv = DomainValidationData::fromResponse(makeDvResponse('invalid', extraChallenges: [
+        ['type' => 'tls-alpn-01', 'token' => 'tok-alpn', 'error' => ['type' => 'urn:ietf:params:acme:error:tls', 'detail' => 'bad cert']],
+    ]));
+
+    expect($dv->getErrors())->toBe([
+        ['domainValidationType' => 'tls-alpn-01', 'error' => ['type' => 'urn:ietf:params:acme:error:tls', 'detail' => 'bad cert']],
+    ]);
+});
+
+it('DomainValidationException::challengeInvalid() exposes the errors as RFC 8555 subproblems', function () {
+    $e = \CoyoteCert\Exceptions\DomainValidationException::challengeInvalid('example.com', [
+        ['domainValidationType' => 'http-01', 'error' => ['type' => 'urn:ietf:params:acme:error:connection', 'detail' => 'refused']],
+    ]);
+
+    expect($e->getMessage())->toContain('http-01: refused');
+    expect($e->getSubproblems())->toBe([[
+        'type'       => 'urn:ietf:params:acme:error:connection',
+        'detail'     => 'refused',
+        'identifier' => ['type' => 'dns', 'value' => 'example.com'],
+    ]]);
+});

@@ -62,10 +62,14 @@ class DomainValidationException extends AcmeException
             $errors,
         );
 
+        // Expose the challenge errors in the RFC 8555 §6.7 subproblem shape
+        $identifier  = ['type' => filter_var($domain, FILTER_VALIDATE_IP) ? 'ip' : 'dns', 'value' => $domain];
+        $subproblems = array_map(static fn(array $e): array => (array) $e['error'] + ['identifier' => $identifier], $errors);
+
         return new self(sprintf(
             'The CA marked the authorization for %s as invalid.%s',
             $domain,
             empty($details) ? '' : ' ' . implode(' ', $details),
-        ), $errors);
+        ), $subproblems);
     }
 }

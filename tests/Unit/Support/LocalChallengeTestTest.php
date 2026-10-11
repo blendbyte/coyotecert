@@ -38,6 +38,35 @@ it('http passes when body matches keyAuthorization', function () {
         ->not->toThrow(DomainValidationException::class);
 });
 
+it('http brackets IPv6 identifiers in the URL and follows up to 10 redirects', function () {
+    $client = new class implements HttpClientInterface {
+        public string $url       = '';
+        public int $maxRedirects = 0;
+
+        public function head(string $url): Response
+        {
+            return new Response([], $url, 200, '');
+        }
+
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
+        {
+            [$this->url, $this->maxRedirects] = [$url, $maxRedirects];
+
+            return new Response([], $url, 200, 'tok.thumb');
+        }
+
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, '');
+        }
+    };
+
+    LocalChallengeTest::http('2001:db8::1', 'tok', 'tok.thumb', $client);
+
+    expect($client->url)->toBe('http://[2001:db8::1]/.well-known/acme-challenge/tok');
+    expect($client->maxRedirects)->toBe(10);
+});
+
 it('http passes when body has surrounding whitespace', function () {
     $client = makeHttpClient(200, "  tokenABC.thumbprint\n");
 

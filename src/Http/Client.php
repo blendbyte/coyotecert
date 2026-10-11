@@ -38,8 +38,6 @@ class Client implements HttpClientInterface
      */
     public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
     {
-        $headers = array_merge(['Content-Type: application/jose+json'], $headers);
-
         return $this->makeCurlRequest('post', $url, $headers, $payload, $maxRedirects);
     }
 
@@ -68,7 +66,9 @@ class Client implements HttpClientInterface
                 break;
 
             case 'get':
-                curl_setopt($curlHandle, CURLOPT_URL, $fullUrl . '?' . http_build_query($payload));
+                if ($payload !== []) {
+                    curl_setopt($curlHandle, CURLOPT_URL, $fullUrl . '?' . http_build_query($payload));
+                }
                 break;
 
             case 'post':
@@ -133,9 +133,14 @@ class Client implements HttpClientInterface
             throw new \RuntimeException('Failed to initialize cURL handle.');
         }
 
-        curl_setopt($curlHandle, CURLOPT_HTTPHEADER, array_merge([
-            'Accept: application/json',
-        ], $headers));
+        // A caller-supplied Accept (e.g. for the PEM certificate download) replaces the default
+        $hasAccept = array_filter($headers, static fn(string $h): bool => stripos($h, 'accept:') === 0) !== [];
+
+        curl_setopt(
+            $curlHandle,
+            CURLOPT_HTTPHEADER,
+            $hasAccept ? $headers : array_merge(['Accept: application/json'], $headers),
+        );
 
         curl_setopt($curlHandle, CURLOPT_USERAGENT, 'blendbyte/coyotecert');
         curl_setopt($curlHandle, CURLOPT_RETURNTRANSFER, true);

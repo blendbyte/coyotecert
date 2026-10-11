@@ -109,11 +109,13 @@ readonly class StoredCertificate
     private function domainCoveredBy(string $domain, array $covered): bool
     {
         $domain = strtolower($domain);
+        // OpenSSL prints IPv6 SANs expanded (2001:DB8:0:0:...), so IPs are compared in binary form
+        $ip = filter_var($domain, FILTER_VALIDATE_IP) ? inet_pton($domain) : false;
 
         foreach ($covered as $entry) {
             $entry = strtolower($entry);
 
-            if ($entry === $domain) {
+            if ($entry === $domain || ($ip !== false && filter_var($entry, FILTER_VALIDATE_IP) && inet_pton($entry) === $ip)) {
                 return true;
             }
 

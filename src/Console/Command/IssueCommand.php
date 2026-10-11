@@ -35,7 +35,7 @@ class IssueCommand extends Command
             ->addOption('dns-skip-propagation', null, InputOption::VALUE_NONE, 'Skip the post-deploy DNS propagation check (use for split-horizon or internal DNS)')
             ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA to use: letsencrypt, letsencrypt-staging, zerossl, google, sslcom')
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Directory to store certificates and account keys', './certs')
-            ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Days before expiry to trigger renewal', '30')
+            ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Days before expiry to trigger renewal (default: when a third of the lifetime remains, or the CA\'s ARI window)')
             ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Certificate key type: ec256, ec384, rsa2048, rsa4096', 'ec256')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Force issuance even if the certificate is still valid')
             ->addOption('skip-caa', null, InputOption::VALUE_NONE, 'Skip CAA DNS pre-check')
@@ -92,7 +92,7 @@ class IssueCommand extends Command
         }
 
         $storagePath = $input->getOption('storage');
-        $days        = max(1, (int) $input->getOption('days'));
+        $days        = $input->getOption('days') !== null ? max(1, (int) $input->getOption('days')) : null;
         $force       = $input->getOption('force');
 
         if ($dnsProvider !== null) {
@@ -183,7 +183,7 @@ class IssueCommand extends Command
     /**
      * @return array{StoredCertificate, bool}
      */
-    protected function performIssue(CoyoteCert $builder, bool $force, int $days): array
+    protected function performIssue(CoyoteCert $builder, bool $force, ?int $days): array
     {
         $wasIssued = false;
         $builder->onIssued(function () use (&$wasIssued): void {

@@ -18,7 +18,7 @@ readonly class DomainValidationData
     public function __construct(
         public array $identifier,
         public string $status,
-        public string $expires,
+        public ?string $expires,
         public array $file,
         public array $dns,
         public array $tlsAlpn = [],
@@ -33,7 +33,7 @@ readonly class DomainValidationData
         return new self(
             identifier: $body['identifier'],
             status: $body['status'],
-            expires: $body['expires'],
+            expires: $body['expires'] ?? null,
             file: self::getValidationByType($challenges, AuthorizationChallengeEnum::HTTP),
             dns: self::getValidationByType($challenges, AuthorizationChallengeEnum::DNS),
             tlsAlpn: self::getValidationByType($challenges, AuthorizationChallengeEnum::TLS_ALPN),
@@ -85,15 +85,12 @@ readonly class DomainValidationData
     /** @return array<int, array<string, mixed>> */
     public function getErrors(): array
     {
-        if (!$this->hasErrors()) {
-            return [];
-        }
-
         $errors = [];
 
+        // Only challenges that actually failed: the CA offers every type but the client attempts one
         foreach ([AuthorizationChallengeEnum::HTTP, AuthorizationChallengeEnum::DNS, AuthorizationChallengeEnum::TLS_ALPN] as $type) {
             $data = $this->challengeData($type);
-            if (!empty($data)) {
+            if (!empty($data['error'])) {
                 $errors[] = [
                     'domainValidationType' => $type->value,
                     'error'                => Arr::get($data, 'error'),

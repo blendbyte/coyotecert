@@ -86,7 +86,10 @@ class Account extends Endpoint
         if (($response->jsonBody()['type'] ?? '') === 'urn:ietf:params:acme:error:accountDoesNotExist') {
             $this->logResponse('error', 'Account does not exist for the stored key', $response);
 
-            throw new AccountNotFoundException($response->jsonBody()['detail'] ?? 'Account does not exist.');
+            throw new AccountNotFoundException(
+                $response->jsonBody()['detail'] ?? 'Account does not exist.',
+                problemType: 'urn:ietf:params:acme:error:accountDoesNotExist',
+            );
         }
 
         $this->throwError($response, 'Retrieving account failed');

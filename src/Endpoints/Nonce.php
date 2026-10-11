@@ -2,6 +2,8 @@
 
 namespace CoyoteCert\Endpoints;
 
+use CoyoteCert\Exceptions\AcmeException;
+
 class Nonce extends Endpoint
 {
     public function getNew(): string
@@ -17,7 +19,16 @@ class Nonce extends Endpoint
         $response = $this->client
             ->getHttpClient()
             ->head($this->client->directory()->newNonce());
+        $nonce = $response->getHeader('replay-nonce');
 
-        return trim($response->getHeader('replay-nonce'));
+        if (!is_string($nonce) || trim($nonce) === '') {
+            throw new AcmeException(sprintf(
+                'The CA returned no Replay-Nonce (HTTP %d from %s).',
+                $response->getHttpResponseCode(),
+                $this->client->directory()->newNonce(),
+            ));
+        }
+
+        return trim($nonce);
     }
 }

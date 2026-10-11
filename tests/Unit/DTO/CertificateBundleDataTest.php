@@ -12,7 +12,7 @@ it('parses a single certificate', function () use ($certA) {
     $bundle = CertificateBundleData::fromResponse($r);
 
     expect($bundle->certificate)->toBe($certA);
-    expect($bundle->fullchain)->toBe('');
+    expect($bundle->fullchain)->toBe($certA . "\n"); // a lone leaf is its own full chain
     expect($bundle->caBundle)->toBe('');
 });
 

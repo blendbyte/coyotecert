@@ -35,12 +35,14 @@ abstract class Endpoint
      * The Replay-Nonce from each response is cached for the next request.
      *
      * @param array<string, mixed>|null $payload
+     * @param array<int, string> $headers
      */
-    protected function postSigned(string $url, string $accountUrl, ?array $payload = null): Response
+    protected function postSigned(string $url, string $accountUrl, ?array $payload = null, array $headers = []): Response
     {
         $send = fn() => $this->client->getHttpClient()->post(
             $url,
             $this->createKeyId($accountUrl, $url, $payload),
+            $headers,
         );
 
         $response = $send();
@@ -84,7 +86,7 @@ abstract class Endpoint
     /**
      * Build a typed exception from the response without logging.
      * Dispatches 401/403 → AuthException, 429 → RateLimitException (with Retry-After),
-     * and attaches RFC 8555 §6.7 subproblems to any exception that carries them.
+     * and attaches the problem type and RFC 8555 §6.7 subproblems.
      */
     protected function createException(Response $response, string $defaultMessage): AcmeException
     {
@@ -93,23 +95,32 @@ abstract class Endpoint
 
         /** @var array<int, array<string, mixed>> $subproblems */
         $subproblems = $body['subproblems'] ?? [];
+        $type        = $body['type']        ?? null;
 
         return match ($response->getHttpResponseCode()) {
-            401, 403 => new AuthException($message),
-            429      => new RateLimitException($message, $this->parseRetryAfterSeconds($response)),
-            default  => new AcmeException($message, $subproblems),
+            401, 403 => new AuthException($message, $subproblems, problemType: $type),
+            429      => new RateLimitException($message, $this->parseRetryAfterSeconds($response), $subproblems, $type),
+            default  => new AcmeException($message, $subproblems, problemType: $type),
         };
     }
 
+    /** Retry-After as seconds from now; the header may be delay-seconds or an HTTP-date (RFC 9110 §10.2.3). */
     protected function parseRetryAfterSeconds(Response $response): ?int
     {
         $value = $response->getHeader('retry-after', '');
 
-        if (!is_string($value) || $value === '') {
+        if (!is_string($value) || trim($value) === '') {
             return null;
         }
 
-        $seconds = (int) $value;
+        $value = trim($value);
+
+        if (ctype_digit($value)) {
+            $seconds = (int) $value;
+        } else {
+            $date    = \DateTimeImmutable::createFromFormat('D, d M Y H:i:s \G\M\T', $value, new \DateTimeZone('UTC'));
+            $seconds = $date !== false ? $date->getTimestamp() - time() : 0;
+        }
 
         return $seconds > 0 ? $seconds : null;
     }
@@ -122,18 +133,17 @@ abstract class Endpoint
     /**
      * Seconds to wait before the next polling attempt.
      *
-     * Respects the ACME server's Retry-After header when present; otherwise
-     * applies exponential back-off (baseDelay * 2^attempt) capped at 64 s.
+     * Respects the server's Retry-After (capped at 120 s so a bogus value can't stall
+     * issuance for hours); otherwise applies exponential back-off (baseDelay * 2^attempt)
+     * capped at 64 s.
      *
      * @param int $attempt Zero-based attempt index for the back-off exponent.
-     * @param int $baseDelay Initial delay in seconds (used when no header is set).
+     * @param int $baseDelay Initial delay in seconds (used when no Retry-After is set).
      */
-    protected function retryAfterDelay(Response $response, int $attempt, int $baseDelay): int
+    protected function pollDelay(?int $retryAfter, int $attempt, int $baseDelay): int
     {
-        $retryAfter = (int) $response->getHeader('retry-after', 0);
-
-        return $retryAfter > 0
-            ? $retryAfter
+        return $retryAfter !== null
+            ? min($retryAfter, 120)
             : (int) min($baseDelay * (2 ** $attempt), 64);
     }
 

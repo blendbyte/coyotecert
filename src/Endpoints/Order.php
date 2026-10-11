@@ -11,11 +11,9 @@ use CoyoteCert\Support\Base64;
 class Order extends Endpoint
 {
     /**
+     * @param string[] $domains
      * @param string $replacesId ARI certId of the certificate being replaced (RFC 9773 §5).
      *                           Pass an empty string when issuing a brand-new certificate.
-     */
-    /**
-     * @param string[] $domains
      */
     public function new(AccountData $accountData, array $domains, string $profile = '', string $replacesId = ''): OrderData
     {
@@ -50,9 +48,15 @@ class Order extends Endpoint
             return OrderData::fromResponse($response, $accountData->url);
         }
 
-        // If the `replaces` ARI hint was rejected, retry without it — the CA
-        // may not recognise the issuer hash (e.g. Pebble with a self-signed CA).
-        if ($replacesId !== '' && $response->getHttpResponseCode() === 400) {
+        // The `replaces` hint is only an optimisation: when the CA doesn't know the certificate
+        // (malformed) or it was already replaced by an earlier, unfinished order (RFC 9773 §5,
+        // alreadyReplaced), order without it. Other errors are about the order itself.
+        $type = $response->jsonBody()['type'] ?? '';
+
+        if ($replacesId !== '' && in_array($type, [
+            'urn:ietf:params:acme:error:malformed',
+            'urn:ietf:params:acme:error:alreadyReplaced',
+        ], true)) {
             unset($payload['replaces']);
             $response = $this->postSigned($newOrderUrl, $accountData->url, $payload);
 
@@ -95,6 +99,10 @@ class Order extends Endpoint
     {
         $response = $this->postSigned($order->url, $order->accountUrl);
 
+        if ($response->getHttpResponseCode() !== 200) {
+            $this->throwError($response, 'Cannot refresh order ' . $order->id);
+        }
+
         return OrderData::fromResponse($response, $order->accountUrl);
     }
 
@@ -102,17 +110,29 @@ class Order extends Endpoint
     {
         for ($i = 0; $i < $maxAttempts; $i++) {
             $response = $this->postSigned($order->url, $order->accountUrl);
-            $body     = $response->jsonBody();
+
+            if ($response->getHttpResponseCode() !== 200) {
+                $this->throwError($response, 'Cannot poll order ' . $order->id);
+            }
+
+            $body = $response->jsonBody();
 
             if (($body['status'] ?? '') === 'valid') {
                 return OrderData::fromResponse($response, $order->accountUrl);
             }
 
             if (($body['status'] ?? '') === 'invalid') {
-                throw new AcmeException('Order became invalid during finalization.');
+                $detail = $body['error']['detail'] ?? null;
+
+                throw new AcmeException(
+                    'Order became invalid during finalization' . ($detail !== null ? ": {$detail}" : '.'),
+                    $body['error']['subproblems'] ?? [],
+                );
             }
 
-            sleep($this->retryAfterDelay($response, $i, $sleepSeconds));
+            if ($i < $maxAttempts - 1) {
+                sleep($this->pollDelay($this->parseRetryAfterSeconds($response), $i, $sleepSeconds));
+            }
         }
 
         throw new AcmeException("Order did not become valid after {$maxAttempts} attempts.");

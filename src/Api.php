@@ -21,7 +21,8 @@ use Psr\Log\LoggerInterface;
 
 class Api
 {
-    private ?string $cachedNonce = null;
+    private ?string $cachedNonce  = null;
+    private ?Directory $directory = null;
 
     public function __construct(
         private readonly AcmeProviderInterface $provider,
@@ -67,7 +68,7 @@ class Api
 
     public function directory(): Directory
     {
-        return new Directory($this);
+        return $this->directory ??= new Directory($this);
     }
 
     public function nonce(): Nonce
@@ -121,6 +122,11 @@ class Api
         $this->logger = $logger;
 
         return $this;
+    }
+
+    public function hasLogger(): bool
+    {
+        return $this->logger !== null;
     }
 
     /** @param array<string, mixed> $context */

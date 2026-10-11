@@ -24,13 +24,16 @@ class RenewalInfo extends Endpoint
             return null;
         }
 
-        $body = $response->jsonBody();
+        $body  = $response->jsonBody();
+        $start = new DateTimeImmutable($body['suggestedWindow']['start']);
+        $end   = new DateTimeImmutable($body['suggestedWindow']['end']);
 
-        return new RenewalWindow(
-            start: new DateTimeImmutable($body['suggestedWindow']['start']),
-            end: new DateTimeImmutable($body['suggestedWindow']['end']),
-            explanationUrl: $body['explanationURL'] ?? null,
-        );
+        // RFC 9773 §4.2: a window that ends before it starts is treated as no response
+        if ($end <= $start) {
+            return null;
+        }
+
+        return new RenewalWindow(start: $start, end: $end, explanationUrl: $body['explanationURL'] ?? null);
     }
 
     /** RFC 9773 §4.1: base64url(AKI keyIdentifier) "." base64url(DER serial number). */

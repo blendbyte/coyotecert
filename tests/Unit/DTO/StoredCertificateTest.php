@@ -290,6 +290,14 @@ it('isValidForDomains() returns false when a domain is not in the SAN', function
     expect($cert->isValidForDomains(['other.com']))->toBeFalse();
 });
 
+it('isValidForDomains() matches an IPv6 SAN that OpenSSL prints in expanded form', function () {
+    [$pem] = caSignedLeaf(1, ['2001:db8::1', '192.0.2.1']);
+    $cert  = makeCert(['certificate' => $pem]);
+
+    expect($cert->isValidForDomains(['2001:db8::1', '192.0.2.1']))->toBeTrue();
+    expect($cert->isValidForDomains(['2001:db8::2']))->toBeFalse();
+});
+
 it('isValidForDomains() returns true when a wildcard SAN covers the domain', function () {
     $pem  = makeStoredCertPem(['*.example.com']);
     $cert = makeCert(['certificate' => $pem]);
