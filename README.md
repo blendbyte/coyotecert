@@ -125,7 +125,7 @@ CoyoteCert has no default CA. Every call requires an explicit provider. Trust st
 
 ## Requirements
 
-PHP ^8.3 with `ext-curl`, `ext-json`, `ext-mbstring`, and `ext-openssl`.
+PHP ^8.3 with `ext-curl`, `ext-json`, and `ext-openssl`.
 
 ---
 
@@ -1522,8 +1522,8 @@ $bundle = $api->certificate()->getBundle($order);
 $api->certificate()->revoke($certPem, reason: 1);
 
 // ARI
-$window = $api->renewalInfo()->get($certPem, $issuerPem);
-$certId = $api->renewalInfo()->certId($certPem, $issuerPem);
+$window = $api->renewalInfo()->get($certPem);
+$certId = $api->renewalInfo()->certId($certPem);
 
 // Directory
 $all    = $api->directory()->all();

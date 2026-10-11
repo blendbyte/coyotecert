@@ -38,11 +38,13 @@ class DomainValidation extends Endpoint
         foreach ($orderData->domainValidationUrls as $domainValidationUrl) {
             $response = $this->postSigned($domainValidationUrl, $orderData->accountUrl);
 
-            if ($response->getHttpResponseCode() === 200) {
-                $data[] = DomainValidationData::fromResponse($response);
-            } else {
-                $this->logResponse('error', 'Cannot get domain validation', $response);
+            // A missing authorization must not be skipped: an empty or partial list would
+            // read as "every challenge passed" and leave a domain unvalidated.
+            if ($response->getHttpResponseCode() !== 200) {
+                $this->throwError($response, 'Cannot get domain validation.');
             }
+
+            $data[] = DomainValidationData::fromResponse($response);
 
             $ra = (int) $response->getHeader('retry-after', 0);
             if ($ra > 0 && $retryAfter === null) {

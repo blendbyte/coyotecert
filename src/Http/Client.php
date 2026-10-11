@@ -2,6 +2,7 @@
 
 namespace CoyoteCert\Http;
 
+use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Interfaces\HttpClientInterface;
 use CurlHandle;
 
@@ -79,29 +80,31 @@ class Client implements HttpClientInterface
         $curlResult = curl_exec($curlHandle);
         $headerSize = curl_getinfo($curlHandle, CURLINFO_HEADER_SIZE);
         $allHeaders = curl_getinfo($curlHandle);
+        $httpCode   = (int) $allHeaders['http_code'];
 
-        $rawResponse = is_string($curlResult) ? $curlResult : '';
-        $rawHeaders  = mb_substr($rawResponse, 0, $headerSize);
-        $rawBody     = mb_substr($rawResponse, $headerSize);
-        $body        = $rawBody;
+        if (!is_string($curlResult) || $httpCode === 0) {
+            // A signed POST is never resent: the server may already have processed it,
+            // and replaying the same JWS (and nonce) can leave state half-applied.
+            if ($httpVerb !== 'post' && $retries > 0) {
+                return $this->makeCurlRequest($httpVerb, $fullUrl, $headers, $payload, $maxRedirects, --$retries);
+            }
+
+            throw new AcmeException(sprintf(
+                '%s %s failed: %s',
+                strtoupper($httpVerb),
+                $fullUrl,
+                curl_error($curlHandle) ?: 'no response received',
+            ));
+        }
+
+        $rawHeaders = substr($curlResult, 0, $headerSize);
+        $rawBody    = substr($curlResult, $headerSize);
+        $body       = $rawBody;
 
         $allHeaders = array_merge($allHeaders, $this->parseRawHeaders($rawHeaders));
 
         if (json_validate($rawBody)) {
             $body = json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR);
-        }
-
-        $httpCode = isset($allHeaders['http_code']) ? (int) $allHeaders['http_code'] : null;
-
-        // Catch HTTP status code 0 when Let's Encrypt API is having problems.
-        if ($httpCode === 0) {
-            // Retry.
-            if ($retries > 0) {
-                return $this->makeCurlRequest($httpVerb, $fullUrl, $headers, $payload, $maxRedirects, --$retries);
-            }
-
-            // Return 504 Gateway Timeout.
-            $httpCode = 504;
         }
 
         $requestedUrl = isset($allHeaders['url']) ? (string) $allHeaders['url'] : '';

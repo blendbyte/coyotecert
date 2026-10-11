@@ -265,9 +265,8 @@ it('issueOrRenew() calls issue() when renewal is needed', function () {
 
 // ── ariWindow() (tested via needsRenewal()) ───────────────────────────────────
 
-it('needsRenewal() falls back to remainingDays when caBundle has no PEM cert headers', function () {
-    // caBundle is non-empty but contains no PEM block → ariWindow() returns null at the
-    // !preg_match() guard (line 345) → falls through to remainingDays()
+it('needsRenewal() falls back to remainingDays when the certificate cannot be parsed for ARI', function () {
+    // certId() throws on the unparsable certificate, so ariWindow() returns null
     $storage = new InMemoryStorage();
     $storage->saveCertificate('example.com', makeCoyoteCert(caBundle: 'not-a-pem', expiresInDays: 90));
 
@@ -277,8 +276,7 @@ it('needsRenewal() falls back to remainingDays when caBundle has no PEM cert hea
 });
 
 it('needsRenewal() returns null from ariWindow when API call throws (catch block)', function () {
-    // caBundle has a valid PEM block → preg_match succeeds → try block reached.
-    // A failing HTTP client causes the directory GET to throw → caught → return null.
+    // A failing HTTP client causes the directory GET to throw, which ariWindow() catches.
     $fakeCaBundle = "-----BEGIN CERTIFICATE-----\nMIIBtest==\n-----END CERTIFICATE-----";
 
     $storage = new InMemoryStorage();
@@ -305,21 +303,16 @@ it('needsRenewal() returns null from ariWindow when API call throws (catch block
 });
 
 it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal window', function () {
-    // Generate a real self-signed cert so certId() can parse it.
-    // Use serial=1 so serialNumberHex is always '01' (even-length hex).
-    $key  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
-    $csr  = openssl_csr_new(['commonName' => 'test.example.com'], $key);
-    $cert = openssl_csr_sign($csr, null, $key, 365, serial: 1);
-    openssl_x509_export($cert, $certPem);
+    [$certPem, $issuerPem] = caSignedLeaf();
 
     $storage = new InMemoryStorage();
     $storage->saveCertificate('example.com', new StoredCertificate(
         certificate: $certPem,
         privateKey: 'key-pem',
-        fullchain: 'fullchain',
-        caBundle: $certPem, // self-signed: issuer == leaf
+        fullchain: $certPem . $issuerPem,
+        caBundle: $issuerPem,
         issuedAt: new DateTimeImmutable(),
-        expiresAt: new DateTimeImmutable('+90 days'),
+        expiresAt: new DateTimeImmutable('+10 days'),
         domains: ['example.com'],
         keyType: KeyType::EC_P256,
     ));
@@ -366,8 +359,9 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
         ->storage($storage)
         ->needsRenewal(30);
 
-    // ARI window is far in the future → isOpen() returns false → no renewal needed
+    // ARI window is far in the future, so no renewal even though only 10 days remain
     expect($result)->toBeFalse();
+    expect($mockClient->calls)->toBe(2);
 });
 
 // ── withHttpTimeout() ─────────────────────────────────────────────────────────
@@ -556,4 +550,130 @@ it('extractTokenAndKeyAuth() returns [token, keyAuthorization] for TlsAlpn01Vali
 
     expect($token)->toBe('tls-token');
     expect($auth)->toBe('tls-token.keyauth');
+});
+
+// ── deployAndValidate() cleanup ───────────────────────────────────────────────
+
+/**
+ * Mock ACME server with one pending http-01 authorization per domain. Challenge
+ * submissions answer with $challengeCode; once submitted, the authorization is valid.
+ */
+function cleanupTestApi(array $domains, int $challengeCode): \CoyoteCert\Api
+{
+    $storage = new InMemoryStorage();
+    $storage->saveAccountKey((new Pebble())->getSlug(), rsaKeyPem(), KeyType::RSA_2048);
+
+    $http = new class ($domains, $challengeCode) implements \CoyoteCert\Interfaces\HttpClientInterface {
+        private bool $submitted = false;
+
+        public function __construct(private array $domains, private int $challengeCode) {}
+
+        public function head(string $url): \CoyoteCert\Http\Response
+        {
+            return new \CoyoteCert\Http\Response(['replay-nonce' => 'nonce'], $url, 200, '');
+        }
+
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): \CoyoteCert\Http\Response
+        {
+            return new \CoyoteCert\Http\Response([], $url, 200, ['newNonce' => 'https://acme.example/nonce']);
+        }
+
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): \CoyoteCert\Http\Response
+        {
+            if (str_contains($url, '/chall/')) {
+                $this->submitted = $this->challengeCode < 400;
+
+                return new \CoyoteCert\Http\Response([], $url, $this->challengeCode, ['detail' => 'Challenge rejected']);
+            }
+
+            $i = (int) basename($url);
+
+            return new \CoyoteCert\Http\Response([], $url, 200, [
+                'identifier' => ['type' => 'dns', 'value' => $this->domains[$i]],
+                'status'     => $this->submitted ? 'valid' : 'pending',
+                'expires'    => '2099-01-01T00:00:00Z',
+                'challenges' => [['type' => 'http-01', 'token' => "tok{$i}", 'url' => "https://acme.example/chall/{$i}"]],
+            ]);
+        }
+    };
+
+    return new \CoyoteCert\Api(provider: new Pebble(), storage: $storage, httpClient: $http);
+}
+
+function recordingHandler(bool $failCleanup = false): ChallengeHandlerInterface
+{
+    return new class ($failCleanup) implements ChallengeHandlerInterface {
+        public array $deployed = [];
+        public array $cleaned  = [];
+
+        public function __construct(private bool $failCleanup) {}
+
+        public function supports(AuthorizationChallengeEnum $t): bool
+        {
+            return $t === AuthorizationChallengeEnum::HTTP;
+        }
+
+        public function deploy(string $d, string $tok, string $auth): void
+        {
+            $this->deployed[] = $d;
+        }
+
+        public function cleanup(string $d, string $tok): void
+        {
+            $this->cleaned[] = $d;
+
+            if ($this->failCleanup) {
+                throw new RuntimeException("cleanup failed for {$d}");
+            }
+        }
+    };
+}
+
+function invokeDeployAndValidate(CoyoteCert $coyote, \CoyoteCert\Api $api, array $domains): void
+{
+    $order = new \CoyoteCert\DTO\OrderData(
+        id: '1',
+        url: 'https://acme.example/order/1',
+        status: 'pending',
+        expires: '2099-01-01T00:00:00Z',
+        identifiers: [],
+        domainValidationUrls: array_map(fn($i) => "https://acme.example/authz/{$i}", array_keys($domains)),
+        finalizeUrl: 'https://acme.example/finalize/1',
+        accountUrl: 'https://acme.example/account/1',
+        certificateUrl: null,
+        finalized: false,
+    );
+    $account = new \CoyoteCert\DTO\AccountData(
+        id: '1',
+        url: 'https://acme.example/account/1',
+        key: [],
+        status: 'valid',
+        agreement: '',
+        createdAt: null,
+    );
+
+    $method = new \ReflectionMethod(CoyoteCert::class, 'deployAndValidate');
+    $method->invoke($coyote, $api, $order, $account, (new \ReflectionProperty(CoyoteCert::class, 'challengeHandler'))->getValue($coyote));
+}
+
+it('deployAndValidate() cleans up every deployed challenge when challenge submission fails', function () {
+    $domains = ['a.example.com', 'b.example.com'];
+    $handler = recordingHandler();
+    $coyote  = makeCoyote()->identifiers($domains)->challenge($handler)->skipLocalTest();
+
+    expect(fn() => invokeDeployAndValidate($coyote, cleanupTestApi($domains, 400), $domains))
+        ->toThrow(AcmeException::class, 'Challenge rejected');
+
+    expect($handler->deployed)->toBe($domains);
+    expect($handler->cleaned)->toBe($domains);
+});
+
+it('deployAndValidate() keeps cleaning up and succeeds when a cleanup call throws', function () {
+    $domains = ['a.example.com', 'b.example.com'];
+    $handler = recordingHandler(failCleanup: true);
+    $coyote  = makeCoyote()->identifiers($domains)->challenge($handler)->skipLocalTest();
+
+    invokeDeployAndValidate($coyote, cleanupTestApi($domains, 200), $domains);
+
+    expect($handler->cleaned)->toBe($domains);
 });

@@ -20,13 +20,13 @@ it('isOpen returns false when now is before the window', function () {
     expect($window->isOpen())->toBeFalse();
 });
 
-it('isOpen returns false when now is after the window', function () {
+it('isOpen returns true when the window has already ended (RFC 9773: renew immediately)', function () {
     $window = new RenewalWindow(
         start: new DateTimeImmutable('-2 days'),
         end: new DateTimeImmutable('-1 day'),
     );
 
-    expect($window->isOpen())->toBeFalse();
+    expect($window->isOpen())->toBeTrue();
 });
 
 it('exposes start, end, and explanationUrl', function () {

@@ -67,10 +67,10 @@ class FilesystemStorage implements StorageInterface
             json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
         );
         $base = $this->pemBase($domain, $cert->keyType);
-        $this->writeFile($base . 'certificate.pem', $cert->certificate);
+        $this->writeFile($base . 'certificate.pem', $cert->certificate, public: true);
         $this->writeFile($base . 'private_key.pem', $cert->privateKey);
-        $this->writeFile($base . 'fullchain.pem', $cert->fullchain);
-        $this->writeFile($base . 'ca.pem', $cert->caBundle);
+        $this->writeFile($base . 'fullchain.pem', $cert->fullchain, public: true);
+        $this->writeFile($base . 'ca.pem', $cert->caBundle, public: true);
     }
 
     public function deleteCertificate(string $domain, KeyType $keyType): void
@@ -185,7 +185,11 @@ class FilesystemStorage implements StorageInterface
         return $contents !== false ? $contents : false;
     }
 
-    private function writeFile(string $path, string $contents): void
+    /**
+     * Files are owner-only unless $public: that covers the keys and cert.json, which
+     * embeds the certificate's private key.
+     */
+    private function writeFile(string $path, string $contents, bool $public = false): void
     {
         // Pre-check writability to avoid a PHP E_WARNING from file_put_contents.
         $checkTarget = file_exists($path) ? $path : dirname($path);
@@ -195,26 +199,14 @@ class FilesystemStorage implements StorageInterface
             );
         }
 
-        $isPublic = false;
-
-        if (str_ends_with($path, '.pem')) {
-            $isPublic = str_ends_with($path, 'certificate.pem')
-                     || str_ends_with($path, 'fullchain.pem')
-                     || str_ends_with($path, 'ca.pem');
-
-            if (!$isPublic) {
-                $oldUmask = umask(0o177);
-            }
-        }
+        $oldUmask = $public ? null : umask(0o177);
 
         file_put_contents($path, $contents, LOCK_EX);
 
-        if (isset($oldUmask)) {
+        if ($oldUmask !== null) {
             umask($oldUmask);
         }
 
-        if (str_ends_with($path, '.pem')) {
-            chmod($path, $isPublic ? 0o644 : 0o600);
-        }
+        chmod($path, $public ? 0o644 : 0o600);
     }
 }

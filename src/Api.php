@@ -49,6 +49,11 @@ class Api
         return $this->provider;
     }
 
+    public function getAccountKeyType(): KeyType
+    {
+        return $this->accountKeyType;
+    }
+
     public function accountAdapter(): AcmeAccountInterface
     {
         if ($this->storage !== null) {

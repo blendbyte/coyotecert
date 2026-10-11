@@ -9,7 +9,7 @@ use DateTimeImmutable;
 
 class RenewalInfo extends Endpoint
 {
-    public function get(string $certPem, string $issuerPem): ?RenewalWindow
+    public function get(string $certPem): ?RenewalWindow
     {
         $baseUrl = $this->client->directory()->renewalInfo();
 
@@ -17,7 +17,7 @@ class RenewalInfo extends Endpoint
             return null;
         }
 
-        $url      = rtrim($baseUrl, '/') . '/' . $this->certId($certPem, $issuerPem);
+        $url      = rtrim($baseUrl, '/') . '/' . $this->certId($certPem);
         $response = $this->client->getHttpClient()->get($url);
 
         if ($response->getHttpResponseCode() !== 200) {
@@ -33,54 +33,35 @@ class RenewalInfo extends Endpoint
         );
     }
 
-    public function certId(string $certPem, string $issuerPem): string
+    /** RFC 9773 §4.1: base64url(AKI keyIdentifier) "." base64url(DER serial number). */
+    public function certId(string $certPem): string
     {
-        $issuerKey = openssl_get_publickey($issuerPem);
-
-        if ($issuerKey === false) {
-            throw new CryptoException('Failed to parse issuer certificate public key.');
-        }
-
-        $issuerSpki = $this->spkiDer($issuerKey);
-        $issuerHash = Base64::urlSafeEncode(hash('sha256', $issuerSpki, true));
-
         $parsed = openssl_x509_parse($certPem);
 
         if ($parsed === false) {
             throw new CryptoException('Failed to parse certificate for ARI cert ID.');
         }
 
-        $serialBin = hex2bin($parsed['serialNumberHex'] ?? '');
+        $aki = $parsed['extensions']['authorityKeyIdentifier'] ?? '';
 
-        if ($serialBin === false || $serialBin === '') {
+        // OpenSSL 3 prints the bare hex; older versions prefix it with "keyid:"
+        if (!preg_match('/^\s*(?:keyid:)?([0-9A-F]{2}(?::[0-9A-F]{2})*)\s*$/im', $aki, $m)) {
+            throw new CryptoException('Certificate has no Authority Key Identifier, cannot build ARI cert ID.');
+        }
+
+        $keyId     = (string) hex2bin(str_replace(':', '', $m[1]));
+        $serialHex = $parsed['serialNumberHex'] ?? '';
+        $serial    = hex2bin(strlen($serialHex) % 2 === 1 ? '0' . $serialHex : $serialHex);
+
+        if ($serial === false || $serial === '') {
             throw new CryptoException('Failed to decode certificate serial number.');
         }
 
-        $serial = Base64::urlSafeEncode($serialBin);
-
-        return $issuerHash . '.' . $serial;
-    }
-
-    private function spkiDer(\OpenSSLAsymmetricKey $publicKey): string
-    {
-        // "BEGIN PUBLIC KEY" PEM wraps raw SPKI DER — strip the headers to get the DER bytes
-        $details = openssl_pkey_get_details($publicKey);
-
-        if ($details === false) {
-            throw new CryptoException('Failed to get issuer public key details.');
+        // DER INTEGER: a serial with the high bit set needs a leading zero byte to stay positive
+        if (ord($serial[0]) >= 0x80) {
+            $serial = "\x00" . $serial;
         }
 
-        $pem = $details['key'];
-
-        $decoded = base64_decode(implode('', array_map(
-            'trim',
-            array_filter(explode("\n", $pem), static fn(string $l): bool => !str_starts_with($l, '-----')),
-        )), true);
-
-        if ($decoded === false) {
-            throw new CryptoException('Failed to decode issuer public key DER.');
-        }
-
-        return $decoded;
+        return Base64::urlSafeEncode($keyId) . '.' . Base64::urlSafeEncode($serial);
     }
 }

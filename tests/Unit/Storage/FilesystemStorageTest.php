@@ -163,6 +163,21 @@ it('private_key.pem is mode 0600 and public PEM files are mode 0644', function (
     expect(decoct(fileperms($base . 'ca.pem') & 0o777))->toBe('644');
 })->skip(fn() => function_exists('posix_getuid') && posix_getuid() === 0, 'root bypasses chmod checks');
 
+it('cert.json and account files are mode 0600 even when the file already exists with looser permissions', function () {
+    $base = $this->dir . '/example.com.EC_P256.';
+    mkdir($this->dir, 0o755, true);
+    touch($base . 'cert.json');
+    chmod($base . 'cert.json', 0o644);
+
+    $this->storage->saveCertificate('example.com', makeFileCert());
+    // A slug ending in "ca" must not be mistaken for the public ca.pem
+    $this->storage->saveAccountKey('myca', 'account-key', KeyType::EC_P256);
+
+    expect(decoct(fileperms($base . 'cert.json') & 0o777))->toBe('600');
+    expect(decoct(fileperms($this->dir . '/account-myca.pem') & 0o777))->toBe('600');
+    expect(decoct(fileperms($this->dir . '/account-myca.json') & 0o777))->toBe('600');
+})->skip(fn() => function_exists('posix_getuid') && posix_getuid() === 0, 'root bypasses chmod checks');
+
 it('saveCertificate overwrites PEM files on renewal', function () {
     $this->storage->saveCertificate('example.com', makeFileCert());
 

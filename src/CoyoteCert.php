@@ -12,6 +12,7 @@ use CoyoteCert\DTO\TlsAlpn01ValidationData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Enums\RevocationReason;
+use CoyoteCert\Exceptions\AccountNotFoundException;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Http\Client as HttpClient;
 use CoyoteCert\Http\Psr18Adapter;
@@ -255,9 +256,9 @@ class CoyoteCert
         $replacesId   = '';
         $existingCert = $this->storage?->getCertificate($this->domains[0], $this->certKeyType);
         $sameProvider = $existingCert?->providerSlug === $this->provider->getSlug();
-        if ($existingCert !== null && $sameProvider && ($issuerPem = $this->extractIssuerPem($existingCert)) !== null) {
+        if ($existingCert !== null && $sameProvider) {
             try {
-                $replacesId = $api->renewalInfo()->certId($existingCert->certificate, $issuerPem);
+                $replacesId = $api->renewalInfo()->certId($existingCert->certificate);
             } catch (\Throwable) {
                 // certId failure is non-critical; proceed without replaces
             }
@@ -312,9 +313,18 @@ class CoyoteCert
 
     private function getOrCreateAccount(Api $api): AccountData
     {
-        return $api->account()->exists()
-            ? $api->account()->get()
-            : $api->account()->create($this->email);
+        if (!$api->account()->exists()) {
+            return $api->account()->create($this->email);
+        }
+
+        try {
+            return $api->account()->get();
+        } catch (AccountNotFoundException) {
+            // The stored key was never registered (e.g. an earlier signup failed): register it now
+            $api->logger('info', 'Stored account key is not registered with the CA, creating the account.');
+
+            return $api->account()->create($this->email);
+        }
     }
 
     private function deployAndValidate(
@@ -336,30 +346,46 @@ class CoyoteCert
         // after the first has propagated leaves a partial set live long enough for the
         // CA's resolvers to cache it and reject the sibling challenge.
         $dnsHandler = $challengeHandler instanceof AbstractDns01Handler ? $challengeHandler : null;
-        $dnsHandler?->beginDeployBatch();
+        $deployed   = [];
 
-        foreach ($validationData as $item) {
-            [$token, $keyAuth] = $this->extractTokenAndKeyAuth($item);
-            $api->logger('info', sprintf('Deploy %s challenge for %s', $challengeType->value, $item->identifier));
-            $challengeHandler->deploy($item->identifier, $token, $keyAuth);
-        }
-
-        $dnsHandler?->awaitDeployedRecords();
-
-        foreach ($challenges as $domainValidation) {
-            if ($domainValidation->isValid()) {
-                continue;
-            }
-            $api->domainValidation()->start($account, $domainValidation, $challengeType, $this->localTest);
-        }
-
+        // Everything from the first deploy() on runs inside the try, so a failed deploy,
+        // propagation wait, local self-test or challenge submission still cleans up.
         try {
+            $dnsHandler?->beginDeployBatch();
+
+            foreach ($validationData as $item) {
+                [$token, $keyAuth] = $this->extractTokenAndKeyAuth($item);
+                $api->logger('info', sprintf('Deploy %s challenge for %s', $challengeType->value, $item->identifier));
+                // Tracked before the call so a deploy that fails partway is cleaned up too
+                $deployed[] = $item;
+                $challengeHandler->deploy($item->identifier, $token, $keyAuth);
+            }
+
+            $dnsHandler?->awaitDeployedRecords();
+
+            foreach ($challenges as $domainValidation) {
+                if ($domainValidation->isValid()) {
+                    continue;
+                }
+                $api->domainValidation()->start($account, $domainValidation, $challengeType, $this->localTest);
+            }
+
             $allPassed = $api->domainValidation()->allChallengesPassed($order, $this->pollAttempts);
         } finally {
-            // Always clean up deployed records, even when the CA rejects a challenge outright.
-            foreach ($validationData as $item) {
+            foreach ($deployed as $item) {
                 [$token] = $this->extractTokenAndKeyAuth($item);
-                $challengeHandler->cleanup($item->identifier, $token);
+
+                // A failed cleanup must neither mask the validation result nor skip the remaining items
+                try {
+                    $challengeHandler->cleanup($item->identifier, $token);
+                } catch (\Throwable $e) {
+                    $api->logger('warning', sprintf(
+                        'Cleanup of %s challenge for %s failed: %s',
+                        $challengeType->value,
+                        $item->identifier,
+                        $e->getMessage(),
+                    ));
+                }
             }
         }
 
@@ -426,32 +452,13 @@ class CoyoteCert
 
     private function ariWindow(StoredCertificate $cert): ?RenewalWindow
     {
-        $issuerPem = $this->extractIssuerPem($cert);
-
-        if ($issuerPem === null) {
-            return null;
-        }
-
         try {
             return (new Api(provider: $this->provider, logger: $this->logger, httpClient: $this->httpClient))
                 ->renewalInfo()
-                ->get($cert->certificate, $issuerPem);
+                ->get($cert->certificate);
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    private function extractIssuerPem(StoredCertificate $cert): ?string
-    {
-        if (empty($cert->caBundle)) {
-            return null;
-        }
-
-        if (!preg_match('~(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)~', $cert->caBundle, $m)) {
-            return null;
-        }
-
-        return $m[1];
     }
 
     private function validate(): void

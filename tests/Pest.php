@@ -245,6 +245,34 @@ namespace {
         };
     }
 
+    /**
+     * A CA-signed leaf whose Authority Key Identifier is the issuer's Subject Key
+     * Identifier, as on real CA certificates. Needed for ARI certId().
+     *
+     * @return array{0: string, 1: string} [$leafPem, $issuerPem]
+     */
+    function caSignedLeaf(int $serial = 1): array
+    {
+        $cnf = tempnam(sys_get_temp_dir(), 'cc-cnf');
+        file_put_contents($cnf, "[req]\ndistinguished_name = dn\n[dn]\n"
+            . "[v3_ca]\nsubjectKeyIdentifier = hash\nbasicConstraints = critical,CA:TRUE\n"
+            . "[v3_leaf]\nauthorityKeyIdentifier = keyid\n");
+
+        $issuerKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $issuerCsr  = openssl_csr_new(['commonName' => 'Test Issuer CA'], $issuerKey, ['config' => $cnf]);
+        $issuerCert = openssl_csr_sign($issuerCsr, null, $issuerKey, 3650, ['config' => $cnf, 'x509_extensions' => 'v3_ca', 'digest_alg' => 'sha256'], 1);
+        openssl_x509_export($issuerCert, $issuerPem);
+
+        $leafKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $leafCsr  = openssl_csr_new(['commonName' => 'leaf.example.com'], $leafKey, ['config' => $cnf]);
+        $leafCert = openssl_csr_sign($leafCsr, $issuerCert, $issuerKey, 365, ['config' => $cnf, 'x509_extensions' => 'v3_leaf', 'digest_alg' => 'sha256'], $serial);
+        openssl_x509_export($leafCert, $leafPem);
+
+        unlink($cnf);
+
+        return [$leafPem, $issuerPem];
+    }
+
     // ── Pebble integration test helpers ──────────────────────────────────────────
 
     /**

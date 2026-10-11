@@ -5,6 +5,7 @@ namespace CoyoteCert\Endpoints;
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\EabCredentials;
 use CoyoteCert\Enums\KeyType;
+use CoyoteCert\Exceptions\AccountNotFoundException;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Http\Response;
@@ -22,9 +23,18 @@ class Account extends Endpoint
         return $this->client->accountAdapter()->exists();
     }
 
+    /**
+     * Register an account. A new key is persisted only once the CA has accepted it, so a
+     * failed registration never leaves an orphaned key behind. A key that is already stored
+     * (e.g. orphaned by an older version) is registered as is.
+     */
     public function create(string $email = ''): AccountData
     {
-        $this->client->accountAdapter()->generateNewKeys();
+        $adapter    = $this->client->accountAdapter();
+        $newKeyType = $adapter->exists() ? null : $this->client->getAccountKeyType();
+        $accountKey = $newKeyType === null
+            ? $adapter->getPrivateKey()
+            : OpenSsl::openSslKeyToString(OpenSsl::generateKey($newKeyType));
 
         $payload = ['termsOfServiceAgreed' => true];
 
@@ -38,19 +48,20 @@ class Account extends Endpoint
                 ));
             }
 
-            $accountKey    = $this->client->accountAdapter()->getPrivateKey();
-            $newAccountUrl = $this->client->directory()->newAccount();
-
             $payload['externalAccountBinding'] = $this->buildEab(
                 json_encode(JsonWebKey::compute($accountKey), JSON_THROW_ON_ERROR),
-                $newAccountUrl,
+                $this->client->directory()->newAccount(),
                 $eab,
             );
         }
 
-        $response = $this->postToAccountUrl($payload);
+        $response = $this->postToAccountUrl($payload, $accountKey);
 
         if ($response->getHttpResponseCode() === 201 && $response->hasHeader('location')) {
+            if ($newKeyType !== null) {
+                $adapter->savePrivateKey($accountKey, $newKeyType);
+            }
+
             return AccountData::fromResponse($response);
         }
 
@@ -70,6 +81,12 @@ class Account extends Endpoint
 
         if ($response->getHttpResponseCode() === 200) {
             return AccountData::fromResponse($response);
+        }
+
+        if (($response->jsonBody()['type'] ?? '') === 'urn:ietf:params:acme:error:accountDoesNotExist') {
+            $this->logResponse('error', 'Account does not exist for the stored key', $response);
+
+            throw new AccountNotFoundException($response->jsonBody()['detail'] ?? 'Account does not exist.');
         }
 
         $this->throwError($response, 'Retrieving account failed');
@@ -288,21 +305,22 @@ class Account extends Endpoint
      * @param array<string, mixed> $payload
      * @return array<string, string>
      */
-    private function signPayload(array $payload): array
+    private function signPayload(array $payload, string $accountKey): array
     {
         return JsonWebSignature::generate(
             $payload,
             $this->client->directory()->newAccount(),
             $this->client->nonce()->getNew(),
-            $this->client->accountAdapter()->getPrivateKey(),
+            $accountKey,
         );
     }
 
     /** @param array<string, mixed> $payload */
-    private function postToAccountUrl(array $payload): Response
+    private function postToAccountUrl(array $payload, ?string $accountKey = null): Response
     {
-        $url  = $this->client->directory()->newAccount();
-        $send = fn() => $this->client->getHttpClient()->post($url, $this->signPayload($payload));
+        $url = $this->client->directory()->newAccount();
+        $accountKey ??= $this->client->accountAdapter()->getPrivateKey();
+        $send = fn() => $this->client->getHttpClient()->post($url, $this->signPayload($payload, $accountKey));
 
         $response = $send();
         $this->cacheResponseNonce($response);

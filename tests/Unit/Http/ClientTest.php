@@ -80,3 +80,16 @@ it('parseRawHeaders() preserves colons in header values', function () {
 
     expect($result['location'])->toBe('https://example.com:8080/path');
 });
+
+// ── Transport failures ────────────────────────────────────────────────────────
+
+it('get() throws with the curl error when the connection fails', function () {
+    // Port 1 on loopback refuses connections immediately
+    expect(fn() => (new Client(timeout: 2))->get('http://127.0.0.1:1/'))
+        ->toThrow(\CoyoteCert\Exceptions\AcmeException::class, 'GET http://127.0.0.1:1/ failed:');
+});
+
+it('post() throws with the curl error when the connection fails', function () {
+    expect(fn() => (new Client(timeout: 2))->post('http://127.0.0.1:1/', ['payload' => '']))
+        ->toThrow(\CoyoteCert\Exceptions\AcmeException::class, 'POST http://127.0.0.1:1/ failed:');
+});

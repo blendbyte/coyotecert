@@ -14,6 +14,7 @@ use CoyoteCert\Http\Response;
 use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\CustomProvider;
 use CoyoteCert\Storage\InMemoryStorage;
+use CoyoteCert\Support\Base64;
 
 // ── Mock helpers ──────────────────────────────────────────────────────────────
 
@@ -139,8 +140,8 @@ it('RenewalInfo::get() returns null when renewalInfo is absent from the director
 
     $api = makeEndpointApi(endpointMock(getBody: directoryBody(withRenewalInfo: false)), $storage);
 
-    // certPem / issuerPem are irrelevant — the null path is hit before certId() runs
-    expect($api->renewalInfo()->get('cert', 'issuer'))->toBeNull();
+    // certPem is irrelevant, the null path is hit before certId() runs
+    expect($api->renewalInfo()->get('cert'))->toBeNull();
 });
 
 // ── Order ─────────────────────────────────────────────────────────────────────
@@ -311,26 +312,6 @@ function orderDataWithAuthzUrls(array $urls): OrderData
     );
 }
 
-/**
- * Generates a self-signed leaf + issuer certificate pair.
- * Returns [$leafPem, $issuerPem].
- * serial: 1 on the leaf ensures an even-length hex serial for certId().
- */
-function makeTestCerts(): array
-{
-    $issuerKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
-    $issuerCsr  = openssl_csr_new(['commonName' => 'Test Issuer CA'], $issuerKey);
-    $issuerCert = openssl_csr_sign($issuerCsr, null, $issuerKey, 3650, serial: 1);
-    openssl_x509_export($issuerCert, $issuerPem);
-
-    $leafKey  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
-    $leafCsr  = openssl_csr_new(['commonName' => 'leaf.example.com'], $leafKey);
-    $leafCert = openssl_csr_sign($leafCsr, $issuerCert, $issuerKey, 365, serial: 1);
-    openssl_x509_export($leafCert, $leafPem);
-
-    return [$leafPem, $issuerPem];
-}
-
 // ── Account ───────────────────────────────────────────────────────────────────
 
 it('Account::get() succeeds when storage has a key and server returns 200', function () {
@@ -397,6 +378,70 @@ it('Account::create() succeeds with valid EAB credentials', function () {
 
     $account = $api->account()->create('test@example.com');
     expect($account->url)->toBe('https://acme.example/account/1');
+});
+
+it('Account::create() does not persist a new key when registration fails', function () {
+    $storage = new InMemoryStorage();
+    $api     = makeEndpointApi(endpointMock(getBody: directoryBody(), postBody: ['detail' => 'Boom'], postCode: 500), $storage);
+
+    expect(fn() => $api->account()->create())->toThrow(AcmeException::class, 'Boom');
+    expect($storage->hasAccountKey(testProvider()->getSlug()))->toBeFalse();
+});
+
+it('Account::create() persists the new key once the CA accepts it', function () {
+    $storage = new InMemoryStorage();
+    $api     = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn($url) => new Response(['location' => 'https://acme.example/account/1'], $url, 201, accountBody()),
+    ), $storage);
+
+    $api->account()->create();
+
+    expect($storage->hasAccountKey(testProvider()->getSlug()))->toBeTrue();
+});
+
+it('Account::create() registers an already stored key instead of replacing it', function () {
+    $storage = withKeyStorage();
+    $key     = $storage->getAccountKey(testProvider()->getSlug());
+    $api     = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn($url) => new Response(['location' => 'https://acme.example/account/1'], $url, 201, accountBody()),
+    ), $storage);
+
+    $api->account()->create();
+
+    expect($storage->getAccountKey(testProvider()->getSlug()))->toBe($key);
+});
+
+it('Account::get() throws AccountNotFoundException when the CA does not know the key', function () {
+    $api = makeEndpointApi(endpointMock(
+        getBody: directoryBody(),
+        postBody: ['type' => 'urn:ietf:params:acme:error:accountDoesNotExist', 'detail' => 'No account'],
+        postCode: 400,
+    ), withKeyStorage());
+
+    expect(fn() => $api->account()->get())->toThrow(\CoyoteCert\Exceptions\AccountNotFoundException::class, 'No account');
+});
+
+it('CoyoteCert registers a stored key the CA does not know instead of failing', function () {
+    $storage = withKeyStorage();
+    $key     = $storage->getAccountKey(testProvider()->getSlug());
+    $api     = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url, $jws) {
+            $payload = json_decode(Base64::urlSafeDecode($jws['payload']), true);
+
+            return isset($payload['onlyReturnExisting'])
+                ? new Response([], $url, 400, ['type' => 'urn:ietf:params:acme:error:accountDoesNotExist'])
+                : new Response(['location' => 'https://acme.example/account/1'], $url, 201, accountBody());
+        },
+    ), $storage);
+
+    $method  = new \ReflectionMethod(\CoyoteCert\CoyoteCert::class, 'getOrCreateAccount');
+    $account = $method->invoke(\CoyoteCert\CoyoteCert::with(testProvider()), $api);
+
+    expect($account->url)->toBe('https://acme.example/account/1');
+    expect($storage->getAccountKey(testProvider()->getSlug()))->toBe($key);
 });
 
 it('Account::create() succeeds without EAB when server returns 201 with location header', function () {
@@ -681,7 +726,7 @@ it('Order::get() returns OrderData on success', function () {
 
 // ── DomainValidation ──────────────────────────────────────────────────────────
 
-it('DomainValidation::status() silently skips non-200 responses', function () {
+it('DomainValidation::status() throws on a non-200 authorization response', function () {
     $api = makeEndpointApi(endpointMock(
         getBody: directoryBody(),
         postBody: ['detail' => 'Forbidden'],
@@ -690,8 +735,20 @@ it('DomainValidation::status() silently skips non-200 responses', function () {
 
     $order = orderDataWithAuthzUrls(['https://acme.example/authz/1']);
 
-    // Non-200 response is logged and skipped — no exception, empty result.
-    expect($api->domainValidation()->status($order))->toBeEmpty();
+    expect(fn() => $api->domainValidation()->status($order))->toThrow(AuthException::class, 'Forbidden');
+});
+
+it('DomainValidation::allChallengesPassed() throws instead of passing when an authorization cannot be fetched', function () {
+    $api = makeEndpointApi(endpointMock(
+        getBody: directoryBody(),
+        postBody: ['detail' => 'Internal error'],
+        postCode: 500,
+    ), withKeyStorage());
+
+    $order = orderDataWithAuthzUrls(['https://acme.example/authz/1']);
+
+    expect(fn() => $api->domainValidation()->allChallengesPassed($order))
+        ->toThrow(AcmeException::class, 'Internal error');
 });
 
 it('DomainValidation::getValidationData() builds HTTP validation item', function () {
@@ -1054,8 +1111,8 @@ it('Certificate::revoke() throws AcmeException when server rejects revocation', 
 // ── RenewalInfo ───────────────────────────────────────────────────────────────
 
 it('RenewalInfo::get() returns a RenewalWindow when server responds 200', function () {
-    $storage               = withKeyStorage();
-    [$leafPem, $issuerPem] = makeTestCerts();
+    $storage   = withKeyStorage();
+    [$leafPem] = caSignedLeaf();
 
     $renewalBody = [
         'suggestedWindow' => [
@@ -1071,15 +1128,15 @@ it('RenewalInfo::get() returns a RenewalWindow when server responds 200', functi
             : new Response([], $url, 200, directoryBody(withRenewalInfo: true)),
     );
 
-    $window = makeEndpointApi($mock, $storage)->renewalInfo()->get($leafPem, $issuerPem);
+    $window = makeEndpointApi($mock, $storage)->renewalInfo()->get($leafPem);
 
     expect($window)->not->toBeNull();
     expect($window->explanationUrl)->toBe('https://acme.example/why');
 });
 
 it('RenewalInfo::get() returns null when ARI endpoint returns non-200', function () {
-    $storage               = withKeyStorage();
-    [$leafPem, $issuerPem] = makeTestCerts();
+    $storage   = withKeyStorage();
+    [$leafPem] = caSignedLeaf();
 
     $mock = closureMock(
         getHandler: fn($url) => str_contains($url, 'ari/')
@@ -1087,7 +1144,7 @@ it('RenewalInfo::get() returns null when ARI endpoint returns non-200', function
             : new Response([], $url, 200, directoryBody(withRenewalInfo: true)),
     );
 
-    expect(makeEndpointApi($mock, $storage)->renewalInfo()->get($leafPem, $issuerPem))->toBeNull();
+    expect(makeEndpointApi($mock, $storage)->renewalInfo()->get($leafPem))->toBeNull();
 });
 
 // ── badNonce retry ────────────────────────────────────────────────────────────
@@ -1625,44 +1682,41 @@ it('Certificate::getBundle() throws AcmeException when certificateUrl is null', 
 
 // ── RenewalInfo::certId() ─────────────────────────────────────────────────────
 
-it('RenewalInfo::certId() returns a string in issuerHash.serial format', function () {
-    $storage               = withKeyStorage();
-    [$leafPem, $issuerPem] = makeTestCerts();
+it('RenewalInfo::certId() encodes the AKI key identifier and the DER serial (RFC 9773 §4.1)', function () {
+    // 0x87654321 has the high bit set, so DER needs a leading zero byte (RFC example: "AIdlQyE")
+    [$leafPem, $issuerPem] = caSignedLeaf(0x87654321);
 
     $mock   = closureMock(getHandler: fn($url) => new Response([], $url, 200, directoryBody(withRenewalInfo: true)));
-    $certId = makeEndpointApi($mock, $storage)->renewalInfo()->certId($leafPem, $issuerPem);
+    $certId = makeEndpointApi($mock, withKeyStorage())->renewalInfo()->certId($leafPem);
 
-    expect($certId)->toBeString();
-    $parts = explode('.', $certId);
-    expect($parts)->toHaveCount(2);
-    expect($parts[0])->not->toBeEmpty();
-    expect($parts[1])->not->toBeEmpty();
+    $ski = openssl_x509_parse($issuerPem)['extensions']['subjectKeyIdentifier'];
+
+    expect($certId)->toBe(Base64::urlSafeEncode(hex2bin(str_replace(':', '', $ski))) . '.AIdlQyE');
+});
+
+it('RenewalInfo::certId() does not pad a serial without the high bit set', function () {
+    [$leafPem] = caSignedLeaf(0x1234);
+
+    $mock   = closureMock(getHandler: fn($url) => new Response([], $url, 200, directoryBody(withRenewalInfo: true)));
+    $certId = makeEndpointApi($mock, withKeyStorage())->renewalInfo()->certId($leafPem);
+
+    expect(explode('.', $certId)[1])->toBe(Base64::urlSafeEncode("\x12\x34"));
 });
 
 it('RenewalInfo::certId() throws CryptoException when certPem is not a valid certificate', function () {
-    $storage               = withKeyStorage();
-    [$leafPem, $issuerPem] = makeTestCerts();
-
     $mock = closureMock(getHandler: fn($url) => new Response([], $url, 200, directoryBody(withRenewalInfo: true)));
 
-    expect(fn() => makeEndpointApi($mock, $storage)->renewalInfo()->certId('not-a-cert', $issuerPem))
+    expect(fn() => makeEndpointApi($mock, withKeyStorage())->renewalInfo()->certId('not-a-cert'))
         ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Failed to parse certificate');
 });
 
-it('RenewalInfo::certId() raises an error when issuerPem is not a valid certificate', function () {
-    $storage   = withKeyStorage();
-    [$leafPem] = makeTestCerts();
+it('RenewalInfo::certId() throws CryptoException when the certificate has no Authority Key Identifier', function () {
+    $key  = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+    $cert = openssl_csr_sign(openssl_csr_new(['commonName' => 'self.example.com'], $key), null, $key, 30, serial: 1);
+    openssl_x509_export($cert, $pem);
 
     $mock = closureMock(getHandler: fn($url) => new Response([], $url, 200, directoryBody(withRenewalInfo: true)));
 
-    // Pass garbage as issuer — openssl_get_publickey() returns false on invalid input.
-    // In PHP 8, openssl_pkey_get_details(false) then raises a TypeError before the
-    // CryptoException guard on line 64 can fire; accept either throwable type.
-    $threw = false;
-    try {
-        makeEndpointApi($mock, $storage)->renewalInfo()->certId($leafPem, 'not-a-cert');
-    } catch (\CoyoteCert\Exceptions\CryptoException|\TypeError $e) {
-        $threw = true;
-    }
-    expect($threw)->toBeTrue();
+    expect(fn() => makeEndpointApi($mock, withKeyStorage())->renewalInfo()->certId($pem))
+        ->toThrow(\CoyoteCert\Exceptions\CryptoException::class, 'Authority Key Identifier');
 });
