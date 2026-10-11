@@ -160,8 +160,8 @@ class FilesystemStorage implements StorageInterface
     }
 
     /**
-     * Read a file with a shared (read) lock to prevent reading a partially
-     * written file when a concurrent writer holds LOCK_EX.
+     * Read a file under a shared lock. Writes replace files atomically (see writeFile()),
+     * so this only matters for files written by other tools or older versions.
      */
     private function readLocked(string $path): string|false
     {
@@ -193,6 +193,11 @@ class FilesystemStorage implements StorageInterface
      */
     private function writeFile(string $path, string $contents, bool $public = false): void
     {
+        // Write through a symlinked file (e.g. one pointing into a deploy directory) instead of replacing the link
+        if (is_link($path) && ($target = realpath($path)) !== false) {
+            $path = $target;
+        }
+
         $dir = dirname($path);
 
         // Pre-check writability to avoid PHP warnings from tempnam()/rename()
@@ -205,16 +210,25 @@ class FilesystemStorage implements StorageInterface
         // tempnam() creates the file with mode 0600, so a key is never readable by others
         $tmp = tempnam($dir, '.coyote-');
 
-        if ($tmp === false || file_put_contents($tmp, $contents) === false) {
+        if ($tmp === false) {
             throw new StorageException(sprintf('Could not write storage file "%s".', $path));
         }
 
-        chmod($tmp, $public ? 0o644 : 0o600);
+        try {
+            // Failures are reported as a StorageException, not PHP warnings (e.g. a full disk)
+            $written = !is_dir($path)
+                && @file_put_contents($tmp, $contents) === strlen($contents)
+                && chmod($tmp, $public ? 0o644 : 0o600)
+                && @rename($tmp, $path);
 
-        if (!rename($tmp, $path)) {
-            unlink($tmp);
-
-            throw new StorageException(sprintf('Could not write storage file "%s".', $path));
+            if (!$written) {
+                throw new StorageException(sprintf('Could not write storage file "%s".', $path));
+            }
+        } finally {
+            // A temp file left behind could hold part of a private key
+            if (file_exists($tmp)) {
+                @unlink($tmp);
+            }
         }
     }
 }

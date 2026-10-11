@@ -52,12 +52,13 @@ class Order extends Endpoint
         }
 
         // The `replaces` hint is only an optimisation: when the CA doesn't know the certificate
-        // (malformed) or it was already replaced by an earlier, unfinished order (RFC 9773 §5,
-        // alreadyReplaced), order without it. Other errors are about the order itself.
+        // (malformed), it belongs to another account (unauthorized) or it was already replaced by
+        // an earlier, unfinished order (RFC 9773 §5, alreadyReplaced), order without it.
         $type = $response->jsonBody()['type'] ?? '';
 
         if ($replacesId !== '' && in_array($type, [
             'urn:ietf:params:acme:error:malformed',
+            'urn:ietf:params:acme:error:unauthorized',
             'urn:ietf:params:acme:error:alreadyReplaced',
         ], true)) {
             unset($payload['replaces']);

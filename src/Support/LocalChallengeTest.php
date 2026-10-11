@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace CoyoteCert\Support;
 
+use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\DomainValidationException;
 use CoyoteCert\Interfaces\HttpClientInterface;
+use Psr\Http\Client\ClientExceptionInterface;
 use RuntimeException;
 use Spatie\Dns\Dns;
 use Spatie\Dns\Records\CNAME;
@@ -22,8 +24,16 @@ class LocalChallengeTest
         HttpClientInterface $httpClient,
     ): void {
         // IPv6 identifiers (RFC 8738) need brackets in a URL; follow redirects like the CA does (RFC 8555 §8.3)
-        $host     = filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $domain . ']' : $domain;
-        $response = $httpClient->get('http://' . $host . '/.well-known/acme-challenge/' . $token, maxRedirects: 10);
+        $host = filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $domain . ']' : $domain;
+
+        try {
+            $response = $httpClient->get('http://' . $host . '/.well-known/acme-challenge/' . $token, maxRedirects: 10);
+        } catch (AcmeException|ClientExceptionInterface $e) {
+            throw new DomainValidationException(
+                sprintf('The local HTTP challenge test for %s could not connect: %s', $domain, $e->getMessage()),
+                previous: $e,
+            );
+        }
 
         if (trim($response->rawBody()) === $keyAuthorization) {
             return;

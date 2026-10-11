@@ -81,7 +81,7 @@ function hetznerZoneDetailsResponse(int $id, string $name): array
     return ['zone' => ['id' => $id, 'name' => $name]];
 }
 
-function hetznerActionResponse(string $status = 'running'): array
+function hetznerActionResponse(string $status = 'success'): array
 {
     return ['action' => ['id' => 1, 'command' => 'add_rrset_records', 'status' => $status]];
 }
@@ -324,4 +324,45 @@ it('wires the default JsonHttpClient with the Cloud API base URL and Bearer toke
 
     expect($baseUrlProp->getValue($client))->toBe('https://api.hetzner.cloud/v1');
     expect($headersProp->getValue($client))->toContain('Authorization: Bearer my-api-token');
+});
+
+it('waits for a running action to finish before the next change to the RRSet', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        ['action' => ['id' => 7, 'status' => 'running']],   // add_records accepted
+        ['action' => ['id' => 7, 'status' => 'running']],   // still running
+        ['action' => ['id' => 7, 'status' => 'success']],   // done
+    ]);
+
+    $handler->deploy('example.com', '', 'keyauth');
+
+    expect(array_column(array_slice($client->captured, 2), 'path'))->toBe(['/zones/actions/7', '/zones/actions/7']);
+});
+
+it('reports an action that fails while running', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        ['action' => ['id' => 7, 'status' => 'running']],
+        ['action' => ['id' => 7, 'status' => 'error', 'error' => ['message' => 'zone is locked']]],
+    ]);
+
+    expect(fn() => $handler->deploy('example.com', '', 'keyauth'))
+        ->toThrow(ChallengeException::class, 'Hetzner failed adding the TXT record: zone is locked');
+});
+
+it('looks a subdomain\'s zone up once per handler', function () {
+    [$client, $handler] = hetznerHandler('tok', null, [
+        ['zones' => []],
+        hetznerZoneListResponse(8, 'example.com'),
+        hetznerActionResponse(),
+        hetznerActionResponse(),
+        hetznerActionResponse(),
+    ]);
+
+    $handler->deploy('sub.example.com', '', 'base');
+    $handler->deploy('sub.example.com', '', 'wildcard');
+    $handler->cleanup('sub.example.com', '');
+
+    $lookups = array_filter($client->captured, fn($c) => $c['path'] === '/zones');
+    expect($lookups)->toHaveCount(2); // sub.example.com (miss) and example.com (hit), once
 });

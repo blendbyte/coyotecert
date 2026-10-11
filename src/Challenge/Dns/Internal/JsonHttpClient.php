@@ -115,7 +115,7 @@ class JsonHttpClient
                     $status,
                     $method,
                     parse_url($url, PHP_URL_PATH) ?: $url,
-                    $reason !== '' ? ' ' . $reason : '',
+                    $reason !== '' ? ' ' . rtrim($reason, '.') . '.' : '',
                 )),
                 $status,
             );

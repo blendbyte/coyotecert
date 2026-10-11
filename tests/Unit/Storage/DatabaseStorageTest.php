@@ -290,3 +290,16 @@ it('createTableSql() rejects an unsupported driver', function () {
     expect(fn() => DatabaseStorage::createTableSql(driver: 'sqlsrv'))
         ->toThrow(\InvalidArgumentException::class, 'Unsupported PDO driver "sqlsrv"');
 });
+
+it('rejects PDO drivers it cannot generate SQL for', function () {
+    $pdo = new class extends \PDO {
+        public function __construct() {}
+
+        public function getAttribute(int $attribute): mixed
+        {
+            return 'sqlsrv';
+        }
+    };
+
+    expect(fn() => new DatabaseStorage($pdo))->toThrow(\InvalidArgumentException::class, 'Unsupported PDO driver "sqlsrv"');
+});

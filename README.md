@@ -338,7 +338,7 @@ If a valid certificate already exists and renewal isn't due yet, the command exi
 | `--dns-skip-propagation` | | | Skip the post-deploy DNS propagation check entirely (split-horizon or internal DNS) |
 | `--provider` | `-p` | | CA to use. See provider table below. **Required** |
 | `--storage` | `-s` | `./certs` | Directory to read/write certificates and account keys |
-| `--days` | | | Renew when fewer than this many days remain. Default: the CA's ARI window, or a third of the lifetime |
+| `--days` | | | Also renew when fewer than this many days remain. Default: the CA's ARI window, or a third of the lifetime without ARI |
 | `--key-type` | | `ec256` | Certificate key type: `ec256`, `ec384`, `rsa2048`, `rsa4096` |
 | `--force` | `-f` | | Issue a fresh certificate even if the current one is still valid |
 | `--skip-caa` | | | Skip CAA DNS pre-check |
@@ -349,7 +349,7 @@ If a valid certificate already exists and renewal isn't due yet, the command exi
 
 Prefer the environment variables for the ZeroSSL key and EAB credentials: command-line arguments show up in `ps` output and shell history.
 
-**Exit codes:** `0` success (issued, or still valid), `1` issuance failed, `2` invalid usage (missing or bad options). Errors go to stderr; `-q` hides everything else.
+**Exit codes:** `0` success (issued, or still valid), `1` issuance failed, `2` invalid usage (missing, unknown or bad options and arguments). Errors go to stderr; `-q` hides everything else.
 
 **Providers**
 
@@ -359,7 +359,7 @@ Prefer the environment variables for the ZeroSSL key and EAB credentials: comman
 | `letsencrypt-staging`, `le-staging`, `staging` | Let's Encrypt (staging) |
 | `zerossl` | ZeroSSL (`--zerossl-key`, or `--eab-kid`/`--eab-hmac`) |
 | `google`, `gts` | Google Trust Services (requires EAB credentials) |
-| `sslcom`, `ssl.com` | SSL.com (requires EAB credentials) |
+| `sslcom`, `ssl.com` | SSL.com (EAB credentials optional) |
 
 **DNS providers**
 
@@ -417,7 +417,7 @@ Each row shows the domain(s), key type, status, and expiry date. The status icon
 
 ```bash
 # Recommended: randomize the start time to spread load on the CA
-0 3 * * * sleep $((RANDOM % 3600)) && coyote issue --identifier example.com --webroot /var/www/html --storage /etc/certs --email admin@example.com
+0 3 * * * sleep $((RANDOM % 3600)) && coyote issue --provider letsencrypt --identifier example.com --webroot /var/www/html --storage /etc/certs --email admin@example.com
 ```
 
 The command is idempotent: it does nothing until renewal is due, so running it daily is safe. Randomizing the start time within the hour avoids stampeding the CA at the same minute as everyone else's cron job. Let's Encrypt explicitly requests this. Set it and forget it. Unlike certain Road Runner traps, this actually works unattended. There is no separate `coyote renew` command; `issue` handles both initial issuance and renewal.
@@ -797,7 +797,7 @@ ssl_certificate     /var/certs/example.com.EC_P256.fullchain.pem;
 ssl_certificate_key /var/certs/example.com.EC_P256.private_key.pem;
 ```
 
-The directory is created automatically (mode 0700). Reads use shared locks, writes use exclusive locks, safe for concurrent processes.
+The directory is created automatically (mode 0700) and must stay writable. Every file is written to a temporary file and renamed into place, so readers (and a web server reload) never see a half-written certificate or key. A symlinked file is written through, not replaced.
 
 ### Database (PDO)
 
@@ -832,7 +832,7 @@ CREATE TABLE IF NOT EXISTS `coyote_cert_storage` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 ```
 
-PostgreSQL and SQLite (`driver: 'pgsql'` or `'sqlite'`) get a `store_key VARCHAR(255) PRIMARY KEY, value TEXT` table. Tables created by earlier versions keep working: only `store_key` (unique) and `value` are used.
+PostgreSQL and SQLite (`driver: 'pgsql'` or `'sqlite'`) get a `store_key VARCHAR(255) PRIMARY KEY, value TEXT` table. Tables created by earlier versions keep working: only `store_key` and `value` are used, and `store_key` must be the primary key or have a unique index (the upsert relies on it). Other PDO drivers are rejected when the storage is constructed.
 
 Upserts are dialect-aware: `ON CONFLICT DO UPDATE` (PostgreSQL, SQLite) and `ON DUPLICATE KEY UPDATE` (MySQL/MariaDB).
 
@@ -973,8 +973,9 @@ Returns `true` when:
 - no storage is configured
 - no certificate is stored for the primary domain
 - the stored certificate has expired, can't be read, or doesn't cover every configured identifier
+- fewer than `$daysBeforeExpiry` days remain, when you pass a threshold (this applies with or without ARI)
 - the CA's ARI renewal window has opened (see [ARI](#ari-ca-guided-renewal-windows))
-- without ARI: a third or less of the certificate's lifetime remains (30 days for a 90-day certificate, 15 for 45 days, 2 for a 6-day `shortlived` one), or fewer than `$daysBeforeExpiry` days when you pass a threshold
+- without ARI and without a threshold: a third or less of the certificate's lifetime remains (30 days for a 90-day certificate, 15 for 45 days, 2 for a 6-day `shortlived` one)
 
 ---
 
@@ -1066,7 +1067,7 @@ CoyoteCert::with(new LetsEncrypt())
 
 ## Error handling
 
-All exceptions extend `AcmeException`, so a single `catch (AcmeException $e)` covers everything. Catch the narrower types when you need to respond differently to specific failure modes.
+Exceptions raised while talking to the CA, DNS providers or storage extend `AcmeException`, so a single `catch (AcmeException $e)` covers them (invalid configuration, such as an unsupported PDO driver, throws `InvalidArgumentException`). Catch the narrower types when you need to respond differently to specific failure modes.
 
 ### Rate limits, Retry-After included
 
@@ -1130,7 +1131,8 @@ AcmeException          - base; always safe to catch
 ├── AuthException      - 401/403 (bad credentials, revoked account)
 ├── RateLimitException - 429 (too many requests); carries getRetryAfter()
 ├── CaaException       - CAA DNS record blocks issuance
-├── ChallengeException - challenge validation failed
+├── ChallengeException - challenge handler failed (DNS provider API, shell hook)
+│   └── HttpChallengeException - DNS provider API returned an HTTP error; carries $httpStatus
 ├── CryptoException    - local key or certificate operation failed
 ├── DomainValidationException - pre-flight self-check failed, or the CA marked a challenge invalid
 └── StorageException   - storage backend error
@@ -1152,7 +1154,7 @@ CoyoteCert::with(new LetsEncrypt())
 // Wildcard certificate via DNS-01
 CoyoteCert::with(new LetsEncrypt())
     ->identifiers(['example.com', '*.example.com'])
-    ->challenge(new CloudflareDns01Handler())
+    ->challenge(new CloudflareDns01Handler(apiToken: 'your-api-token'))
     ->issueOrRenew();
 ```
 
@@ -1231,7 +1233,8 @@ Randomizing the start time within the hour avoids stampeding the CA at the same 
 [RFC 9773](https://datatracker.ietf.org/doc/html/rfc9773) lets a CA tell you exactly when it wants you to renew: a specific window, not just "X days before expiry." CoyoteCert checks the ARI endpoint automatically whenever `needsRenewal()` or `issueOrRenew()` is called.
 
 - If the CA exposes a `renewalInfo` URL, its window decides: `needsRenewal()` returns `true` once the window has started, including when it has already passed (the CA may be about to revoke the certificate).
-- If the ARI request fails or the CA doesn't support ARI, CoyoteCert falls back to the lifetime rule, or to `$daysBeforeExpiry` when you pass one.
+- If the ARI request fails or the CA doesn't support ARI, CoyoteCert falls back to the lifetime rule.
+- A `$daysBeforeExpiry` threshold you pass applies in both cases, as an extra trigger next to the window.
 
 No configuration needed. It just works.
 
@@ -1483,8 +1486,8 @@ CoyoteCert::with(AcmeProviderInterface $provider)  // factory: pick your CA
 | `->onIssued(callable)` | fluent | none | Callback fired after every successful issuance; receives `StoredCertificate` |
 | `->onRenewed(callable)` | fluent | none | Callback fired when an existing cert is replaced; receives `StoredCertificate` |
 | `->issue()` | terminal | | Issue unconditionally; returns `StoredCertificate` |
-| `->issueOrRenew(int $days = 30)` | terminal | | Issue only when needed; returns `StoredCertificate` |
-| `->needsRenewal(int $days = 30)` | query | | `true` if renewal is needed |
+| `->issueOrRenew(?int $daysBeforeExpiry = null)` | terminal | | Issue only when `needsRenewal()` says so; returns `StoredCertificate` |
+| `->needsRenewal(?int $daysBeforeExpiry = null)` | query | | `true` if renewal is needed (see [needsRenewal()](#needsrenewal)) |
 | `->revoke(StoredCertificate, RevocationReason)` | terminal | | Revoke a certificate |
 
 ---
@@ -1617,7 +1620,7 @@ Same path, every run. If you are using `DatabaseStorage`, confirm the connection
 
 ### Can I get a wildcard certificate?
 
-Yes, but DNS-01 only. RFC 8555 forbids wildcard validation over HTTP-01 or TLS-ALPN-01. That is not a CoyoteCert limitation -- it is a rule carved into the RFC the same way the ACME Corporation name was stamped into every box of defective rocket skates.
+Yes, but DNS-01 only. RFC 8555 forbids wildcard validation over HTTP-01 or TLS-ALPN-01. That is not a CoyoteCert limitation; it is a rule carved into the RFC the same way the ACME Corporation name was stamped into every box of defective rocket skates.
 
 ```php
 ->identifiers(['*.example.com', 'example.com'])
@@ -1663,7 +1666,7 @@ If that TTL is the zone default (often 3600 or 86400), that is the problem. Coyo
 
 ### My DNS-01 propagation check times out, but I can see the TXT record in my DNS tool.
 
-Your DNS tool is probably querying a resolver. CoyoteCert queries the authoritative nameservers directly -- the same approach the ACME validator uses when it comes to check. If you are on split-horizon or internal DNS, the public authoritative servers may not have the record at all, and no amount of staring at your DNS dashboard will fix that.
+Your DNS tool is probably querying a resolver. CoyoteCert queries the authoritative nameservers directly, the same approach the ACME validator uses when it comes to check. If you are on split-horizon or internal DNS, the public authoritative servers may not have the record at all, and no amount of staring at your DNS dashboard will fix that.
 
 Three ways out:
 
@@ -1700,7 +1703,7 @@ Delete the old account key files (`account-letsencrypt.pem` and equivalents for 
 
 ### How do I migrate from certbot or acmephp?
 
-Point `FilesystemStorage` at a new directory and let CoyoteCert issue fresh certificates. Account formats are incompatible so there is no import path -- but there is no need for one either. New account, same domains, same webroot. Your existing certificates stay valid until they expire naturally.
+Point `FilesystemStorage` at a new directory and let CoyoteCert issue fresh certificates. Account formats are incompatible so there is no import path, but there is no need for one either. New account, same domains, same webroot. Your existing certificates stay valid until they expire naturally.
 
 If you were using HTTP-01 with a certbot webroot, the `Http01Handler` webroot path is the exact same directory certbot was writing to. CoyoteCert will walk in and take over like it was always there.
 

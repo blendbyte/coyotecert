@@ -157,3 +157,25 @@ it('followCname() stops after 10 hops without querying DNS', function () {
 
     expect($method->invoke(null, 'ns.example.test', '_acme-challenge.example.test', 10))->toBe([]);
 });
+
+it('http reports a connection failure as a DomainValidationException', function () {
+    $client = new class implements HttpClientInterface {
+        public function head(string $url): Response
+        {
+            throw new \CoyoteCert\Exceptions\AcmeException('GET failed: Connection refused');
+        }
+
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
+        {
+            throw new \CoyoteCert\Exceptions\AcmeException('GET failed: Connection refused');
+        }
+
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
+        {
+            throw new \CoyoteCert\Exceptions\AcmeException('unused');
+        }
+    };
+
+    expect(fn() => LocalChallengeTest::http('example.com', 'tok', 'tok.thumb', $client))
+        ->toThrow(DomainValidationException::class, 'could not connect: GET failed: Connection refused');
+});

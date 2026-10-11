@@ -439,7 +439,7 @@ it('needsRenewal() returns $window->isOpen() when ARI returns a valid renewal wi
         ->httpClient($mockClient, $factory, $factory)
         ->identifiers('example.com')
         ->storage($storage)
-        ->needsRenewal(30);
+        ->needsRenewal();
 
     // ARI window is far in the future, so no renewal even though only 10 days remain
     expect($result)->toBeFalse();
@@ -806,4 +806,20 @@ it('deployAndValidate() does not deploy challenges for authorizations that are a
 
     expect($handler->deployed)->toBe(['b.example.com']);
     expect($handler->cleaned)->toBe(['b.example.com']);
+});
+
+it('needsRenewal() applies an explicit day threshold even when the CA offers ARI', function () {
+    $storage = new InMemoryStorage();
+    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 20, issuedDaysAgo: 70));
+
+    // Threshold reached: true without asking ARI (the failing client proves no request is made)
+    $failing = new class implements \Psr\Http\Client\ClientInterface {
+        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
+        {
+            throw new \RuntimeException('no request expected');
+        }
+    };
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+
+    expect(makeCoyote()->httpClient($failing, $factory, $factory)->identifiers('example.com')->storage($storage)->needsRenewal(30))->toBeTrue();
 });

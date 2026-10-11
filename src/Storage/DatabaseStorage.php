@@ -14,6 +14,15 @@ class DatabaseStorage implements StorageInterface
         private readonly string $table = 'coyote_cert_storage',
     ) {
         self::validateIdentifier($this->table);
+
+        $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+
+        if (!in_array($driver, ['mysql', 'pgsql', 'sqlite'], true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unsupported PDO driver "%s": use mysql, pgsql or sqlite.',
+                is_string($driver) ? $driver : get_debug_type($driver),
+            ));
+        }
     }
 
     /**
@@ -161,7 +170,7 @@ class DatabaseStorage implements StorageInterface
 
     private function isMysql(): bool
     {
-        return !in_array($this->pdo->getAttribute(\PDO::ATTR_DRIVER_NAME), ['pgsql', 'sqlite'], true);
+        return $this->pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'mysql';
     }
 
     private static function validateIdentifier(string $name): void

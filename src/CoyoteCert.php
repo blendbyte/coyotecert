@@ -211,9 +211,9 @@ class CoyoteCert
 
     /**
      * Whether the certificate is missing, expired, no longer covers the configured identifiers,
-     * or is due for renewal. The CA's ARI window decides when available. Otherwise renewal is due
-     * once a third of the lifetime remains (30 days for a 90-day certificate, 2 for a 6-day one),
-     * or within $daysBeforeExpiry days when given.
+     * or is due for renewal. Renewal is due within $daysBeforeExpiry days when given, and when the
+     * CA's ARI window has opened. Without ARI and without a threshold, it is due once a third of
+     * the lifetime remains (30 days for a 90-day certificate, 2 for a 6-day one).
      */
     public function needsRenewal(?int $daysBeforeExpiry = null): bool
     {
@@ -227,6 +227,11 @@ class CoyoteCert
             return true;
         }
 
+        // An explicit threshold always applies, on top of the CA's ARI window when there is one
+        if ($daysBeforeExpiry !== null && $cert->remainingDays() <= $daysBeforeExpiry) {
+            return true;
+        }
+
         $window = $this->ariWindow($cert);
 
         if ($window !== null) {
@@ -234,7 +239,7 @@ class CoyoteCert
         }
 
         if ($daysBeforeExpiry !== null) {
-            return $cert->remainingDays() <= $daysBeforeExpiry;
+            return false;
         }
 
         $lifetime = $cert->expiresAt->getTimestamp() - $cert->issuedAt->getTimestamp();

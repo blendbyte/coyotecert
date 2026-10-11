@@ -8,6 +8,7 @@ use CoyoteCert\Challenge\Http01Handler;
 use CoyoteCert\Console\DnsHandlerResolver;
 use CoyoteCert\Console\ProviderResolver;
 use CoyoteCert\CoyoteCert;
+use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\AuthException;
 use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
@@ -39,7 +40,7 @@ class IssueCommand extends CoyoteCommand
             ->addOption('dns-skip-propagation', null, InputOption::VALUE_NONE, 'Skip the post-deploy DNS propagation check (use for split-horizon or internal DNS)')
             ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA to use: ' . self::PROVIDERS)
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Directory to store certificates and account keys', './certs')
-            ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Days before expiry to trigger renewal (default: the CA\'s ARI window, or when a third of the lifetime remains)')
+            ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Also renew when fewer than this many days remain (default: the CA\'s ARI window, or when a third of the lifetime remains)')
             ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Certificate key type: ' . self::KEY_TYPES, 'ec256')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Force issuance even if the certificate is still valid')
             ->addOption('skip-caa', null, InputOption::VALUE_NONE, 'Skip CAA DNS pre-check')
@@ -86,11 +87,16 @@ class IssueCommand extends CoyoteCommand
         }
 
         $storagePath = $this->stringOption($input, 'storage') ?? './certs';
-        $coyote      = CoyoteCert::with($acmeProvider)
-            ->storage(new FilesystemStorage($storagePath))
-            ->identifiers($identifiers)
-            ->challenge($challengeHandler)
-            ->keyType($keyType);
+
+        try {
+            $coyote = CoyoteCert::with($acmeProvider)
+                ->storage(new FilesystemStorage($storagePath))
+                ->identifiers($identifiers)
+                ->challenge($challengeHandler)
+                ->keyType($keyType);
+        } catch (AcmeException $e) {
+            return $this->invalid($io, $e->getMessage()); // e.g. a malformed identifier
+        }
 
         if ($output->isVerbose()) {
             $coyote->logger(new ConsoleLogger($output));

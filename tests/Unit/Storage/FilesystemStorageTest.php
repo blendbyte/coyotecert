@@ -299,3 +299,26 @@ it('replaces files atomically via rename and leaves no temp files behind', funct
     expect(fileinode($path))->not->toBe($inode);
     expect(glob($this->dir . '/.coyote-*') ?: [])->toBe([]);
 });
+
+it('leaves no temp file behind when a write fails', function () {
+    mkdir($this->dir, 0o700, true);
+    mkdir($this->dir . '/account-letsencrypt.pem'); // a directory where the key file should go: rename() fails
+
+    expect(fn() => $this->storage->saveAccountKey('letsencrypt', 'secret-key', KeyType::EC_P256))
+        ->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'Could not write');
+    expect(glob($this->dir . '/.coyote-*') ?: [])->toBe([]);
+
+    rmdir($this->dir . '/account-letsencrypt.pem');
+});
+
+it('writes through a symlinked file instead of replacing the link', function () {
+    mkdir($this->dir, 0o700, true);
+    $target = $this->dir . '/deployed-fullchain.pem';
+    file_put_contents($target, 'OLD');
+    symlink($target, $this->dir . '/example.com.EC_P256.fullchain.pem');
+
+    $this->storage->saveCertificate('example.com', makeFileCert());
+
+    expect(is_link($this->dir . '/example.com.EC_P256.fullchain.pem'))->toBeTrue();
+    expect(file_get_contents($target))->toBe(makeFileCert()->fullchain);
+});

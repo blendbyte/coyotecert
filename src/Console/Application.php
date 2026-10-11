@@ -10,8 +10,13 @@ use CoyoteCert\Console\Command\IssueCommand;
 use CoyoteCert\Console\Command\RevokeCommand;
 use CoyoteCert\Console\Command\StatusCommand;
 use Symfony\Component\Console\Application as BaseApplication;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\InvalidArgumentException;
+use Symfony\Component\Console\Exception\InvalidOptionException;
+use Symfony\Component\Console\Exception\RuntimeException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class Application extends BaseApplication
@@ -40,6 +45,21 @@ class Application extends BaseApplication
         }
 
         return parent::doRun($input, $output);
+    }
+
+    /**
+     * Symfony's own input errors (unknown option, missing value, extra argument) are usage
+     * errors too: exit with 2 like the commands' own checks, instead of Symfony's 1.
+     */
+    protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
+    {
+        try {
+            return parent::doRunCommand($command, $input, $output);
+        } catch (InvalidArgumentException|InvalidOptionException|RuntimeException $e) {
+            $this->renderThrowable($e, $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output);
+
+            return Command::INVALID;
+        }
     }
 
     public function getLongVersion(): string

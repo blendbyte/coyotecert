@@ -67,7 +67,8 @@ class Account extends Endpoint
 
         $response = $this->postToAccountUrl($payload, $accountKey);
 
-        if ($response->getHttpResponseCode() === 201 && $response->hasHeader('location')) {
+        // 201 for a new account; 200 when the stored key is already registered (RFC 8555 §7.3.1)
+        if (in_array($response->getHttpResponseCode(), [200, 201], true) && $response->hasHeader('location')) {
             if ($newKeyType !== null) {
                 $adapter->savePrivateKey($accountKey, $newKeyType);
             }

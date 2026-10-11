@@ -39,7 +39,7 @@ class HetznerDns01Handler extends AbstractDns01Handler
     private array $values = [];
 
     /**
-     * Zone cache keyed by zone name (auto-detect) or zone ID (explicit).
+     * Zone cache keyed by zone name and looked-up domain (auto-detect) or zone ID (explicit).
      *
      * @var array<string, array{id: string, name: string}>
      */
@@ -70,7 +70,7 @@ class HetznerDns01Handler extends AbstractDns01Handler
             'records' => [['value' => $value, 'comment' => 'ACME challenge']],
         ]);
 
-        $this->assertActionSucceeded($response, 'adding the TXT record');
+        $this->awaitAction($response, 'adding the TXT record');
 
         $this->values[$domain][] = $value;
         $this->awaitPropagation($domain, $keyAuthorization);
@@ -90,7 +90,7 @@ class HetznerDns01Handler extends AbstractDns01Handler
 
         unset($this->values[$domain]);
 
-        $this->assertActionSucceeded($response, 'removing the TXT records');
+        $this->awaitAction($response, 'removing the TXT records');
     }
 
     protected function deleteExistingRecords(string $domain): void
@@ -102,7 +102,7 @@ class HetznerDns01Handler extends AbstractDns01Handler
         ]);
 
         if (!empty($response['rrsets'])) {
-            $this->request('DELETE', $this->rrsetPath($domain));
+            $this->awaitAction($this->request('DELETE', $this->rrsetPath($domain)), 'deleting the old TXT records');
         }
     }
 
@@ -141,10 +141,25 @@ class HetznerDns01Handler extends AbstractDns01Handler
         return strtolower($this->relativeRecordName($domain, $zoneName));
     }
 
-    /** @param array<mixed> $response */
-    private function assertActionSucceeded(array $response, string $what): void
+    /**
+     * RRSet changes are asynchronous Cloud API actions: wait until one finishes, so the next
+     * change to the same RRSet doesn't collide with it (423 locked) and a late failure is seen.
+     *
+     * @param array<mixed> $response
+     */
+    private function awaitAction(array $response, string $what): void
     {
-        $action = Arr::array($response, 'action');
+        $action   = Arr::array($response, 'action');
+        $deadline = time() + 60;
+
+        while (Arr::stringOrNull($action, 'status') === 'running' && ($id = Arr::id($action, 'id')) !== null) {
+            if (time() >= $deadline) {
+                throw new ChallengeException(sprintf('Hetzner did not finish %s within 60 seconds.', $what));
+            }
+
+            sleep(1);
+            $action = Arr::array($this->request('GET', '/zones/actions/' . $id), 'action');
+        }
 
         if (Arr::stringOrNull($action, 'status') === 'error') {
             throw new ChallengeException(sprintf(
@@ -178,16 +193,23 @@ class HetznerDns01Handler extends AbstractDns01Handler
             return $this->zoneCache[$this->zoneId] = ['id' => $id, 'name' => $name];
         }
 
-        foreach ($this->zoneCandidates(strtolower($domain)) as $candidate) {
+        // Cached per domain too, so sub.example.com doesn't re-query its non-zone candidates on every call
+        $domain = strtolower($domain);
+
+        if (isset($this->zoneCache[$domain])) {
+            return $this->zoneCache[$domain];
+        }
+
+        foreach ($this->zoneCandidates($domain) as $candidate) {
             if (isset($this->zoneCache[$candidate])) {
-                return $this->zoneCache[$candidate];
+                return $this->zoneCache[$domain] = $this->zoneCache[$candidate];
             }
 
             $response = $this->request('GET', '/zones', queryParams: ['name' => $candidate]);
             $id       = Arr::id(Arr::arrays($response, 'zones')[0] ?? [], 'id');
 
             if ($id !== null) {
-                return $this->zoneCache[$candidate] = ['id' => $id, 'name' => $candidate];
+                return $this->zoneCache[$domain] = $this->zoneCache[$candidate] = ['id' => $id, 'name' => $candidate];
             }
         }
 

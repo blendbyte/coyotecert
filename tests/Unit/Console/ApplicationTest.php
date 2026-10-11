@@ -58,3 +58,15 @@ it('doRun delegates --help to the named command when a command is given', functi
     expect($output)->toContain('--identifier');
     expect($output)->toContain('--webroot');
 });
+
+it('exits with 2 for Symfony input errors such as an unknown option', function (array $input) {
+    $app = new Application();
+    $app->setAutoExit(false);
+    $tester = new ApplicationTester($app);
+
+    expect($tester->run($input, ['capture_stderr_separately' => true]))->toBe(2);
+    expect($tester->getErrorOutput())->not->toBe('');
+})->with([
+    'unknown option' => [['command' => 'issue', '--bogus' => true]],
+    'missing value'  => [['command' => 'status', '--identifier' => null]],
+]);

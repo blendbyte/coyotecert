@@ -104,16 +104,18 @@ class ShellDns01Handler extends AbstractDns01Handler
 
         fclose($pipes[0]);
 
-        // Drain stdout and stderr together: reading one to the end first deadlocks once the
-        // command fills the other pipe's buffer
+        // Drain stdout and stderr while the process runs: reading one to the end first deadlocks
+        // once the command fills the other pipe's buffer. The process itself (not its pipes) is
+        // watched, so a hook that closes its output and hangs still hits the timeout, and one
+        // that leaves a background child holding the pipes still counts as finished.
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
         $stderr   = '';
         $deadline = time() + $this->timeout;
 
-        while (!feof($pipes[1]) || !feof($pipes[2])) {
+        while (($status = proc_get_status($proc))['running']) {
             if (time() >= $deadline) {
-                proc_terminate($proc);
+                $this->terminate($proc);
                 fclose($pipes[1]);
                 fclose($pipes[2]);
                 proc_close($proc);
@@ -127,8 +129,9 @@ class ShellDns01Handler extends AbstractDns01Handler
             $write  = null;
             $except = null;
 
-            if (stream_select($read, $write, $except, 1) === false) {
-                break;
+            if ($read === [] || stream_select($read, $write, $except, 0, 200_000) === false) {
+                usleep(100_000);
+                continue;
             }
 
             foreach ($read as $pipe) {
@@ -140,10 +143,13 @@ class ShellDns01Handler extends AbstractDns01Handler
             }
         }
 
+        $stderr .= (string) stream_get_contents($pipes[2]);
         fclose($pipes[1]);
         fclose($pipes[2]);
+        proc_close($proc);
 
-        $exitCode = proc_close($proc);
+        // proc_get_status() reports the exit code once, when it first sees the process exited
+        $exitCode = $status['exitcode'];
         $stderr   = trim($stderr);
 
         if ($exitCode !== 0) {
@@ -152,6 +158,24 @@ class ShellDns01Handler extends AbstractDns01Handler
             throw new ChallengeException(
                 sprintf('ShellDns01Handler: "%s" exited with code %d%s', $cmdTemplate, $exitCode, $detail),
             );
+        }
+    }
+
+    /**
+     * SIGTERM first; SIGKILL when the command ignores it.
+     *
+     * @param resource $proc
+     */
+    private function terminate($proc): void
+    {
+        proc_terminate($proc);
+
+        for ($i = 0; $i < 20 && proc_get_status($proc)['running']; $i++) {
+            usleep(100_000);
+        }
+
+        if (proc_get_status($proc)['running']) {
+            proc_terminate($proc, 9);
         }
     }
 }

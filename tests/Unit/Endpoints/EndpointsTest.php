@@ -1992,3 +1992,20 @@ it('Account::create() requires EAB when the directory says so, whatever the prov
 
     expect(fn() => $api->account()->create())->toThrow(AcmeException::class, 'requires EAB credentials');
 });
+
+it('Order::new() retries without replaces when the certificate belongs to another account', function () {
+    $sent = [];
+    $api  = replacesRetryApi(403, 'urn:ietf:params:acme:error:unauthorized', $sent);
+
+    expect($api->order()->new(makeAccountData(), ['example.com'], '', 'aki.serial')->status)->toBe('pending');
+    expect($sent[1])->not->toHaveKey('replaces');
+});
+
+it('Account::create() accepts 200 for a stored key that is already registered (RFC 8555 §7.3.1)', function () {
+    $api = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn($url) => new Response(['location' => 'https://acme.example/account/9'], $url, 200, accountBody()),
+    ), withKeyStorage());
+
+    expect($api->account()->create()->url)->toBe('https://acme.example/account/9');
+});
