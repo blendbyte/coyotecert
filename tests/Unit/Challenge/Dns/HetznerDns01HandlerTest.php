@@ -69,40 +69,39 @@ function hetznerHandler(string $token, ?string $zoneId, array $responses, bool $
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-function hetznerZoneListResponse(string $id, string $name): array
+function hetznerZoneListResponse(int $id, string $name): array
 {
     return ['zones' => [['id' => $id, 'name' => $name]]];
 }
 
-function hetznerZoneDetailsResponse(string $id, string $name): array
+function hetznerZoneDetailsResponse(int $id, string $name): array
 {
     return ['zone' => ['id' => $id, 'name' => $name]];
 }
 
-function hetznerRecordResponse(string $id): array
+function hetznerActionResponse(string $status = 'running'): array
 {
-    return ['record' => ['id' => $id]];
+    return ['action' => ['id' => 1, 'command' => 'add_rrset_records', 'status' => $status]];
 }
 
 // ── deploy() with explicit zone ID ────────────────────────────────────────────
 
 it('deploy fetches zone details to resolve the zone name when zoneId is provided', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-1'),
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
 
-    expect($client->captured[0]['method'])->toBe('GET');
-    expect($client->captured[0]['path'])->toBe('/zones/zone-abc');
+    expect($client->captured[0])->toMatchArray(['method' => 'GET', 'path' => '/zones/42']);
 });
 
 it('deploy caches zone details and does not re-fetch on subsequent calls', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-1'),
-        hetznerRecordResponse('rec-2'),
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        hetznerActionResponse(),
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth1');
@@ -112,105 +111,80 @@ it('deploy caches zone details and does not re-fetch on subsequent calls', funct
     expect(count($gets))->toBe(1);
 });
 
-it('deploy uses _acme-challenge as the record name for an apex domain', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-1'),
-    ]);
-
-    $handler->deploy('example.com', '', 'keyauth');
-
-    expect($client->captured[1]['payload']['name'])->toBe('_acme-challenge');
-});
-
-it('deploy uses _acme-challenge.sub as the record name for a subdomain', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-1'),
-    ]);
-
-    $handler->deploy('sub.example.com', '', 'keyauth');
-
-    expect($client->captured[1]['payload']['name'])->toBe('_acme-challenge.sub');
-});
-
-it('deploy posts to /records with the correct full payload', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-1'),
+it('deploy adds the quoted value to the _acme-challenge TXT RRSet', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('example.com', '', 'my-key-auth');
 
     expect($client->captured[1]['method'])->toBe('POST');
-    expect($client->captured[1]['path'])->toBe('/records');
+    expect($client->captured[1]['path'])->toBe('/zones/42/rrsets/_acme-challenge/TXT/actions/add_records');
     expect($client->captured[1]['payload'])->toBe([
-        'type'    => 'TXT',
-        'name'    => '_acme-challenge',
-        'value'   => 'my-key-auth',
-        'zone_id' => 'zone-abc',
         'ttl'     => 60,
+        'records' => [['value' => '"my-key-auth"', 'comment' => 'ACME challenge']],
     ]);
 });
 
-it('deploy stores the record ID for use in cleanup', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-xyz'),
-        [],
+it('deploy uses a lower-case _acme-challenge.sub RRSet name for a subdomain', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        hetznerActionResponse(),
     ]);
 
-    $handler->deploy('example.com', '', 'keyauth');
-    $handler->cleanup('example.com', '');
+    $handler->deploy('Sub.Example.com', '', 'keyauth');
 
-    expect($client->captured[2]['path'])->toContain('rec-xyz');
+    expect($client->captured[1]['path'])->toBe('/zones/42/rrsets/_acme-challenge.sub/TXT/actions/add_records');
+});
+
+it('deploy throws when the action fails immediately', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        ['action' => ['id' => 1, 'status' => 'error', 'error' => ['code' => 'x', 'message' => 'rrset is protected']]],
+    ]);
+
+    expect(fn() => $handler->deploy('example.com', '', 'key'))
+        ->toThrow(ChallengeException::class, 'rrset is protected');
 });
 
 // ── deploy() with zone auto-detection ─────────────────────────────────────────
 
 it('deploy auto-detects zone from apex domain', function () {
     [$client, $handler] = hetznerHandler('tok', null, [
-        hetznerZoneListResponse('zone-1', 'example.com'),
-        hetznerRecordResponse('rec-1'),
+        hetznerZoneListResponse(7, 'example.com'),
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
 
-    expect($client->captured[0]['method'])->toBe('GET');
-    expect($client->captured[0]['path'])->toBe('/zones');
-    expect($client->captured[0]['queryParams'])->toBe(['name' => 'example.com']);
+    expect($client->captured[0])->toMatchArray([
+        'method'      => 'GET',
+        'path'        => '/zones',
+        'queryParams' => ['name' => 'example.com'],
+    ]);
+    expect($client->captured[1]['path'])->toBe('/zones/7/rrsets/_acme-challenge/TXT/actions/add_records');
 });
 
 it('deploy tries subdomain candidate first then falls back to apex', function () {
     [$client, $handler] = hetznerHandler('tok', null, [
-        ['zones' => []],                                    // sub.example.com → not found
-        hetznerZoneListResponse('zone-2', 'example.com'),   // example.com    → found
-        hetznerRecordResponse('rec-1'),
+        ['zones' => []],                               // sub.example.com → not found
+        hetznerZoneListResponse(8, 'example.com'),     // example.com    → found
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('sub.example.com', '', 'keyauth');
 
     expect($client->captured[0]['queryParams'])->toBe(['name' => 'sub.example.com']);
     expect($client->captured[1]['queryParams'])->toBe(['name' => 'example.com']);
-});
-
-it('deploy uses _acme-challenge.sub relative name when zone is auto-detected from apex', function () {
-    [$client, $handler] = hetznerHandler('tok', null, [
-        ['zones' => []],
-        hetznerZoneListResponse('zone-2', 'example.com'),
-        hetznerRecordResponse('rec-1'),
-    ]);
-
-    $handler->deploy('sub.example.com', '', 'keyauth');
-
-    expect($client->captured[2]['payload']['name'])->toBe('_acme-challenge.sub');
+    expect($client->captured[2]['path'])->toBe('/zones/8/rrsets/_acme-challenge.sub/TXT/actions/add_records');
 });
 
 it('deploy caches zone and does not look it up a second time', function () {
     [$client, $handler] = hetznerHandler('tok', null, [
-        hetznerZoneListResponse('zone-3', 'example.com'),
-        hetznerRecordResponse('rec-a'),
-        hetznerRecordResponse('rec-b'),
+        hetznerZoneListResponse(9, 'example.com'),
+        hetznerActionResponse(),
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth1');
@@ -223,12 +197,12 @@ it('deploy caches zone and does not look it up a second time', function () {
 // ── deploy() error handling ───────────────────────────────────────────────────
 
 it('deploy throws when the zone details response is empty', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
+    [$client, $handler] = hetznerHandler('tok', '42', [
         ['zone' => null],
     ]);
 
     expect(fn() => $handler->deploy('example.com', '', 'key'))
-        ->toThrow(ChallengeException::class, 'zone-abc');
+        ->toThrow(ChallengeException::class, '"42"');
 });
 
 it('deploy throws when no zone is found for the domain', function () {
@@ -240,55 +214,40 @@ it('deploy throws when no zone is found for the domain', function () {
         ->toThrow(ChallengeException::class, 'No Hetzner DNS zone found');
 });
 
-it('deploy throws when the API does not return a record ID', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        ['record' => null],
+it('deploy propagates a ChallengeException thrown by the HTTP client', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        new ChallengeException('API returned HTTP 401 for GET /zones/42.'),
     ]);
 
     expect(fn() => $handler->deploy('example.com', '', 'key'))
-        ->toThrow(ChallengeException::class, 'did not return a record ID');
+        ->toThrow(ChallengeException::class, 'HTTP 401');
 });
 
-it('deploy propagates a ChallengeException thrown by the HTTP client', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        new ChallengeException('API returned HTTP 403 for GET /zones/zone-abc.'),
+it('deploy explains that a Cloud API token is needed when the API answers 401', function () {
+    [$client, $handler] = hetznerHandler('old-dns-console-token', null, [
+        new \CoyoteCert\Exceptions\HttpChallengeException('Hetzner: API returned HTTP 401 for GET /v1/zones.', 401),
     ]);
 
     expect(fn() => $handler->deploy('example.com', '', 'key'))
-        ->toThrow(ChallengeException::class, 'HTTP 403');
+        ->toThrow(\CoyoteCert\Exceptions\HttpChallengeException::class, 'Use a Hetzner Cloud API token');
 });
 
 // ── cleanup() ─────────────────────────────────────────────────────────────────
 
-it('cleanup sends DELETE to /records/{id}', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-del'),
-        [],
-    ]);
+it('cleanup is a no-op when deploy was never called for the domain', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', []);
 
-    $handler->deploy('example.com', '', 'keyauth');
     $handler->cleanup('example.com', '');
 
-    expect($client->captured[2]['method'])->toBe('DELETE');
-    expect($client->captured[2]['path'])->toBe('/records/rec-del');
-});
-
-it('cleanup is a no-op when deploy was never called for the domain', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', []);
-
-    expect(fn() => $handler->cleanup('example.com', ''))->not->toThrow(\Throwable::class);
     expect($client->captured)->toBeEmpty();
 });
 
-it('cleanup deletes every record deployed for the same domain (wildcard + base)', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-base'),
-        hetznerRecordResponse('rec-wildcard'),
-        [],
-        [],
+it('cleanup removes every value deployed for the same domain (wildcard + base) in one call', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        hetznerActionResponse(),
+        hetznerActionResponse(),
+        hetznerActionResponse(),
     ]);
 
     $handler->deploy('example.com', '', 'keyauth-base');
@@ -296,61 +255,63 @@ it('cleanup deletes every record deployed for the same domain (wildcard + base)'
     $handler->cleanup('example.com', '');
     $handler->cleanup('example.com', '');  // second identifier: already cleaned
 
-    expect($client->captured)->toHaveCount(5);
-    expect($client->captured[3])->toMatchArray(['method' => 'DELETE', 'path' => '/records/rec-base']);
-    expect($client->captured[4])->toMatchArray(['method' => 'DELETE', 'path' => '/records/rec-wildcard']);
+    expect($client->captured)->toHaveCount(4);
+    expect($client->captured[3])->toMatchArray([
+        'method'  => 'POST',
+        'path'    => '/zones/42/rrsets/_acme-challenge/TXT/actions/remove_records',
+        'payload' => ['records' => [['value' => '"keyauth-base"'], ['value' => '"keyauth-wildcard"']]],
+    ]);
 });
 
-it('cleanup clears the stored record ID so a second call is a no-op', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        hetznerRecordResponse('rec-1'),
-        [],
+it('cleanup throws when the remove action fails', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        hetznerActionResponse(),
+        ['action' => ['id' => 2, 'status' => 'error', 'error' => ['message' => 'nope']]],
     ]);
 
     $handler->deploy('example.com', '', 'keyauth');
-    $handler->cleanup('example.com', '');
-    $handler->cleanup('example.com', '');  // second call: no extra request
 
-    expect($client->captured)->toHaveCount(3);
+    expect(fn() => $handler->cleanup('example.com', ''))->toThrow(ChallengeException::class, 'nope');
 });
 
 // ── Stale record purge ────────────────────────────────────────────────────────
 
-it('deploy deletes existing _acme-challenge TXT records before creating a new one', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),  // resolveZone in purge
-        ['records' => [
-            ['id' => 'stale-1', 'type' => 'TXT', 'name' => '_acme-challenge'],
-            ['id' => 'other-1', 'type' => 'A',   'name' => '_acme-challenge'],  // wrong type, skipped
-        ]],
-        [],                                   // DELETE stale-1
-        hetznerRecordResponse('rec-new'),     // create
+it('deploy deletes an existing _acme-challenge TXT RRSet before adding the new value', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        ['rrsets' => [['id' => '_acme-challenge/TXT', 'name' => '_acme-challenge', 'type' => 'TXT']]],
+        hetznerActionResponse(),               // DELETE rrset
+        hetznerActionResponse(),               // add_records
     ], withPurge: true);
 
     $handler->deploy('example.com', '', 'keyauth');
 
-    expect($client->captured[1])->toMatchArray(['method' => 'GET', 'path' => '/records']);
-    expect($client->captured[2])->toMatchArray(['method' => 'DELETE', 'path' => '/records/stale-1']);
-    expect($client->captured[3]['method'])->toBe('POST');
+    expect($client->captured[1])->toMatchArray([
+        'method'      => 'GET',
+        'path'        => '/zones/42/rrsets',
+        'queryParams' => ['name' => '_acme-challenge', 'type' => 'TXT'],
+    ]);
+    expect($client->captured[2])->toMatchArray(['method' => 'DELETE', 'path' => '/zones/42/rrsets/_acme-challenge/TXT']);
+    expect($client->captured[3]['path'])->toEndWith('/actions/add_records');
 });
 
-it('deploy does nothing when no existing records are found', function () {
-    [$client, $handler] = hetznerHandler('tok', 'zone-abc', [
-        hetznerZoneDetailsResponse('zone-abc', 'example.com'),
-        ['records' => []],
-        hetznerRecordResponse('rec-new'),
+it('deploy does not delete anything when no RRSet exists yet', function () {
+    [$client, $handler] = hetznerHandler('tok', '42', [
+        hetznerZoneDetailsResponse(42, 'example.com'),
+        ['rrsets' => []],
+        hetznerActionResponse(),
     ], withPurge: true);
 
     $handler->deploy('example.com', '', 'keyauth');
 
-    expect($client->captured[1])->toMatchArray(['method' => 'GET', 'path' => '/records']);
-    expect($client->captured[2]['method'])->toBe('POST');
+    expect($client->captured)->toHaveCount(3);
+    expect($client->captured[2]['path'])->toEndWith('/actions/add_records');
 });
 
 // ── Default client wiring ─────────────────────────────────────────────────────
 
-it('wires the default JsonHttpClient with the correct base URL and auth header', function () {
+it('wires the default JsonHttpClient with the Cloud API base URL and Bearer token', function () {
     $handler = new MockHetznerHandler('my-api-token');
 
     $clientProp = new ReflectionProperty(HetznerDns01Handler::class, 'httpClient');
@@ -359,6 +320,6 @@ it('wires the default JsonHttpClient with the correct base URL and auth header',
     $baseUrlProp = new ReflectionProperty(JsonHttpClient::class, 'baseUrl');
     $headersProp = new ReflectionProperty(JsonHttpClient::class, 'defaultHeaders');
 
-    expect($baseUrlProp->getValue($client))->toBe('https://dns.hetzner.com/api/v1');
-    expect($headersProp->getValue($client))->toContain('Auth-API-Token: my-api-token');
+    expect($baseUrlProp->getValue($client))->toBe('https://api.hetzner.cloud/v1');
+    expect($headersProp->getValue($client))->toContain('Authorization: Bearer my-api-token');
 });

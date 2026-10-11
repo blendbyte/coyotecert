@@ -684,15 +684,15 @@ $handler = new CloudflareDns01Handler(apiToken: 'your-api-token', zoneId: 'zone-
 
 ### Hetzner DNS
 
-API token from the [Hetzner DNS Console](https://dns.hetzner.com).
+Uses the [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zones). Create a read & write API token in the [Hetzner Console](https://console.hetzner.com) under your project's Security > API tokens. Tokens from the retired DNS Console (dns.hetzner.com) no longer work.
 
 ```php
 use CoyoteCert\Challenge\Dns\HetznerDns01Handler;
 
-$handler = new HetznerDns01Handler(apiToken: 'your-api-token');
+$handler = new HetznerDns01Handler(apiToken: 'your-cloud-api-token');
 
 // With explicit zone ID
-$handler = new HetznerDns01Handler(apiToken: 'your-api-token', zoneId: 'zone-id');
+$handler = new HetznerDns01Handler(apiToken: 'your-cloud-api-token', zoneId: '12345');
 ```
 
 ### DigitalOcean
