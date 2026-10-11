@@ -101,17 +101,16 @@ abstract class TlsAlpn01Handler implements ChallengeHandlerInterface
             throw new ChallengeException('Failed to generate EC key for tls-alpn-01 certificate.');
         }
 
-        $csr = openssl_csr_new(
-            ['commonName' => $domain],
-            $key,
-            ['config' => $configPath, 'x509_extensions' => 'v3_acme'],
-        );
+        // Without digest_alg the temp config has no default_md and OpenSSL signs with SHA-1
+        $options = ['config' => $configPath, 'x509_extensions' => 'v3_acme', 'digest_alg' => 'sha256'];
+
+        $csr = openssl_csr_new(['commonName' => $domain], $key, $options);
 
         if (!($csr instanceof \OpenSSLCertificateSigningRequest)) {
             throw new ChallengeException('Failed to generate CSR for tls-alpn-01 certificate.');
         }
 
-        $cert = openssl_csr_sign($csr, null, $key, 1, ['config' => $configPath, 'x509_extensions' => 'v3_acme']);
+        $cert = openssl_csr_sign($csr, null, $key, 1, $options);
 
         if ($cert === false) {
             throw new ChallengeException('Failed to sign tls-alpn-01 certificate.');
@@ -133,8 +132,10 @@ abstract class TlsAlpn01Handler implements ChallengeHandlerInterface
         return sprintf(
             "[req]\ndistinguished_name=req_dn\nx509_extensions=v3_acme\nprompt=no\n\n"
             . "[req_dn]\nCN=%s\n\n"
-            . "[v3_acme]\nsubjectAltName=DNS:%s\n1.3.6.1.5.5.7.1.31=critical,DER:%s\n",
+            . "[v3_acme]\nsubjectAltName=%s:%s\n1.3.6.1.5.5.7.1.31=critical,DER:%s\n",
             $domain,
+            // IP identifiers are validated against an IP SAN (RFC 8738 §6)
+            filter_var($domain, FILTER_VALIDATE_IP) ? 'IP' : 'DNS',
             $domain,
             $hexDer,
         );

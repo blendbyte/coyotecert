@@ -104,12 +104,15 @@ class JsonHttpClient
         }
 
         if ($status >= 400) {
+            $reason = $this->errorMessage((string) $raw);
+
             throw new HttpChallengeException(
                 $this->prefixed(sprintf(
-                    'API returned HTTP %d for %s %s.',
+                    'API returned HTTP %d for %s %s.%s',
                     $status,
                     $method,
                     parse_url($url, PHP_URL_PATH) ?: $url,
+                    $reason !== '' ? ' ' . $reason : '',
                 )),
                 $status,
             );
@@ -122,6 +125,27 @@ class JsonHttpClient
         }
 
         return json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * The provider's own explanation from an error body: Cloudflare's errors[].message,
+     * Hetzner's error.message, DigitalOcean's message, or a short excerpt of anything else.
+     */
+    private function errorMessage(string $raw): string
+    {
+        $body = json_decode($raw, true);
+
+        if (is_array($body)) {
+            $message = $body['errors'][0]['message'] ?? $body['error']['message'] ?? $body['message'] ?? null;
+
+            if (is_string($message) && $message !== '') {
+                return $message;
+            }
+        }
+
+        $raw = trim(preg_replace('/\s+/', ' ', strip_tags($raw)) ?? '');
+
+        return strlen($raw) > 200 ? substr($raw, 0, 200) . '...' : $raw;
     }
 
     private function prefixed(string $message): string

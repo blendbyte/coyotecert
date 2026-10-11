@@ -53,16 +53,21 @@ afterEach(function () {
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-function r53ZoneListXml(string $id, string $name): string
+/** @param array<string, bool> $privateById zone ID => private flag for extra zones, listed first */
+function r53ZoneListXml(string $id, string $name, array $privateById = []): string
 {
+    $zones = '';
+    foreach ([...$privateById, $id => false] as $zoneId => $private) {
+        $zones .= '<HostedZone>'
+            . '<Id>/hostedzone/' . $zoneId . '</Id>'
+            . '<Name>' . $name . '.</Name>'
+            . '<Config><PrivateZone>' . ($private ? 'true' : 'false') . '</PrivateZone></Config>'
+            . '</HostedZone>';
+    }
+
     return '<?xml version="1.0" encoding="UTF-8"?>'
         . '<ListHostedZonesByNameResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/">'
-        . '<HostedZones>'
-        . '<HostedZone>'
-        . '<Id>/hostedzone/' . $id . '</Id>'
-        . '<Name>' . $name . '.</Name>'
-        . '</HostedZone>'
-        . '</HostedZones>'
+        . '<HostedZones>' . $zones . '</HostedZones>'
         . '</ListHostedZonesByNameResponse>';
 }
 
@@ -162,9 +167,20 @@ it('deploy queries ListHostedZonesByName when no zone ID is provided', function 
     $handler->deploy('example.com', '', 'keyauth');
 
     expect($handler->captured[0]['method'])->toBe('GET');
-    expect($handler->captured[0]['path'])->toBe('/2013-04-01/hostedzone');
-    expect($handler->captured[0]['queryString'])->toContain('dnsname=example.com');
-    expect($handler->captured[0]['queryString'])->toContain('maxitems=1');
+    // ListHostedZonesByName; ListHostedZones (/hostedzone) has no dnsname filter
+    expect($handler->captured[0]['path'])->toBe('/2013-04-01/hostedzonesbyname');
+    expect($handler->captured[0]['queryString'])->toBe('dnsname=example.com&maxitems=10');
+});
+
+it('deploy skips a private hosted zone with the same name as the public one', function () {
+    $handler = new TestableRoute53Handler(null, [
+        r53ZoneListXml('ZPUBLIC', 'example.com', ['ZPRIVATE' => true]),
+        r53ChangeOkXml(),
+    ]);
+
+    $handler->deploy('example.com', '', 'keyauth');
+
+    expect($handler->captured[1]['path'])->toBe('/2013-04-01/hostedzone/ZPUBLIC/rrset');
 });
 
 it('deploy tries subdomain candidate first then falls back to apex', function () {
@@ -366,6 +382,19 @@ it('send() throws when the API returns HTTP 4xx', function () {
 
     expect(fn() => $handler->deploy('example.com', '', 'keyauth'))
         ->toThrow(ChallengeException::class, 'Route53 API returned HTTP 403');
+});
+
+it('send() includes the AWS error code and message', function () {
+    $GLOBALS['__test_curl'] = [
+        'body' => '<ErrorResponse><Error><Type>Sender</Type><Code>AccessDenied</Code>'
+            . '<Message>User is not authorized to perform route53:ChangeResourceRecordSets</Message></Error></ErrorResponse>',
+        'status' => 403,
+    ];
+
+    $handler = new Route53HandlerWithRealSend('AKID', 'secret', 'ZTEST');
+
+    expect(fn() => $handler->deploy('example.com', '', 'keyauth'))
+        ->toThrow(\CoyoteCert\Exceptions\HttpChallengeException::class, 'AccessDenied: User is not authorized');
 });
 
 it('send() returns the response body on success', function () {

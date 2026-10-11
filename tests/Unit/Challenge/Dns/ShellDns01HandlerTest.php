@@ -121,3 +121,31 @@ it('run() sets ACME_KEYAUTH in the child process environment', function () {
     expect(fn() => $handler->deploy('example.com', '', 'my-key-auth'))
         ->not->toThrow(\Throwable::class);
 });
+
+it('cleanup runs once per deployed value so the hook can remove exactly that value', function () {
+    $handler = new MockShellHandler('/hook add {domain} {keyauth}', '/hook del {domain} {keyauth}');
+    $handler->deploy('example.com', '', 'base-value');
+    $handler->deploy('example.com', '', 'wildcard-value');
+    $handler->cleanup('example.com', '_acme-challenge');
+    $handler->cleanup('example.com', '_acme-challenge'); // second identifier: already cleaned
+
+    $cleanups = array_values(array_filter($handler->calls, fn($c) => str_contains($c['cmdTemplate'], 'del')));
+    expect(array_column($cleanups, 'keyAuth'))->toBe(['base-value', 'wildcard-value']);
+});
+
+it('run() does not deadlock when the command writes a lot to stderr', function () {
+    $php     = escapeshellarg(PHP_BINARY);
+    $handler = new ShellHandlerWithRealRun($php . ' -r ' . escapeshellarg('fwrite(STDERR, str_repeat("x", 200000)); echo str_repeat("y", 200000); exit(3);'));
+
+    expect(fn() => $handler->deploy('example.com', '', 'keyauth'))
+        ->toThrow(ChallengeException::class, 'exited with code 3: xxx');
+});
+
+it('run() stops a command that runs longer than the timeout', function () {
+    $handler = new ShellHandlerWithRealRun('sleep 5', timeout: 1);
+    $start   = microtime(true);
+
+    expect(fn() => $handler->deploy('example.com', '', 'keyauth'))
+        ->toThrow(ChallengeException::class, 'did not finish within 1 seconds');
+    expect(microtime(true) - $start)->toBeLessThan(4);
+});

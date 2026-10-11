@@ -89,11 +89,11 @@ class DigitalOceanDns01Handler extends AbstractDns01Handler
 
     protected function deleteExistingRecords(string $domain): void
     {
-        $zone     = $this->resolveZone($domain);
-        $name     = $this->relativeRecordName($domain, $zone);
+        $zone = $this->resolveZone($domain);
+        // The records filter takes the fully qualified name; a relative name matches nothing
         $response = $this->httpClient->request('GET', '/domains/' . $zone . '/records', queryParams: [
             'type' => 'TXT',
-            'name' => $name,
+            'name' => $this->challengeName($domain),
         ]);
 
         foreach ($response['domain_records'] ?? [] as $record) {

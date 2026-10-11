@@ -4,6 +4,7 @@ namespace CoyoteCert\Challenge\Dns;
 
 use CoyoteCert\Challenge\Dns\Internal\AwsSigV4Signer;
 use CoyoteCert\Exceptions\ChallengeException;
+use CoyoteCert\Exceptions\HttpChallengeException;
 
 /**
  * DNS-01 challenge handler for AWS Route53.
@@ -13,8 +14,10 @@ use CoyoteCert\Exceptions\ChallengeException;
  * implemented inline using hash_hmac() / hash().
  *
  * If $zoneId is omitted the hosted zone is resolved automatically by walking the
- * domain's public-suffix candidates and querying ListHostedZonesByName. The zone
- * ID may be supplied with or without the '/hostedzone/' prefix.
+ * domain's public-suffix candidates and querying ListHostedZonesByName; private
+ * hosted zones are skipped, since the CA can't see them. The zone ID may be
+ * supplied with or without the '/hostedzone/' prefix. Pass $sessionToken when
+ * using temporary credentials (STS, SSO, EC2/ECS roles).
  *
  * Usage:
  *
@@ -47,8 +50,9 @@ class Route53Dns01Handler extends AbstractDns01Handler
         string $accessKeyId,
         string $secretAccessKey,
         private readonly ?string $zoneId = null,
+        ?string $sessionToken = null,
     ) {
-        $this->signer = new AwsSigV4Signer($accessKeyId, $secretAccessKey, 'us-east-1', 'route53');
+        $this->signer = new AwsSigV4Signer($accessKeyId, $secretAccessKey, 'us-east-1', 'route53', $sessionToken);
     }
 
     public function deploy(string $domain, string $token, string $keyAuthorization): void
@@ -101,11 +105,13 @@ class Route53Dns01Handler extends AbstractDns01Handler
                 return $this->zoneCache[$candidate];
             }
 
-            $xml   = $this->send('GET', '/' . self::API_VERSION . '/hostedzone', 'dnsname=' . rawurlencode($candidate) . '&maxitems=1', '');
+            // Listing starts at $candidate in name order, so a public and a private zone of the
+            // same name both come first
+            $xml   = $this->send('GET', '/' . self::API_VERSION . '/hostedzonesbyname', 'dnsname=' . rawurlencode($candidate) . '&maxitems=10', '');
             $zones = $this->parseHostedZones($xml);
 
             foreach ($zones as $zone) {
-                if (rtrim($zone['name'], '.') === $candidate) {
+                if (rtrim($zone['name'], '.') === $candidate && !$zone['private']) {
                     $this->zoneCache[$candidate] = $zone['id'];
 
                     return $zone['id'];
@@ -119,7 +125,7 @@ class Route53Dns01Handler extends AbstractDns01Handler
     }
 
     /**
-     * @return list<array{id: string, name: string}>
+     * @return list<array{id: string, name: string, private: bool}>
      */
     private function parseHostedZones(string $xml): array
     {
@@ -128,8 +134,9 @@ class Route53Dns01Handler extends AbstractDns01Handler
 
         foreach ($doc->HostedZones->HostedZone as $zone) {
             $zones[] = [
-                'id'   => str_replace('/hostedzone/', '', (string) $zone->Id),
-                'name' => (string) $zone->Name,
+                'id'      => str_replace('/hostedzone/', '', (string) $zone->Id),
+                'name'    => (string) $zone->Name,
+                'private' => (string) $zone->Config->PrivateZone === 'true',
             ];
         }
 
@@ -223,8 +230,14 @@ class Route53Dns01Handler extends AbstractDns01Handler
         }
 
         if ($status >= 400) {
-            throw new ChallengeException(
-                sprintf('Route53 API returned HTTP %d for %s %s.', $status, $method, $path),
+            // AWS explains the failure in <Code>/<Message>, e.g. AccessDenied or InvalidChangeBatch
+            $reason = preg_match('~<Code>(.*?)</Code>.*?<Message>(.*?)</Message>~s', (string) $raw, $m)
+                ? sprintf(' %s: %s', $m[1], html_entity_decode($m[2], ENT_XML1))
+                : '';
+
+            throw new HttpChallengeException(
+                sprintf('Route53 API returned HTTP %d for %s %s.%s', $status, $method, $path, $reason),
+                $status,
             );
         }
 

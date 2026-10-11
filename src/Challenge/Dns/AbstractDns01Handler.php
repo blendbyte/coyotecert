@@ -3,7 +3,6 @@
 namespace CoyoteCert\Challenge\Dns;
 
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
-use CoyoteCert\Exceptions\DomainValidationException;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 use CoyoteCert\Support\LocalChallengeTest;
 use Psr\Log\LoggerInterface;
@@ -219,8 +218,9 @@ abstract class AbstractDns01Handler implements ChallengeHandlerInterface
      */
     final public function beginDeployBatch(): void
     {
-        $this->batching = true;
-        $this->pending  = [];
+        $this->batching  = true;
+        $this->pending   = [];
+        $this->purgeDone = []; // a new order may reuse this handler: purge stale records again
     }
 
     /**
@@ -310,53 +310,39 @@ abstract class AbstractDns01Handler implements ChallengeHandlerInterface
      */
     protected function areTxtRecordsVisible(string $domain, array $keyAuthorizations): bool
     {
-        if ($this->logger !== null) {
-            $allVisible = true;
-            $highestTtl = 0;
+        $allVisible = true;
+        $highestTtl = 0;
 
-            foreach ($this->lookupTxt($domain) as $result) {
-                $missing    = array_diff($keyAuthorizations, $result['found']);
-                $highestTtl = max($highestTtl, $result['ttl']);
-                $this->logger->debug(sprintf(
-                    'DNS propagation check: %s (%s) → _acme-challenge.%s TXT = %s%s%s',
-                    $result['ns'],
-                    $result['ip'],
-                    $domain,
-                    empty($result['found'])
-                        ? '(none)'
-                        : implode(', ', array_map(fn($v) => '"' . $v . '"', $result['found'])),
-                    $result['ttl'] > 0 ? sprintf(' (ttl %ds)', $result['ttl']) : '',
-                    $missing === []
-                        ? ''
-                        : sprintf(' (missing %d of %d)', count($missing), count($keyAuthorizations)),
-                ));
+        foreach ($this->lookupTxt($domain) as $result) {
+            $missing    = array_diff($keyAuthorizations, $result['found']);
+            $highestTtl = max($highestTtl, $result['ttl']);
+            $allVisible = $allVisible && $missing === [];
 
-                if ($missing !== []) {
-                    $allVisible = false;
-                }
-            }
-
-            if ($allVisible) {
-                $this->logger->debug(sprintf(
-                    'All %d TXT record(s) confirmed on all nameservers: _acme-challenge.%s',
-                    count($keyAuthorizations),
-                    $domain,
-                ));
-                $this->warnOnLongTtl($domain, $highestTtl);
-            }
-
-            return $allVisible;
+            $this->logger?->debug(sprintf(
+                'DNS propagation check: %s (%s) → _acme-challenge.%s TXT = %s%s%s',
+                $result['ns'],
+                $result['ip'],
+                $domain,
+                empty($result['found'])
+                    ? '(none)'
+                    : implode(', ', array_map(fn($v) => '"' . $v . '"', $result['found'])),
+                $result['ttl'] > 0 ? sprintf(' (ttl %ds)', $result['ttl']) : '',
+                $missing === []
+                    ? ''
+                    : sprintf(' (missing %d of %d)', count($missing), count($keyAuthorizations)),
+            ));
         }
 
-        foreach ($keyAuthorizations as $keyAuthorization) {
-            try {
-                LocalChallengeTest::dns($domain, '_acme-challenge', $keyAuthorization);
-            } catch (DomainValidationException) {
-                return false;
-            }
+        if ($allVisible) {
+            $this->logger?->debug(sprintf(
+                'All %d TXT record(s) confirmed on all nameservers: _acme-challenge.%s',
+                count($keyAuthorizations),
+                $domain,
+            ));
+            $this->warnOnLongTtl($domain, $highestTtl);
         }
 
-        return true;
+        return $allVisible;
     }
 
     /**

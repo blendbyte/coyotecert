@@ -215,3 +215,16 @@ it('send() exercises the DELETE curl branch', function () {
 
     expect($client->request('DELETE', '/records/42'))->toBe([]);
 });
+
+it('send() includes the provider error message in the exception', function (string $body, string $expected) {
+    $GLOBALS['__test_curl'] = ['body' => $body, 'status' => 403];
+    $client                 = new JsonHttpClient('https://api.example.com', providerName: 'Test');
+
+    expect(fn() => $client->request('GET', '/zones'))
+        ->toThrow(ChallengeException::class, 'Test: API returned HTTP 403 for GET /zones. ' . $expected);
+})->with([
+    'cloudflare'   => ['{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}', 'Authentication error'],
+    'hetzner'      => ['{"error":{"code":"unauthorized","message":"the token you have provided is invalid"}}', 'the token you have provided is invalid'],
+    'digitalocean' => ['{"id":"forbidden","message":"You are not authorized to perform this operation"}', 'You are not authorized'],
+    'plain text'   => ['<html><body>Forbidden</body></html>', 'Forbidden'],
+]);

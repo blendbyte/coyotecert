@@ -22,7 +22,7 @@ use CoyoteCert\Challenge\Dns\ShellDns01Handler;
  *   cloudns      CLOUDNS_AUTH_ID                          CLOUDNS_AUTH_PASSWORD
  *                                               optional: CLOUDNS_ZONE
  *   route53      AWS_ACCESS_KEY_ID                        AWS_SECRET_ACCESS_KEY
- *                                               optional: AWS_ROUTE53_ZONE_ID
+ *                                               optional: AWS_ROUTE53_ZONE_ID, AWS_SESSION_TOKEN
  *   exec         DNS_DEPLOY_CMD                 optional: DNS_CLEANUP_CMD
  */
 class DnsHandlerResolver
@@ -63,6 +63,7 @@ class DnsHandlerResolver
                     self::env('AWS_ACCESS_KEY_ID', 'route53'),
                     self::env('AWS_SECRET_ACCESS_KEY', 'route53'),
                     self::optionalEnv('AWS_ROUTE53_ZONE_ID'),
+                    self::optionalEnv('AWS_SESSION_TOKEN'),
                 ),
 
             'exec', 'shell'

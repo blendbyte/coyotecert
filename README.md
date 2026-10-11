@@ -361,7 +361,7 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 | `hetzner` | `HETZNER_API_TOKEN` | `HETZNER_ZONE_ID` |
 | `digitalocean`, `do` | `DO_API_TOKEN` | `DO_ZONE` |
 | `cloudns` | `CLOUDNS_AUTH_ID`, `CLOUDNS_AUTH_PASSWORD` | `CLOUDNS_ZONE` |
-| `route53` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_ROUTE53_ZONE_ID` |
+| `route53` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (plus `AWS_SESSION_TOKEN` for temporary credentials) | `AWS_ROUTE53_ZONE_ID` |
 | `exec`, `shell` | `DNS_DEPLOY_CMD` | `DNS_CLEANUP_CMD` |
 
 Zone is auto-detected from the domain for all providers that support it. Supply the zone override to skip the detection API call or to disambiguate when the same domain appears in multiple zones.
@@ -709,7 +709,7 @@ $handler = new ClouDnsDns01Handler(authId: '12345', authPassword: 'secret', zone
 
 ### AWS Route53
 
-No AWS SDK required; SigV4 request signing is implemented directly with `hash_hmac()` and `hash()`. Needs an IAM user or role with `route53:ChangeResourceRecordSets` and `route53:ListHostedZonesByName` permissions.
+No AWS SDK required; SigV4 request signing is implemented directly with `hash_hmac()` and `hash()`. Needs an IAM user or role with `route53:ChangeResourceRecordSets` and `route53:ListHostedZonesByName` permissions. Zone auto-detection skips private hosted zones, since the CA can't see them.
 
 ```php
 use CoyoteCert\Challenge\Dns\Route53Dns01Handler;
@@ -724,6 +724,13 @@ $handler = new Route53Dns01Handler(
     accessKeyId:     'AKIAIOSFODNN7EXAMPLE',
     secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
     zoneId:          'Z1D633PJN98FT9',
+);
+
+// Temporary credentials (STS, SSO, EC2/ECS roles) also need the session token
+$handler = new Route53Dns01Handler(
+    accessKeyId:     'ASIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    sessionToken:    'IQoJb3JpZ2luX2VjEXAMPLE...',
 );
 ```
 
@@ -740,11 +747,11 @@ $handler = new ShellDns01Handler('/usr/local/bin/dns-hook {domain} {keyauth}');
 // Separate deploy and cleanup commands
 $handler = new ShellDns01Handler(
     deployCommand:  '/usr/local/bin/dns-hook add {domain} {keyauth}',
-    cleanupCommand: '/usr/local/bin/dns-hook del {domain}',
+    cleanupCommand: '/usr/local/bin/dns-hook del {domain} {keyauth}',
 );
 ```
 
-A non-zero exit code throws `ChallengeException`.
+Don't quote the placeholders; the values are already shell-escaped. The cleanup command runs once per deployed value with the same placeholders, so a hook can remove exactly the value it added (a wildcard and its base domain share one `_acme-challenge` name). A non-zero exit code, or a command running longer than the `timeout` (default 120 seconds), throws `ChallengeException`.
 
 ---
 

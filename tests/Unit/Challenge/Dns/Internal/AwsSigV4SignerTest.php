@@ -152,3 +152,11 @@ it('different regions produce different signatures', function () {
 
     expect($sig1)->not->toBe($sig2);
 });
+
+it('signs and sends the session token for temporary credentials', function () {
+    $signer  = new AwsSigV4Signer('ASIAEXAMPLE', 'secret', 'us-east-1', 'route53', 'session-token');
+    $headers = $signer->sign('GET', '/2013-04-01/hostedzonesbyname', '', '', 'application/xml', fixedNow());
+
+    expect($headers['X-Amz-Security-Token'])->toBe('session-token');
+    expect($headers['Authorization'])->toContain('SignedHeaders=content-type;host;x-amz-date;x-amz-security-token');
+});

@@ -101,3 +101,17 @@ it('generateAcmeCertificate produces a different cert for a different key author
 
     expect($a['cert'])->not->toBe($b['cert']);
 });
+
+it('generateAcmeCertificate signs with SHA-256 and puts the domain in a DNS SAN', function () {
+    $result = (new TestTlsAlpn01Handler())->exposedGenerateAcmeCertificate('example.com', 'token.thumbprint');
+    $parsed = openssl_x509_parse($result['cert']);
+
+    expect($parsed['signatureTypeSN'])->toBe('ecdsa-with-SHA256');
+    expect($parsed['extensions']['subjectAltName'])->toBe('DNS:example.com');
+});
+
+it('generateAcmeCertificate uses an IP SAN for IP identifiers (RFC 8738)', function () {
+    $result = (new TestTlsAlpn01Handler())->exposedGenerateAcmeCertificate('192.0.2.1', 'token.thumbprint');
+
+    expect(openssl_x509_parse($result['cert'])['extensions']['subjectAltName'])->toBe('IP Address:192.0.2.1');
+});

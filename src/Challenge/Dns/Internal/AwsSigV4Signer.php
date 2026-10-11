@@ -18,6 +18,8 @@ class AwsSigV4Signer
         private readonly string $secretAccessKey,
         private readonly string $region,
         private readonly string $service,
+        // Temporary credentials (STS, SSO, instance roles) also need their session token signed
+        private readonly ?string $sessionToken = null,
     ) {}
 
     /**
@@ -43,6 +45,10 @@ class AwsSigV4Signer
             'host'         => $host,
             'x-amz-date'   => $datetime,
         ];
+
+        if ($this->sessionToken !== null) {
+            $canonicalHeaderMap['x-amz-security-token'] = $this->sessionToken;
+        }
 
         ksort($canonicalHeaderMap);
 
@@ -88,7 +94,7 @@ class AwsSigV4Signer
             true,
         );
 
-        return [
+        $headers = [
             'Content-Type'  => $contentType,
             'Host'          => $host,
             'X-Amz-Date'    => $datetime,
@@ -100,5 +106,11 @@ class AwsSigV4Signer
                 hash_hmac('sha256', $stringToSign, $signingKey),
             ),
         ];
+
+        if ($this->sessionToken !== null) {
+            $headers['X-Amz-Security-Token'] = $this->sessionToken;
+        }
+
+        return $headers;
     }
 }

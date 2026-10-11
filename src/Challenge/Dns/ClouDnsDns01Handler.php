@@ -44,6 +44,8 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
     /** @var array<string, true> zone_name => true, caches confirmed zones */
     private array $zoneCache = [];
 
+    private bool $authenticated = false;
+
     private JsonHttpClient $httpClient;
 
     public function __construct(
@@ -114,17 +116,27 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
             return;
         }
 
-        $zone = $this->resolveZone($domain);
+        $zone     = $this->resolveZone($domain);
+        $failures = [];
 
         foreach ($recordIds as $recordId) {
-            $this->httpClient->request('GET', '/dns/delete-record.json', queryParams: [
+            $response = $this->httpClient->request('GET', '/dns/delete-record.json', queryParams: [
                 ...$this->auth(),
                 'domain-name' => $zone,
                 'record-id'   => $recordId,
             ]);
+
+            // ClouDNS reports failures as HTTP 200 with a Failed status
+            if (($response['status'] ?? '') !== 'Success') {
+                $failures[] = sprintf('%s (%s)', $recordId, $response['statusDescription'] ?? 'unknown error');
+            }
         }
 
         unset($this->recordIds[$domain]);
+
+        if ($failures !== []) {
+            throw new ChallengeException('ClouDNS could not delete TXT record ' . implode(', ', $failures) . '.');
+        }
     }
 
     protected function deleteExistingRecords(string $domain): void
@@ -155,19 +167,18 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
             return $this->zone;
         }
 
+        // A Failed zone lookup can't tell bad credentials from a missing zone, so check them first
+        $this->assertAuthenticated();
+
         foreach ($this->zoneCandidates($domain) as $candidate) {
             if (isset($this->zoneCache[$candidate])) {
                 return $candidate;
             }
 
-            try {
-                $response = $this->httpClient->request('GET', '/dns/get-zone-info.json', queryParams: [
-                    ...$this->auth(),
-                    'domain-name' => $candidate,
-                ]);
-            } catch (ChallengeException) {
-                continue;
-            }
+            $response = $this->httpClient->request('GET', '/dns/get-zone-info.json', queryParams: [
+                ...$this->auth(),
+                'domain-name' => $candidate,
+            ]);
 
             // ClouDNS returns HTTP 200 with {"status":"Failed"} for non-existent zones.
             if (!empty($response['name'])) {
@@ -180,6 +191,23 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
         throw new ChallengeException(
             sprintf('No ClouDNS zone found for "%s". Verify the credentials have zone access.', $domain),
         );
+    }
+
+    private function assertAuthenticated(): void
+    {
+        if ($this->authenticated) {
+            return;
+        }
+
+        $response = $this->httpClient->request('GET', '/login/login.json', queryParams: $this->auth());
+
+        if (($response['status'] ?? '') !== 'Success') {
+            throw new ChallengeException(
+                sprintf('ClouDNS login failed: %s', $response['statusDescription'] ?? 'unknown error'),
+            );
+        }
+
+        $this->authenticated = true;
     }
 
     /** @return array{auth-id: string, auth-password: string} */

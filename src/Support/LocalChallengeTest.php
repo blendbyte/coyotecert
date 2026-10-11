@@ -49,8 +49,7 @@ class LocalChallengeTest
                     continue;
                 }
 
-                $cnameRecords = self::getRecords($nameserver, $challenge, DNS_CNAME);
-                if (self::validateCnameRecords($cnameRecords, $value)) {
+                if (self::validateTxtRecords(self::followCname($nameserver, $challenge), $value)) {
                     continue;
                 }
             } catch (RuntimeException $e) {
@@ -80,30 +79,36 @@ class LocalChallengeTest
         return false;
     }
 
-    /** @param array<mixed> $records */
-    private static function validateCnameRecords(array $records, string $value, int $depth = 0): bool
+    /**
+     * TXT records at the end of a CNAME chain starting at $name, each hop queried on the
+     * target's own authoritative nameserver. CAs follow a CNAME-delegated _acme-challenge
+     * (RFC 8555 §8.4), so the check has to as well.
+     *
+     * @return array<mixed>
+     */
+    private static function followCname(string $nameserver, string $name, int $depth = 0): array
     {
         if ($depth >= 10) {
-            return false;
+            return [];
         }
 
-        foreach ($records as $record) {
-            $nameserver = self::getNameserver($record->target());
-            $txtRecords = self::getRecords($nameserver, $record->target(), DNS_TXT);
-            if (self::validateTxtRecords($txtRecords, $value)) {
-                return true;
+        foreach (self::getRecords($nameserver, $name, DNS_CNAME) as $cname) {
+            $target       = $cname->target();
+            $targetServer = self::getNameserver($target);
+            $txtRecords   = self::getRecords($targetServer, $target, DNS_TXT);
+
+            if ($txtRecords !== []) {
+                return $txtRecords;
             }
 
-            // If this is another CNAME, follow it.
-            $cnameRecords = self::getRecords($nameserver, $record->target(), DNS_CNAME);
-            if (!empty($cnameRecords)) {
-                if (self::validateCnameRecords($cnameRecords, $value, $depth + 1)) {
-                    return true;
-                }
+            $txtRecords = self::followCname($targetServer, $target, $depth + 1);
+
+            if ($txtRecords !== []) {
+                return $txtRecords;
             }
         }
 
-        return false;
+        return [];
     }
 
     public static function getNameserver(string $domain): string
@@ -138,7 +143,8 @@ class LocalChallengeTest
     }
 
     /**
-     * TXT records at _acme-challenge.{domain} queried from every authoritative NS.
+     * TXT records at _acme-challenge.{domain} queried from every authoritative NS,
+     * following a CNAME when the name has no TXT records of its own.
      *
      * The TTL is the highest one served for the record set, or 0 when the
      * nameserver returned nothing. It bounds how long a resolver in front of
@@ -152,8 +158,9 @@ class LocalChallengeTest
 
         foreach (self::getNameservers($domain) as $ns) {
             try {
-                $ip        = gethostbyname($ns);
-                $records   = self::getRecords($ns, '_acme-challenge.' . $domain, DNS_TXT);
+                $ip      = gethostbyname($ns);
+                $records = self::getRecords($ns, '_acme-challenge.' . $domain, DNS_TXT)
+                    ?: self::followCname($ns, '_acme-challenge.' . $domain);
                 $found     = array_map(fn($r) => $r->txt(), $records);
                 $ttls      = array_map(fn($r) => (int) $r->ttl(), $records);
                 $results[] = [

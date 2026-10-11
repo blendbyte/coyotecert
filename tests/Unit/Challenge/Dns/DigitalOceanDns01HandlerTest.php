@@ -296,7 +296,8 @@ it('deploy deletes existing _acme-challenge TXT records before creating a new on
     $handler->deploy('example.com', '', 'keyauth');
 
     expect($client->captured[0])->toMatchArray(['method' => 'GET', 'path' => '/domains/example.com/records']);
-    expect($client->captured[0]['queryParams'])->toMatchArray(['type' => 'TXT', 'name' => '_acme-challenge']);
+    // DigitalOcean filters on the fully qualified record name
+    expect($client->captured[0]['queryParams'])->toMatchArray(['type' => 'TXT', 'name' => '_acme-challenge.example.com']);
     expect($client->captured[1])->toMatchArray(['method' => 'DELETE', 'path' => '/domains/example.com/records/999']);
     expect($client->captured[2]['method'])->toBe('POST');
 });
