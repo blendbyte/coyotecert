@@ -1,26 +1,19 @@
 <?php
 
-use CoyoteCert\Console\Command\ListCommand;
+use CoyoteCert\Console\Command\CertsCommand;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Storage\FilesystemStorage;
 use CoyoteCert\Storage\StoredCertificate;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
-use function Termwind\renderUsing;
-
 beforeEach(function () {
-    $this->buffer  = new BufferedOutput();
     $this->dir     = sys_get_temp_dir() . '/coyote-list-test-' . uniqid();
     $this->storage = new FilesystemStorage($this->dir);
-    $this->tester  = new CommandTester(new ListCommand());
-    renderUsing($this->buffer);
+    $this->tester  = new CommandTester(new CertsCommand());
 });
 
 afterEach(function () {
-    renderUsing(null);
-
     if (is_dir($this->dir)) {
         foreach (glob($this->dir . '/*') ?: [] as $file) {
             unlink($file);
@@ -34,13 +27,15 @@ function makeListCert(
     KeyType $keyType = KeyType::EC_P256,
     array $domains = ['example.com'],
 ): StoredCertificate {
+    $expiresAt = (new DateTimeImmutable())->modify("+{$daysUntilExpiry} days");
+
     return new StoredCertificate(
         certificate: 'fake-pem',
         privateKey: 'fake-key',
         fullchain: 'fake-fullchain',
         caBundle: 'fake-cabundle',
-        issuedAt: new DateTimeImmutable('-1 day'),
-        expiresAt: (new DateTimeImmutable())->modify("+{$daysUntilExpiry} days"),
+        issuedAt: $expiresAt->modify('-90 days'),
+        expiresAt: $expiresAt,
         domains: $domains,
         keyType: $keyType,
     );
@@ -51,7 +46,7 @@ function makeListCert(
 it('fails when the storage directory does not exist', function () {
     $this->tester->execute(['--storage' => '/nonexistent/path/xyz']);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::FAILURE);
     expect($output)->toContain('Storage directory not found');
@@ -64,7 +59,7 @@ it('reports no certificates when the directory is empty', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::SUCCESS);
     expect($output)->toContain('No certificates found');
@@ -77,7 +72,7 @@ it('lists a single certificate', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::SUCCESS);
     expect($output)->toContain('example.com');
@@ -91,7 +86,7 @@ it('lists multiple certificates and shows the count', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::SUCCESS);
     expect($output)->toContain('alpha.com');
@@ -106,7 +101,7 @@ it('shows all domains for a multi-domain certificate', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($output)->toContain('www.example.com');
     expect($output)->toContain('api.example.com');
@@ -119,7 +114,7 @@ it('shows Valid status for a certificate with plenty of time remaining', functio
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('Valid');
+    expect($this->tester->getDisplay())->toContain('Valid');
 });
 
 it('shows Renewal due when between 7 and 30 days remain', function () {
@@ -127,7 +122,7 @@ it('shows Renewal due when between 7 and 30 days remain', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('Renewal due');
+    expect($this->tester->getDisplay())->toContain('Renewal due');
 });
 
 it('shows Expiring soon when fewer than 7 days remain', function () {
@@ -135,7 +130,7 @@ it('shows Expiring soon when fewer than 7 days remain', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('Expiring soon');
+    expect($this->tester->getDisplay())->toContain('Expiring soon');
 });
 
 it('shows Expired for a past-expiry certificate', function () {
@@ -153,7 +148,7 @@ it('shows Expired for a past-expiry certificate', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('Expired');
+    expect($this->tester->getDisplay())->toContain('Expired');
 });
 
 // ── Key type labels ───────────────────────────────────────────────────────────
@@ -163,7 +158,7 @@ it('shows the EC P-256 key type label', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('EC P-256');
+    expect($this->tester->getDisplay())->toContain('EC P-256');
 });
 
 it('shows the EC P-384 key type label', function () {
@@ -171,7 +166,7 @@ it('shows the EC P-384 key type label', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('EC P-384');
+    expect($this->tester->getDisplay())->toContain('EC P-384');
 });
 
 it('shows the RSA 2048 key type label', function () {
@@ -179,7 +174,7 @@ it('shows the RSA 2048 key type label', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('RSA 2048');
+    expect($this->tester->getDisplay())->toContain('RSA 2048');
 });
 
 it('shows the RSA 4096 key type label', function () {
@@ -187,7 +182,7 @@ it('shows the RSA 4096 key type label', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->buffer->fetch())->toContain('RSA 4096');
+    expect($this->tester->getDisplay())->toContain('RSA 4096');
 });
 
 // ── Filesystem edge cases ─────────────────────────────────────────────────────
@@ -199,7 +194,7 @@ it('ignores cert files with an unrecognised key type in the filename', function 
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::SUCCESS);
     expect($output)->toContain('No certificates found');
@@ -214,7 +209,7 @@ it('sorts certificates by expiry date ascending', function () {
 
     $this->tester->execute(['--storage' => $this->dir]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect(strpos($output, 'near.com'))->toBeLessThan(strpos($output, 'mid.com'));
     expect(strpos($output, 'mid.com'))->toBeLessThan(strpos($output, 'far.com'));

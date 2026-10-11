@@ -319,7 +319,7 @@ coyote issue \
   --storage /etc/certs
 ```
 
-If a valid certificate already exists and expiry is more than `--days` away, the command exits cleanly with no network requests. Pass `--force` to issue regardless.
+If a valid certificate already exists and renewal isn't due yet, the command exits cleanly without issuing. Pass `--force` to issue regardless.
 
 **Options**
 
@@ -339,9 +339,13 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 | `--force` | `-f` | | Issue a fresh certificate even if the current one is still valid |
 | `--skip-caa` | | | Skip CAA DNS pre-check |
 | `--skip-local-test` | | | Skip the HTTP pre-flight self-test |
-| `--zerossl-key` | | | ZeroSSL API key for automatic EAB provisioning |
-| `--eab-kid` | | | EAB key ID (Google Trust Services, SSL.com, or pre-provisioned ZeroSSL) |
-| `--eab-hmac` | | | EAB HMAC key |
+| `--zerossl-key` | | | ZeroSSL API key for automatic EAB provisioning. Falls back to `ZEROSSL_API_KEY` |
+| `--eab-kid` | | | EAB key ID (Google Trust Services, SSL.com, or pre-provisioned ZeroSSL). Falls back to `ACME_EAB_KID` |
+| `--eab-hmac` | | | EAB HMAC key. Falls back to `ACME_EAB_HMAC` |
+
+Prefer the environment variables for the ZeroSSL key and EAB credentials: command-line arguments show up in `ps` output and shell history.
+
+**Exit codes:** `0` success (issued, or still valid), `1` issuance failed, `2` invalid usage (missing or bad options). Errors go to stderr; `-q` hides everything else.
 
 **Providers**
 
@@ -349,9 +353,9 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 |---|---|
 | `letsencrypt`, `le` | Let's Encrypt (production) |
 | `letsencrypt-staging`, `le-staging`, `staging` | Let's Encrypt (staging) |
-| `zerossl` | ZeroSSL (use `--zerossl-key` or `--eab-kid`/`--eab-hmac`) |
-| `google`, `gts` | Google Trust Services (requires `--eab-kid` and `--eab-hmac`) |
-| `sslcom`, `ssl.com` | SSL.com (requires `--eab-kid` and `--eab-hmac`) |
+| `zerossl` | ZeroSSL (`--zerossl-key`, or `--eab-kid`/`--eab-hmac`) |
+| `google`, `gts` | Google Trust Services (requires EAB credentials) |
+| `sslcom`, `ssl.com` | SSL.com (requires EAB credentials) |
 
 **DNS providers**
 
@@ -378,16 +382,18 @@ coyote status --identifier example.com --storage /etc/certs
 |---|---|---|---|
 | `--identifier` | `-i` | | Primary identifier of the certificate to inspect |
 | `--storage` | `-s` | `./certs` | Directory where certificates are stored |
-| `--key-type` | | `ec256` | Key type to look up: `ec256`, `ec384`, `rsa2048`, `rsa4096` |
+| `--key-type` | | | Key type to look up: `ec256`, `ec384`, `rsa2048`, `rsa4096`. Default: every stored key type |
 
-The status line reflects time to expiry:
+The status reflects how much of the certificate's lifetime is left, matching the default renewal rule:
 
 | Status | Condition |
 |---|---|
-| `Valid` | More than 30 days remaining |
-| `Renewal due` | 7–30 days remaining |
-| `Expiring soon` | Fewer than 7 days remaining |
+| `Valid` | More than a third of the lifetime remaining (30 days for a 90-day certificate) |
+| `Renewal due` | A third or less remaining |
+| `Expiring soon` | A tenth or less remaining (9 days for a 90-day certificate) |
 | `Expired` | Certificate has passed its expiry date |
+
+Exits with `1` when no certificate is found or it has expired, so monitoring can alert on the exit code.
 
 ### `coyote certs`
 
@@ -428,11 +434,10 @@ coyote revoke \
 | `--identifier` | `-i` | | Primary identifier of the certificate to revoke |
 | `--provider` | `-p` | | CA the certificate was issued by. **Required** |
 | `--storage` | `-s` | `./certs` | Directory where certificates are stored |
-| `--key-type` | | `ec256` | Key type: `ec256`, `ec384`, `rsa2048`, `rsa4096` |
+| `--key-type` | | | Key type: `ec256`, `ec384`, `rsa2048`, `rsa4096`. Only needed when certificates of several key types are stored |
 | `--reason` | | `unspecified` | Revocation reason (see table below) |
-| `--zerossl-key` | | | ZeroSSL API key for EAB provisioning |
-| `--eab-kid` | | | EAB key ID |
-| `--eab-hmac` | | | EAB HMAC key |
+
+No EAB credentials are needed: revocation is signed with the stored account key.
 
 **Revocation reasons**
 

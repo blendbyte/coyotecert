@@ -17,7 +17,6 @@
     "ext-curl": "*",
     "ext-json": "*",
     "ext-openssl": "*",
-    "nunomaduro/termwind": "^2.0",
     "psr/http-client": "^1.0",
     "psr/http-factory": "^1.0",
     "psr/log": "^3.0",

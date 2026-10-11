@@ -44,6 +44,16 @@ enum KeyType: string
         };
     }
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::RSA_2048 => 'RSA 2048',
+            self::RSA_4096 => 'RSA 4096',
+            self::EC_P256  => 'EC P-256',
+            self::EC_P384  => 'EC P-384',
+        };
+    }
+
     public function isEc(): bool
     {
         return $this === self::EC_P256 || $this === self::EC_P384;

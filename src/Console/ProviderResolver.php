@@ -12,6 +12,9 @@ use CoyoteCert\Provider\ZeroSSL;
 class ProviderResolver
 {
     /**
+     * EAB credentials are only needed to register an account; pass $requireEab = false when
+     * the stored account is used as is (e.g. to revoke).
+     *
      * @throws \InvalidArgumentException for unknown provider names or missing required credentials.
      */
     public static function resolve(
@@ -19,6 +22,7 @@ class ProviderResolver
         ?string $zeroSslKey = null,
         ?string $eabKid = null,
         ?string $eabHmac = null,
+        bool    $requireEab = true,
     ): AcmeProviderInterface {
         return match (strtolower($name)) {
             'letsencrypt', 'le'
@@ -35,6 +39,7 @@ class ProviderResolver
                 $eabKid,
                 $eabHmac,
                 'Google Trust Services',
+                $requireEab,
             ),
 
             'sslcom', 'ssl.com' => self::requireEab(
@@ -42,6 +47,7 @@ class ProviderResolver
                 $eabKid,
                 $eabHmac,
                 'SSL.com',
+                $requireEab,
             ),
 
             default => throw new \InvalidArgumentException(
@@ -53,14 +59,19 @@ class ProviderResolver
         };
     }
 
-    private static function requireEab(callable $factory, ?string $kid, ?string $hmac, string $providerName): AcmeProviderInterface
-    {
-        if ($kid === null || $hmac === null) {
+    private static function requireEab(
+        callable $factory,
+        ?string $kid,
+        ?string $hmac,
+        string $providerName,
+        bool $required,
+    ): AcmeProviderInterface {
+        if ($required && ($kid === null || $hmac === null)) {
             throw new \InvalidArgumentException(
-                sprintf('%s requires --eab-kid and --eab-hmac.', $providerName),
+                sprintf('%s requires --eab-kid and --eab-hmac (or ACME_EAB_KID and ACME_EAB_HMAC).', $providerName),
             );
         }
 
-        return $factory($kid, $hmac);
+        return $factory($kid ?? '', $hmac ?? '');
     }
 }

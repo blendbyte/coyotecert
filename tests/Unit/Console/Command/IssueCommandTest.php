@@ -7,23 +7,12 @@ use CoyoteCert\Exceptions\AuthException;
 use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Storage\StoredCertificate;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
-use function Termwind\renderUsing;
-
-beforeEach(function () {
-    $this->buffer = new BufferedOutput();
-    renderUsing($this->buffer);
-});
-
-afterEach(function () {
-    renderUsing(null);
-});
+beforeEach(function () {});
 
 /**
  * Run the IssueCommand and return [statusCode, output].
- * Termwind is redirected to $this->buffer in beforeEach.
  *
  * @return array{0: int, 1: string}
  */
@@ -32,7 +21,7 @@ function runIssue(array $input): array
     $tester = new CommandTester(new IssueCommand());
     $tester->execute($input);
 
-    return [$tester->getStatusCode(), test()->buffer->fetch()];
+    return [$tester->getStatusCode(), $tester->getDisplay()];
 }
 
 // ── Input validation ──────────────────────────────────────────────────────────
@@ -40,14 +29,14 @@ function runIssue(array $input): array
 it('fails when no --identifier is provided', function () {
     [$code, $output] = runIssue([]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('No identifiers specified');
 });
 
 it('fails when neither --webroot nor --dns is provided', function () {
     [$code, $output] = runIssue(['--identifier' => ['example.com']]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('--webroot');
 });
 
@@ -57,7 +46,7 @@ it('fails when --provider is not provided', function () {
         '--webroot'    => '/tmp',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('--provider is required');
 });
 
@@ -68,7 +57,7 @@ it('fails for an unknown --provider', function () {
         '--provider'   => 'nonexistent-ca',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('nonexistent-ca');
 });
 
@@ -80,7 +69,7 @@ it('fails for an unknown --key-type', function () {
         '--key-type'   => 'rsa9999',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('rsa9999');
 });
 
@@ -91,7 +80,7 @@ it('fails for google provider without EAB credentials', function () {
         '--provider'   => 'google',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('eab-kid');
 });
 
@@ -102,7 +91,7 @@ it('fails for sslcom provider without EAB credentials', function () {
         '--provider'   => 'sslcom',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('eab-kid');
 });
 
@@ -151,15 +140,15 @@ class StubIssueCommand extends IssueCommand
 
 function runStub(mixed $result, array $input = []): array
 {
-    $tester = new CommandTester(new StubIssueCommand($result));
-    $tester->execute(array_merge([
+    $tester   = new CommandTester(new StubIssueCommand($result));
+    $defaults = [
         '--identifier' => ['example.com'],
-        '--webroot'    => '/tmp',
         '--storage'    => sys_get_temp_dir(),
         '--provider'   => 'letsencrypt',
-    ], $input));
+    ];
+    $tester->execute(array_merge($defaults, isset($input['--dns']) ? [] : ['--webroot' => '/tmp'], $input));
 
-    return [$tester->getStatusCode(), test()->buffer->fetch()];
+    return [$tester->getStatusCode(), $tester->getDisplay()];
 }
 
 it('shows success when a certificate is freshly issued', function () {
@@ -281,7 +270,7 @@ afterEach(function () {
 it('fails for an unknown --dns provider', function () {
     [$code, $output] = runStub(makeIssueCert(), ['--dns' => 'unknown-provider']);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('unknown-provider');
 });
 
@@ -290,7 +279,7 @@ it('fails when the required env var is missing for the --dns provider', function
 
     [$code, $output] = runStub(makeIssueCert(), ['--dns' => 'exec']);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('DNS_DEPLOY_CMD');
 });
 
@@ -324,4 +313,58 @@ it('applies --dns-skip-propagation when provided', function () {
     [$code] = runStub(makeIssueCert(), ['--dns' => 'exec', '--dns-skip-propagation' => true]);
 
     expect($code)->toBe(Command::SUCCESS);
+});
+
+// ── Output streams, escaping, option validation ───────────────────────────────
+
+it('writes errors to stderr and prints user input literally', function () {
+    $tester = new CommandTester(new IssueCommand());
+    $tester->execute(['--identifier' => ['example.com'], '--webroot' => '/tmp', '--provider' => '<b>x'], ['capture_stderr_separately' => true]);
+
+    expect($tester->getStatusCode())->toBe(Command::INVALID);
+    expect($tester->getDisplay())->toBe('');
+    expect($tester->getErrorOutput())->toContain('Unknown provider "<b>x"');
+});
+
+it('rejects --webroot and --dns together', function () {
+    [$code, $output] = runIssue([
+        '--identifier' => ['example.com'],
+        '--webroot'    => '/tmp',
+        '--dns'        => 'cloudflare',
+        '--provider'   => 'letsencrypt',
+    ]);
+
+    expect($code)->toBe(Command::INVALID);
+    expect($output)->toContain('exactly one of --webroot');
+});
+
+it('rejects a non-numeric --days instead of treating it as 0', function () {
+    [$code, $output] = runStub(makeIssueCert(), ['--days' => 'abc']);
+
+    expect($code)->toBe(Command::INVALID);
+    expect($output)->toContain('--days must be a whole number');
+});
+
+it('reads EAB credentials from ACME_EAB_KID and ACME_EAB_HMAC', function () {
+    putenv('ACME_EAB_KID=kid');
+    putenv('ACME_EAB_HMAC=hmac');
+
+    try {
+        [$code] = runStub(makeIssueCert(), ['--provider' => 'google']);
+    } finally {
+        putenv('ACME_EAB_KID');
+        putenv('ACME_EAB_HMAC');
+    }
+
+    expect($code)->toBe(Command::SUCCESS);
+});
+
+it('still prints errors with --quiet', function () {
+    $tester = new CommandTester(new IssueCommand());
+    $tester->execute(['--identifier' => ['example.com'], '--webroot' => '/tmp'], [
+        'capture_stderr_separately' => true,
+        'verbosity'                 => \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_QUIET,
+    ]);
+
+    expect($tester->getErrorOutput())->toContain('--provider is required');
 });

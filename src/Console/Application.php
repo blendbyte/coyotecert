@@ -3,8 +3,8 @@
 namespace CoyoteCert\Console;
 
 use Composer\InstalledVersions;
+use CoyoteCert\Console\Command\CertsCommand;
 use CoyoteCert\Console\Command\IssueCommand;
-use CoyoteCert\Console\Command\ListCommand;
 use CoyoteCert\Console\Command\RevokeCommand;
 use CoyoteCert\Console\Command\StatusCommand;
 use Symfony\Component\Console\Application as BaseApplication;
@@ -24,7 +24,7 @@ class Application extends BaseApplication
         $this->addCommands([
             new IssueCommand(),
             new StatusCommand(),
-            new ListCommand(),
+            new CertsCommand(),
             new RevokeCommand(),
         ]);
     }
@@ -43,7 +43,7 @@ class Application extends BaseApplication
     public function getLongVersion(): string
     {
         return sprintf(
-            '<info>coyote</info> <comment>%s</comment> — ACME v2 TLS certificate manager' . PHP_EOL
+            '<info>coyote</info> <comment>%s</comment>: ACME v2 TLS certificate manager' . PHP_EOL
             . '  <href=%s>%s</>',
             $this->getVersion(),
             self::REPO,
@@ -54,7 +54,7 @@ class Application extends BaseApplication
     public function getHelp(): string
     {
         return sprintf(
-            '<info>coyote</info> — ACME v2 TLS certificate manager' . PHP_EOL
+            '<info>coyote</info>: ACME v2 TLS certificate manager' . PHP_EOL
             . '  Issue, renew, and inspect certificates from <comment>Let\'s Encrypt</comment>, <comment>ZeroSSL</comment>,' . PHP_EOL
             . '  <comment>Google Trust Services</comment>, and <comment>SSL.com</comment>.' . PHP_EOL
             . PHP_EOL

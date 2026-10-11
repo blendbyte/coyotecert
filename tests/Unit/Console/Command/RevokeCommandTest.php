@@ -9,21 +9,14 @@ use CoyoteCert\Exceptions\AuthException;
 use CoyoteCert\Storage\FilesystemStorage;
 use CoyoteCert\Storage\StoredCertificate;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
-use function Termwind\renderUsing;
-
 beforeEach(function () {
-    $this->buffer  = new BufferedOutput();
     $this->dir     = sys_get_temp_dir() . '/coyote-revoke-test-' . uniqid();
     $this->storage = new FilesystemStorage($this->dir);
-    renderUsing($this->buffer);
 });
 
 afterEach(function () {
-    renderUsing(null);
-
     if (is_dir($this->dir)) {
         foreach (glob($this->dir . '/*') ?: [] as $file) {
             unlink($file);
@@ -75,7 +68,7 @@ function runRevoke(array $input, ?\Throwable $stubError = null): array
     $tester = new CommandTester(new StubRevokeCommand($stubError));
     $tester->execute($input);
 
-    return [$tester->getStatusCode(), test()->buffer->fetch()];
+    return [$tester->getStatusCode(), $tester->getDisplay()];
 }
 
 // ── Input validation ──────────────────────────────────────────────────────────
@@ -83,14 +76,14 @@ function runRevoke(array $input, ?\Throwable $stubError = null): array
 it('fails when --identifier is not provided', function () {
     [$code, $output] = runRevoke(['--provider' => 'letsencrypt']);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('--identifier is required');
 });
 
 it('fails when --provider is not provided', function () {
     [$code, $output] = runRevoke(['--identifier' => 'example.com']);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('--provider is required');
 });
 
@@ -100,7 +93,7 @@ it('fails for an unknown --provider', function () {
         '--provider'   => 'nonexistent-ca',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('nonexistent-ca');
 });
 
@@ -111,7 +104,7 @@ it('fails for an unknown --key-type', function () {
         '--key-type'   => 'rsa9999',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('rsa9999');
 });
 
@@ -122,18 +115,20 @@ it('fails for an unknown --reason', function () {
         '--reason'     => 'notareason',
     ]);
 
-    expect($code)->toBe(Command::FAILURE);
+    expect($code)->toBe(Command::INVALID);
     expect($output)->toContain('notareason');
 });
 
-it('fails for google provider without EAB credentials', function () {
+it('does not need EAB credentials to revoke with an EAB provider', function () {
+    // Revocation is signed with the stored account key; EAB is only used to register an account
     [$code, $output] = runRevoke([
         '--identifier' => 'example.com',
         '--provider'   => 'google',
+        '--storage'    => $this->dir,
     ]);
 
     expect($code)->toBe(Command::FAILURE);
-    expect($output)->toContain('eab-kid');
+    expect($output)->toContain('No certificate found')->not->toContain('eab');
 });
 
 it('fails when no certificate is found in storage', function () {
@@ -144,7 +139,7 @@ it('fails when no certificate is found in storage', function () {
         '--storage'    => $this->dir,
     ]);
 
-    $output = $this->buffer->fetch();
+    $output = $tester->getDisplay();
 
     expect($tester->getStatusCode())->toBe(Command::FAILURE);
     expect($output)->toContain('No certificate found');
@@ -235,7 +230,7 @@ it('performRevoke delegates to CoyoteCert::revoke and surfaces the AcmeException
         '--storage'    => $this->dir,
     ]);
 
-    $output = $this->buffer->fetch();
+    $output = $tester->getDisplay();
 
     // The fake cert PEM triggers AcmeException('Could not parse the certificate.')
     // inside Certificate::revoke() before any network call is made.
@@ -298,3 +293,17 @@ it('accepts all valid reason strings', function (string $reason) {
     'privilegewithdrawn',
     'aacompromise',
 ]);
+
+it('asks for --key-type when several certificates are stored for the identifier', function () {
+    $this->storage->saveCertificate('example.com', makeRevokeCert(KeyType::EC_P256));
+    $this->storage->saveCertificate('example.com', makeRevokeCert(KeyType::RSA_2048));
+
+    [$code, $output] = runRevoke([
+        '--identifier' => 'example.com',
+        '--provider'   => 'letsencrypt',
+        '--storage'    => $this->dir,
+    ]);
+
+    expect($code)->toBe(Command::INVALID);
+    expect($output)->toContain('Choose one with --key-type');
+});

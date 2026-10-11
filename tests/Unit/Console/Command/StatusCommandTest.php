@@ -5,22 +5,15 @@ use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Storage\FilesystemStorage;
 use CoyoteCert\Storage\StoredCertificate;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
-use function Termwind\renderUsing;
-
 beforeEach(function () {
-    $this->buffer  = new BufferedOutput();
     $this->dir     = sys_get_temp_dir() . '/coyote-status-test-' . uniqid();
     $this->storage = new FilesystemStorage($this->dir);
     $this->tester  = new CommandTester(new StatusCommand());
-    renderUsing($this->buffer);
 });
 
 afterEach(function () {
-    renderUsing(null);
-
     if (is_dir($this->dir)) {
         foreach (glob($this->dir . '/*') ?: [] as $file) {
             unlink($file);
@@ -41,7 +34,7 @@ function makeStatusCert(
         privateKey: 'fake-key',
         fullchain: 'fake-fullchain',
         caBundle: 'fake-cabundle',
-        issuedAt: new DateTimeImmutable('-1 day'),
+        issuedAt: $expiresAt->modify('-90 days'),
         expiresAt: $expiresAt,
         domains: $domains,
         keyType: $keyType,
@@ -53,8 +46,8 @@ function makeStatusCert(
 it('fails when --identifier is not provided', function () {
     $this->tester->execute(['--storage' => $this->dir]);
 
-    expect($this->tester->getStatusCode())->toBe(Command::FAILURE);
-    expect($this->buffer->fetch())->toContain('--identifier is required');
+    expect($this->tester->getStatusCode())->toBe(Command::INVALID);
+    expect($this->tester->getDisplay())->toContain('--identifier is required');
 });
 
 it('fails when no certificate is found in storage', function () {
@@ -63,7 +56,7 @@ it('fails when no certificate is found in storage', function () {
         '--storage'    => $this->dir,
     ]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::FAILURE);
     expect($output)->toContain('No certificate found');
@@ -77,8 +70,8 @@ it('fails for an unknown --key-type', function () {
         '--key-type'   => 'rsa9999',
     ]);
 
-    expect($this->tester->getStatusCode())->toBe(Command::FAILURE);
-    expect($this->buffer->fetch())->toContain('rsa9999');
+    expect($this->tester->getStatusCode())->toBe(Command::INVALID);
+    expect($this->tester->getDisplay())->toContain('rsa9999');
 });
 
 // ── Happy path ────────────────────────────────────────────────────────────────
@@ -91,7 +84,7 @@ it('shows cert details for a valid certificate', function () {
         '--storage'    => $this->dir,
     ]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($this->tester->getStatusCode())->toBe(Command::SUCCESS);
     expect($output)->toContain('example.com');
@@ -106,7 +99,7 @@ it('shows days remaining', function () {
         '--storage'    => $this->dir,
     ]);
 
-    expect($this->buffer->fetch())->toContain('days remaining');
+    expect($this->tester->getDisplay())->toContain('days remaining');
 });
 
 it('shows Expiring soon when fewer than 7 days remain', function () {
@@ -117,7 +110,7 @@ it('shows Expiring soon when fewer than 7 days remain', function () {
         '--storage'    => $this->dir,
     ]);
 
-    expect($this->buffer->fetch())->toContain('Expiring soon');
+    expect($this->tester->getDisplay())->toContain('Expiring soon');
 });
 
 it('shows Renewal due when between 7 and 30 days remain', function () {
@@ -128,7 +121,7 @@ it('shows Renewal due when between 7 and 30 days remain', function () {
         '--storage'    => $this->dir,
     ]);
 
-    expect($this->buffer->fetch())->toContain('Renewal due');
+    expect($this->tester->getDisplay())->toContain('Renewal due');
 });
 
 it('shows Expired for a past-expiry certificate', function () {
@@ -149,7 +142,7 @@ it('shows Expired for a past-expiry certificate', function () {
         '--storage'    => $this->dir,
     ]);
 
-    expect($this->buffer->fetch())->toContain('Expired');
+    expect($this->tester->getDisplay())->toContain('Expired');
 });
 
 it('shows the key type label', function () {
@@ -161,7 +154,7 @@ it('shows the key type label', function () {
         '--key-type'   => 'rsa2048',
     ]);
 
-    expect($this->buffer->fetch())->toContain('RSA 2048');
+    expect($this->tester->getDisplay())->toContain('RSA 2048');
 });
 
 it('shows all domains for a multi-domain certificate', function () {
@@ -173,7 +166,7 @@ it('shows all domains for a multi-domain certificate', function () {
         '--storage'    => $this->dir,
     ]);
 
-    $output = $this->buffer->fetch();
+    $output = $this->tester->getDisplay();
 
     expect($output)->toContain('www.example.com');
     expect($output)->toContain('api.example.com');
@@ -188,7 +181,7 @@ it('shows the EC P-384 key type label', function () {
         '--key-type'   => 'ec384',
     ]);
 
-    expect($this->buffer->fetch())->toContain('EC P-384');
+    expect($this->tester->getDisplay())->toContain('EC P-384');
 });
 
 it('shows the RSA 4096 key type label', function () {
@@ -200,7 +193,7 @@ it('shows the RSA 4096 key type label', function () {
         '--key-type'   => 'rsa4096',
     ]);
 
-    expect($this->buffer->fetch())->toContain('RSA 4096');
+    expect($this->tester->getDisplay())->toContain('RSA 4096');
 });
 
 it('shows SANs parsed from a real certificate', function () {
@@ -243,5 +236,22 @@ it('shows SANs parsed from a real certificate', function () {
         '--storage'    => $this->dir,
     ]);
 
-    expect($this->buffer->fetch())->toContain('www.example.com');
+    expect($this->tester->getDisplay())->toContain('www.example.com');
+});
+
+it('exits with 1 when the certificate has expired, for monitoring', function () {
+    $this->storage->saveCertificate('example.com', makeStatusCert(daysUntilExpiry: -1));
+
+    $this->tester->execute(['--identifier' => 'example.com', '--storage' => $this->dir]);
+
+    expect($this->tester->getStatusCode())->toBe(Command::FAILURE);
+});
+
+it('finds a certificate of any key type when --key-type is not given', function () {
+    $this->storage->saveCertificate('example.com', makeStatusCert(keyType: KeyType::RSA_2048));
+
+    $this->tester->execute(['--identifier' => 'Example.com', '--storage' => $this->dir]);
+
+    expect($this->tester->getStatusCode())->toBe(Command::SUCCESS);
+    expect($this->tester->getDisplay())->toContain('RSA 2048');
 });

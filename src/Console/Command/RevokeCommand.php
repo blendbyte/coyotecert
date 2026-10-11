@@ -4,7 +4,6 @@ namespace CoyoteCert\Console\Command;
 
 use CoyoteCert\Console\ProviderResolver;
 use CoyoteCert\CoyoteCert;
-use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\AuthException;
@@ -15,132 +14,82 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-
-use function Termwind\render;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'revoke', description: 'Revoke a stored certificate')]
-class RevokeCommand extends Command
+class RevokeCommand extends CoyoteCommand
 {
+    private const REASONS = 'unspecified, keycompromise, cacompromise, affiliationchanged, superseded, cessationofoperation, certificatehold, privilegewithdrawn, aacompromise';
+
     protected function configure(): void
     {
         $this
             ->addOption('identifier', 'i', InputOption::VALUE_REQUIRED, 'Primary identifier of the certificate to revoke')
             ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA the certificate was issued by: letsencrypt, letsencrypt-staging, zerossl, google, sslcom')
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Directory where certificates are stored', './certs')
-            ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Key type of the certificate: ec256, ec384, rsa2048, rsa4096', 'ec256')
-            ->addOption('reason', null, InputOption::VALUE_REQUIRED, 'Revocation reason: unspecified, keycompromise, cacompromise, affiliationchanged, superseded, cessationofoperation, certificatehold, privilegewithdrawn, aacompromise', 'unspecified')
-            ->addOption('zerossl-key', null, InputOption::VALUE_REQUIRED, 'ZeroSSL API key for EAB provisioning')
-            ->addOption('eab-kid', null, InputOption::VALUE_REQUIRED, 'EAB key ID (Google Trust Services, SSL.com, or ZeroSSL pre-provisioned)')
-            ->addOption('eab-hmac', null, InputOption::VALUE_REQUIRED, 'EAB HMAC key');
+            ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Key type of the certificate: ' . self::KEY_TYPES . ' (needed only when several are stored)')
+            ->addOption('reason', null, InputOption::VALUE_REQUIRED, 'Revocation reason: ' . self::REASONS, 'unspecified');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $io         = new SymfonyStyle($input, $output);
         $identifier = $input->getOption('identifier');
         $provider   = $input->getOption('provider');
 
         if ($identifier === null) {
-            $this->renderError('--identifier is required.');
-
-            return Command::FAILURE;
+            return $this->invalid($io, '--identifier is required.');
         }
 
         if ($provider === null) {
-            $this->renderError('--provider is required. It must match the CA that issued the certificate.');
-
-            return Command::FAILURE;
+            return $this->invalid($io, '--provider is required. It must match the CA that issued the certificate.');
         }
 
         try {
-            $acmeProvider = ProviderResolver::resolve(
-                $provider,
-                zeroSslKey: $input->getOption('zerossl-key'),
-                eabKid: $input->getOption('eab-kid'),
-                eabHmac: $input->getOption('eab-hmac'),
-            );
+            // Revocation is signed with the stored account key; EAB is only needed to register one
+            $acmeProvider = ProviderResolver::resolve($provider, requireEab: false);
+            $keyType      = $input->getOption('key-type') !== null ? $this->parseKeyType($input->getOption('key-type')) : null;
+            $reason       = $this->parseReason($input->getOption('reason'));
         } catch (\InvalidArgumentException $e) {
-            $this->renderError($e->getMessage());
-
-            return Command::FAILURE;
-        }
-
-        try {
-            $keyType = $this->resolveKeyType($input->getOption('key-type'));
-        } catch (\InvalidArgumentException $e) {
-            $this->renderError($e->getMessage());
-
-            return Command::FAILURE;
-        }
-
-        try {
-            $reason = $this->resolveReason($input->getOption('reason'));
-        } catch (\InvalidArgumentException $e) {
-            $this->renderError($e->getMessage());
-
-            return Command::FAILURE;
+            return $this->invalid($io, $e->getMessage());
         }
 
         $storagePath = $input->getOption('storage');
         $fs          = new FilesystemStorage($storagePath);
-        $cert        = $fs->getCertificate($identifier, $keyType);
+        $certs       = $this->findCertificates($fs, $identifier, $keyType);
 
-        if ($cert === null) {
-            $this->renderError(sprintf(
-                'No certificate found for %s in %s.',
-                $identifier,
-                $storagePath,
-            ));
-
-            return Command::FAILURE;
+        if ($certs === []) {
+            return $this->fail($io, sprintf('No certificate found for %s in %s.', $identifier, $storagePath));
         }
 
-        $coyote = CoyoteCert::with($acmeProvider)
-            ->storage($fs);
+        if (count($certs) > 1) {
+            return $this->invalid($io, sprintf(
+                'Several certificates are stored for %s (%s). Choose one with --key-type.',
+                $identifier,
+                implode(', ', array_map(static fn(StoredCertificate $c): string => $c->keyType->label(), $certs)),
+            ));
+        }
+
+        $cert = $certs[0];
 
         try {
-            $this->performRevoke($coyote, $cert, $reason);
+            $this->performRevoke(CoyoteCert::with($acmeProvider)->storage($fs), $cert, $reason);
         } catch (AuthException $e) {
-            $this->renderError('Authentication failed.', htmlspecialchars($e->getMessage()));
-
-            return Command::FAILURE;
+            return $this->fail($io, 'Authentication failed.', $e->getMessage());
         } catch (AcmeException $e) {
-            $this->renderError('Revocation failed.', htmlspecialchars($e->getMessage()));
-
-            return Command::FAILURE;
+            return $this->fail($io, 'Revocation failed.', $e->getMessage());
         }
 
-        render(sprintf(
-            <<<HTML
-                <div class="mt-1 mb-1">
-                    <div class="ml-2">
-                        <span class="text-green-500 font-bold">✓</span>
-                        <span class="ml-1 font-bold">Certificate revoked</span>
-                    </div>
-                    <table class="mt-1 ml-4">
-                        <tr>
-                            <td class="text-gray-500 pr-4">Identifier(s)</td>
-                            <td>%s</td>
-                        </tr>
-                        <tr>
-                            <td class="text-gray-500 pr-4">Reason</td>
-                            <td>%s</td>
-                        </tr>
-                        <tr>
-                            <td class="text-gray-500 pr-4">Provider</td>
-                            <td>%s</td>
-                        </tr>
-                        <tr>
-                            <td class="text-gray-500 pr-4">Storage</td>
-                            <td>%s</td>
-                        </tr>
-                    </table>
-                </div>
-                HTML,
-            implode(', ', $cert->domains),
-            $reason->name,
-            $acmeProvider->getDisplayName(),
-            $storagePath,
-        ));
+        $io->newLine();
+        $io->writeln(' <fg=green;options=bold>✓</> <options=bold>Certificate revoked</>');
+        $io->newLine();
+
+        $this->details($io, [
+            'Identifier(s)' => implode(', ', $cert->domains),
+            'Reason'        => $reason->name,
+            'Provider'      => $acmeProvider->getDisplayName(),
+            'Storage'       => $storagePath,
+        ]);
 
         return Command::SUCCESS;
     }
@@ -150,20 +99,7 @@ class RevokeCommand extends Command
         $coyote->revoke($cert, $reason);
     }
 
-    private function resolveKeyType(string $type): KeyType
-    {
-        return match (strtolower($type)) {
-            'ec256', 'ec-p256', 'p256' => KeyType::EC_P256,
-            'ec384', 'ec-p384', 'p384' => KeyType::EC_P384,
-            'rsa2048'                  => KeyType::RSA_2048,
-            'rsa4096'                  => KeyType::RSA_4096,
-            default                    => throw new \InvalidArgumentException(
-                sprintf('Unknown key type "%s". Supported: ec256, ec384, rsa2048, rsa4096.', $type),
-            ),
-        };
-    }
-
-    private function resolveReason(string $reason): RevocationReason
+    private function parseReason(string $reason): RevocationReason
     {
         return match (strtolower($reason)) {
             'unspecified'          => RevocationReason::Unspecified,
@@ -176,32 +112,8 @@ class RevokeCommand extends Command
             'privilegewithdrawn'   => RevocationReason::PrivilegeWithdrawn,
             'aacompromise'         => RevocationReason::AaCompromise,
             default                => throw new \InvalidArgumentException(
-                sprintf(
-                    'Unknown reason "%s". Supported: unspecified, keycompromise, cacompromise, affiliationchanged, superseded, cessationofoperation, certificatehold, privilegewithdrawn, aacompromise.',
-                    $reason,
-                ),
+                sprintf('Unknown reason "%s". Supported: %s.', $reason, self::REASONS),
             ),
         };
-    }
-
-    private function renderError(string $message, string $detail = ''): void
-    {
-        $detailHtml = $detail !== ''
-            ? sprintf('<div class="ml-4 mt-1 text-red-400">%s</div>', $detail)
-            : '';
-
-        render(sprintf(
-            <<<HTML
-                <div class="mt-1 mb-1">
-                    <div class="ml-2">
-                        <span class="text-red-500 font-bold">✗</span>
-                        <span class="ml-1 text-red-500">%s</span>
-                    </div>
-                    %s
-                </div>
-                HTML,
-            $message,
-            $detailHtml,
-        ));
     }
 }
