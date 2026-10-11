@@ -8,6 +8,8 @@ use CoyoteCert\Exceptions\DomainValidationException;
 use CoyoteCert\Interfaces\HttpClientInterface;
 use RuntimeException;
 use Spatie\Dns\Dns;
+use Spatie\Dns\Records\CNAME;
+use Spatie\Dns\Records\TXT;
 
 class LocalChallengeTest
 {
@@ -44,8 +46,8 @@ class LocalChallengeTest
             $lookupError = null;
 
             try {
-                $txtRecords = self::getRecords($nameserver, $challenge, DNS_TXT);
-                $foundTxt   = array_map(fn($r) => $r->txt(), $txtRecords);
+                $txtRecords = self::txtRecords($nameserver, $challenge);
+                $foundTxt   = array_map(static fn(TXT $r): string => $r->txt(), $txtRecords);
 
                 if (self::validateTxtRecords($txtRecords, $value)) {
                     continue;
@@ -69,7 +71,7 @@ class LocalChallengeTest
         }
     }
 
-    /** @param array<mixed> $records */
+    /** @param list<TXT> $records */
     private static function validateTxtRecords(array $records, string $value): bool
     {
         foreach ($records as $record) {
@@ -86,7 +88,7 @@ class LocalChallengeTest
      * target's own authoritative nameserver. CAs follow a CNAME-delegated _acme-challenge
      * (RFC 8555 §8.4), so the check has to as well.
      *
-     * @return array<mixed>
+     * @return list<TXT>
      */
     private static function followCname(string $nameserver, string $name, int $depth = 0): array
     {
@@ -94,10 +96,10 @@ class LocalChallengeTest
             return [];
         }
 
-        foreach (self::getRecords($nameserver, $name, DNS_CNAME) as $cname) {
+        foreach (self::cnameRecords($nameserver, $name) as $cname) {
             $target       = $cname->target();
             $targetServer = self::getNameserver($target);
-            $txtRecords   = self::getRecords($targetServer, $target, DNS_TXT);
+            $txtRecords   = self::txtRecords($targetServer, $target);
 
             if ($txtRecords !== []) {
                 return $txtRecords;
@@ -161,10 +163,10 @@ class LocalChallengeTest
         foreach (self::getNameservers($domain) as $ns) {
             try {
                 $ip      = gethostbyname($ns);
-                $records = self::getRecords($ns, '_acme-challenge.' . $domain, DNS_TXT)
+                $records = self::txtRecords($ns, '_acme-challenge.' . $domain)
                     ?: self::followCname($ns, '_acme-challenge.' . $domain);
-                $found     = array_map(fn($r) => $r->txt(), $records);
-                $ttls      = array_map(fn($r) => (int) $r->ttl(), $records);
+                $found     = array_map(static fn(TXT $r): string => $r->txt(), $records);
+                $ttls      = array_map(static fn(TXT $r): int => (int) $r->ttl(), $records);
                 $results[] = [
                     'ns'    => $ns,
                     'ip'    => $ip !== $ns ? $ip : 'unresolved',
@@ -177,6 +179,18 @@ class LocalChallengeTest
         }
 
         return $results;
+    }
+
+    /** @return list<TXT> */
+    private static function txtRecords(string $nameserver, string $name): array
+    {
+        return array_values(array_filter(self::getRecords($nameserver, $name, DNS_TXT), static fn($r): bool => $r instanceof TXT));
+    }
+
+    /** @return list<CNAME> */
+    private static function cnameRecords(string $nameserver, string $name): array
+    {
+        return array_values(array_filter(self::getRecords($nameserver, $name, DNS_CNAME), static fn($r): bool => $r instanceof CNAME));
     }
 
     /** @return array<mixed> */

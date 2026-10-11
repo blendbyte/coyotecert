@@ -6,6 +6,7 @@ namespace CoyoteCert\Endpoints;
 
 use CoyoteCert\DTO\RenewalWindow;
 use CoyoteCert\Exceptions\CryptoException;
+use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\Base64;
 use DateTimeImmutable;
 
@@ -26,16 +27,17 @@ class RenewalInfo extends Endpoint
             return null;
         }
 
-        $body  = $response->jsonBody();
-        $start = new DateTimeImmutable($body['suggestedWindow']['start']);
-        $end   = new DateTimeImmutable($body['suggestedWindow']['end']);
+        $body   = $response->jsonBody();
+        $window = Arr::array($body, 'suggestedWindow');
+        $start  = new DateTimeImmutable(Arr::string($window, 'start'));
+        $end    = new DateTimeImmutable(Arr::string($window, 'end'));
 
         // RFC 9773 §4.2: a window that ends before it starts is treated as no response
         if ($end <= $start) {
             return null;
         }
 
-        return new RenewalWindow(start: $start, end: $end, explanationUrl: $body['explanationURL'] ?? null);
+        return new RenewalWindow(start: $start, end: $end, explanationUrl: Arr::stringOrNull($body, 'explanationURL'));
     }
 
     /** RFC 9773 §4.1: base64url(AKI keyIdentifier) "." base64url(DER serial number). */

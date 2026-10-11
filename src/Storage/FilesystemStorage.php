@@ -6,6 +6,7 @@ namespace CoyoteCert\Storage;
 
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\StorageException;
+use CoyoteCert\Support\Arr;
 
 class FilesystemStorage implements StorageInterface
 {
@@ -28,7 +29,7 @@ class FilesystemStorage implements StorageInterface
     {
         $meta = json_decode($this->readFile($this->accountMetaPath($providerSlug)), true, 512, JSON_THROW_ON_ERROR);
 
-        return KeyType::from($meta['key_type']);
+        return KeyType::from(Arr::string(is_array($meta) ? $meta : [], 'key_type'));
     }
 
     public function saveAccountKey(string $providerSlug, string $pem, KeyType $type): void
@@ -56,9 +57,7 @@ class FilesystemStorage implements StorageInterface
             return null;
         }
 
-        $data = json_decode($this->readFile($path), true, 512, JSON_THROW_ON_ERROR);
-
-        return StoredCertificate::fromArray($data);
+        return StoredCertificate::fromJson($this->readFile($path));
     }
 
     public function saveCertificate(string $domain, StoredCertificate $cert): void

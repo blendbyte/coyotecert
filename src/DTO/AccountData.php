@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace CoyoteCert\DTO;
 
 use CoyoteCert\Http\Response;
+use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\Url;
 
 readonly class AccountData
 {
     /**
-     * @param array<string, mixed> $key
-     * @param string[] $contact Contact URIs, e.g. ['mailto:admin@example.com']
+     * @param array<mixed> $key
+     * @param list<string> $contact Contact URIs, e.g. ['mailto:admin@example.com']
      */
     public function __construct(
         public string  $id,
@@ -25,26 +26,25 @@ readonly class AccountData
 
     public static function fromResponse(Response $response): AccountData
     {
-        $url = trim($response->getHeader('location', ''));
-
-        return self::fromBody($url, $response->jsonBody());
+        return self::fromBody($response->getHeaderLine('location'), $response->jsonBody());
     }
 
     /**
      * Build from an account URL and a response body array.
      * Used for update/deactivate responses where the Location header is absent.
+     *
+     * @param array<mixed> $body
      */
-    /** @param array<string, mixed> $body */
     public static function fromBody(string $url, array $body): AccountData
     {
         return new self(
             id: Url::extractId($url),
             url: $url,
-            key: $body['key'] ?? [], // optional in RFC 8555 account objects
-            status: $body['status'],
-            agreement: $body['agreement'] ?? '',
-            createdAt: $body['createdAt'] ?? null,
-            contact: $body['contact']     ?? [],
+            key: Arr::array($body, 'key'), // optional in RFC 8555 account objects
+            status: Arr::string($body, 'status'),
+            agreement: Arr::stringOrNull($body, 'agreement') ?? '',
+            createdAt: Arr::stringOrNull($body, 'createdAt'),
+            contact: Arr::strings($body, 'contact'),
         );
     }
 }

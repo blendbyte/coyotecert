@@ -8,7 +8,7 @@ readonly class Response
 {
     /**
      * @param array<string, mixed> $headers
-     * @param array<string, mixed>|string $body
+     * @param array<mixed>|string $body
      */
     public function __construct(
         private array $headers,
@@ -22,6 +22,14 @@ readonly class Response
         return $this->headers[$name] ?? $default;
     }
 
+    /** A header as a string, or '' when it is missing (like PSR-7's getHeaderLine()). */
+    public function getHeaderLine(string $name): string
+    {
+        $value = $this->headers[$name] ?? '';
+
+        return is_scalar($value) ? trim((string) $value) : '';
+    }
+
     /** @return array<string, mixed> */
     public function getHeaders(): array
     {
@@ -33,13 +41,13 @@ readonly class Response
         return isset($this->headers[$name]);
     }
 
-    /** @return array<string, mixed>|string */
+    /** @return array<mixed>|string */
     public function getBody(): array|string
     {
         return $this->body;
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<mixed> */
     public function jsonBody(): array
     {
         return is_array($this->body) ? $this->body : [];

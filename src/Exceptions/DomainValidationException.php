@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CoyoteCert\Exceptions;
 
+use CoyoteCert\Support\Arr;
+
 class DomainValidationException extends AcmeException
 {
     public static function localHttpChallengeTestFailed(string $domain, string $code): self
@@ -51,22 +53,22 @@ class DomainValidationException extends AcmeException
     }
 
     /**
-     * @param array<int, array<string, mixed>> $errors
+     * @param list<array{domainValidationType: string, error: array<mixed>}> $errors
      */
     public static function challengeInvalid(string $domain, array $errors): self
     {
         $details = array_map(
             static fn(array $e) => sprintf(
                 '%s: %s',
-                $e['domainValidationType'] ?? '?',
-                $e['error']['detail']      ?? $e['error']['type'] ?? 'no detail provided',
+                $e['domainValidationType'],
+                Arr::stringOrNull($e['error'], 'detail') ?? Arr::stringOrNull($e['error'], 'type') ?? 'no detail provided',
             ),
             $errors,
         );
 
         // Expose the challenge errors in the RFC 8555 §6.7 subproblem shape
         $identifier  = ['type' => filter_var($domain, FILTER_VALIDATE_IP) ? 'ip' : 'dns', 'value' => $domain];
-        $subproblems = array_map(static fn(array $e): array => (array) $e['error'] + ['identifier' => $identifier], $errors);
+        $subproblems = array_map(static fn(array $e): array => $e['error'] + ['identifier' => $identifier], $errors);
 
         return new self(sprintf(
             'The CA marked the authorization for %s as invalid.%s',

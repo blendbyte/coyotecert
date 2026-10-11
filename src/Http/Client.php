@@ -101,13 +101,10 @@ class Client implements HttpClientInterface
 
         $rawHeaders = substr($curlResult, 0, $headerSize);
         $rawBody    = substr($curlResult, $headerSize);
-        $body       = $rawBody;
+        $decoded    = json_validate($rawBody) ? json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR) : null;
+        $body       = is_array($decoded) ? $decoded : $rawBody;
 
         $allHeaders = array_merge($allHeaders, $this->parseRawHeaders($rawHeaders));
-
-        if (json_validate($rawBody)) {
-            $body = json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR);
-        }
 
         $requestedUrl = isset($allHeaders['url']) ? (string) $allHeaders['url'] : '';
 

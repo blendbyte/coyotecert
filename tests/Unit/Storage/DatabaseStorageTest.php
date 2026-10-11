@@ -269,7 +269,7 @@ it('quotes identifiers with double quotes on PostgreSQL, never backticks', funct
                     return true;
                 }
 
-                public function fetch(int $mode = \PDO::FETCH_DEFAULT, int $cursorOrientation = \PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed
+                public function fetchColumn(int $column = 0): mixed
                 {
                     return false;
                 }

@@ -67,7 +67,7 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::HTTP)
                 && !empty($domainValidationData->file)
             ) {
-                $token            = $domainValidationData->file['token'];
+                $token            = Arr::string($domainValidationData->file, 'token');
                 $keyAuth          = $token . '.' . $thumbprint;
                 $authorizations[] = new Http01ValidationData(
                     identifier: $domainValidationData->identifier['value'],
@@ -81,7 +81,7 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::DNS)
                 && !empty($domainValidationData->dns)
             ) {
-                $token            = $domainValidationData->dns['token'];
+                $token            = Arr::string($domainValidationData->dns, 'token');
                 $keyAuth          = $token . '.' . $thumbprint;
                 $authorizations[] = new Dns01ValidationData(
                     identifier: $domainValidationData->identifier['value'],
@@ -95,7 +95,7 @@ class DomainValidation extends Endpoint
                 (is_null($authChallenge) || $authChallenge === AuthorizationChallengeEnum::TLS_ALPN)
                 && !empty($domainValidationData->tlsAlpn)
             ) {
-                $token            = $domainValidationData->tlsAlpn['token'];
+                $token            = Arr::string($domainValidationData->tlsAlpn, 'token');
                 $keyAuth          = $token . '.' . $thumbprint;
                 $authorizations[] = new TlsAlpn01ValidationData(
                     identifier: $domainValidationData->identifier['value'],
@@ -118,7 +118,7 @@ class DomainValidation extends Endpoint
         $this->client->logger('info', sprintf(
             'Start %s challenge for %s',
             $authChallenge->value,
-            Arr::get($domainValidation->identifier, 'value', ''),
+            $domainValidation->identifier['value'],
         ));
 
         $thumbprint = JsonWebKey::thumbprint(JsonWebKey::compute($this->getAccountPrivateKey()));
@@ -133,19 +133,20 @@ class DomainValidation extends Endpoint
             ));
         }
 
-        $keyAuthorization = $challengeData['token'] . '.' . $thumbprint;
+        $token            = Arr::string($challengeData, 'token');
+        $keyAuthorization = $token . '.' . $thumbprint;
 
         if ($localTest && $authChallenge === AuthorizationChallengeEnum::HTTP) {
             LocalChallengeTest::http(
                 $domainValidation->identifier['value'],
-                $challengeData['token'],
+                $token,
                 $keyAuthorization,
                 $this->client->getHttpClient(),
             );
         }
 
         // RFC 8555 §7.5.1: challenge response payload must be an empty JSON object {}
-        $response = $this->postSigned($challengeData['url'], $accountData->url, []);
+        $response = $this->postSigned(Arr::string($challengeData, 'url'), $accountData->url, []);
 
         if ($response->getHttpResponseCode() >= 400) {
             $this->throwError($response, 'Challenge submission failed.');
@@ -199,8 +200,8 @@ class DomainValidation extends Endpoint
                     $this->client->logger('error', sprintf(
                         'Challenge for %s failed: %s (%s)',
                         $status->identifier['value'],
-                        $error['error']['detail'] ?? 'no detail provided',
-                        $error['error']['type']   ?? 'unknown error type',
+                        Arr::stringOrNull($error['error'], 'detail') ?? 'no detail provided',
+                        Arr::stringOrNull($error['error'], 'type')   ?? 'unknown error type',
                     ));
                 }
 

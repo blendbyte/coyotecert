@@ -6,6 +6,7 @@ namespace CoyoteCert\Challenge\Dns;
 
 use CoyoteCert\Challenge\Dns\Internal\JsonHttpClient;
 use CoyoteCert\Exceptions\ChallengeException;
+use CoyoteCert\Support\Arr;
 
 /**
  * DNS-01 challenge handler for the Cloudflare API.
@@ -62,11 +63,13 @@ class CloudflareDns01Handler extends AbstractDns01Handler
             'ttl'     => 60, // Cloudflare's minimum outside Enterprise plans.
         ]);
 
-        if (empty($response['result']['id'])) {
+        $recordId = Arr::id(Arr::array($response, 'result'), 'id');
+
+        if ($recordId === null || $recordId === '') {
             throw new ChallengeException('Cloudflare did not return a record ID after creating the TXT record.');
         }
 
-        $this->recordIds[$domain][] = $response['result']['id'];
+        $this->recordIds[$domain][] = $recordId;
         $this->awaitPropagation($domain, $keyAuthorization);
     }
 
@@ -95,9 +98,9 @@ class CloudflareDns01Handler extends AbstractDns01Handler
             'name' => $this->challengeName($domain),
         ]);
 
-        foreach ($response['result'] ?? [] as $record) {
-            if (!empty($record['id'])) {
-                $this->httpClient->request('DELETE', "/zones/{$zoneId}/dns_records/{$record['id']}");
+        foreach (Arr::arrays($response, 'result') as $record) {
+            if (($recordId = Arr::id($record, 'id')) !== null) {
+                $this->httpClient->request('DELETE', "/zones/{$zoneId}/dns_records/{$recordId}");
             }
         }
     }
@@ -114,12 +117,10 @@ class CloudflareDns01Handler extends AbstractDns01Handler
             }
 
             $response = $this->httpClient->request('GET', '/zones', queryParams: ['name' => $candidate]);
-            $zones    = $response['result'] ?? [];
+            $zoneId   = Arr::id(Arr::arrays($response, 'result')[0] ?? [], 'id');
 
-            if (!empty($zones)) {
-                $this->zoneIdCache[$candidate] = $zones[0]['id'];
-
-                return $this->zoneIdCache[$candidate];
+            if ($zoneId !== null) {
+                return $this->zoneIdCache[$candidate] = $zoneId;
             }
         }
 

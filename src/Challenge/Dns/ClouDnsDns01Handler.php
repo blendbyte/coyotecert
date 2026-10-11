@@ -6,6 +6,7 @@ namespace CoyoteCert\Challenge\Dns;
 
 use CoyoteCert\Challenge\Dns\Internal\JsonHttpClient;
 use CoyoteCert\Exceptions\ChallengeException;
+use CoyoteCert\Support\Arr;
 
 /**
  * DNS-01 challenge handler for the ClouDNS API.
@@ -80,7 +81,7 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
 
         if (($response['status'] ?? '') !== 'Success') {
             throw new ChallengeException(
-                sprintf('ClouDNS add-record failed: %s', $response['statusDescription'] ?? 'unknown error'),
+                sprintf('ClouDNS add-record failed: %s', Arr::stringOrNull($response, 'statusDescription') ?? 'unknown error'),
             );
         }
 
@@ -97,7 +98,7 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
 
         foreach ($records as $record) {
             if (is_array($record) && ($record['record'] ?? null) === $keyAuthorization) {
-                $recordId = (string) $record['id'];
+                $recordId = Arr::id($record, 'id');
                 break;
             }
         }
@@ -130,7 +131,7 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
 
             // ClouDNS reports failures as HTTP 200 with a Failed status
             if (($response['status'] ?? '') !== 'Success') {
-                $failures[] = sprintf('%s (%s)', $recordId, $response['statusDescription'] ?? 'unknown error');
+                $failures[] = sprintf('%s (%s)', $recordId, Arr::stringOrNull($response, 'statusDescription') ?? 'unknown error');
             }
         }
 
@@ -153,11 +154,11 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
         ]);
 
         foreach ($records as $record) {
-            if (is_array($record) && !empty($record['id'])) {
+            if (is_array($record) && ($recordId = Arr::id($record, 'id')) !== null) {
                 $this->httpClient->request('GET', '/dns/delete-record.json', queryParams: [
                     ...$this->auth(),
                     'domain-name' => $zone,
-                    'record-id'   => (string) $record['id'],
+                    'record-id'   => $recordId,
                 ]);
             }
         }
@@ -205,7 +206,7 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
 
         if (($response['status'] ?? '') !== 'Success') {
             throw new ChallengeException(
-                sprintf('ClouDNS login failed: %s', $response['statusDescription'] ?? 'unknown error'),
+                sprintf('ClouDNS login failed: %s', Arr::stringOrNull($response, 'statusDescription') ?? 'unknown error'),
             );
         }
 

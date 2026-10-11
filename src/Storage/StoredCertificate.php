@@ -6,6 +6,8 @@ namespace CoyoteCert\Storage;
 
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\CryptoException;
+use CoyoteCert\Exceptions\StorageException;
+use CoyoteCert\Support\Arr;
 
 readonly class StoredCertificate
 {
@@ -40,19 +42,33 @@ readonly class StoredCertificate
         ];
     }
 
-    /** @param array<string, mixed> $data */
+    /** @throws StorageException when $json is not a stored certificate object */
+    public static function fromJson(string $json): self
+    {
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+
+        if (!is_array($data)) {
+            throw new StorageException('Stored certificate data is not a JSON object.');
+        }
+
+        return self::fromArray($data);
+    }
+
+    /** @param array<mixed> $data */
     public static function fromArray(array $data): self
     {
+        $keyType = Arr::stringOrNull($data, 'key_type');
+
         return new self(
-            certificate: $data['certificate'],
-            privateKey: $data['private_key'],
-            fullchain: $data['fullchain'],
-            caBundle: $data['ca_bundle'],
-            issuedAt: new \DateTimeImmutable($data['issued_at']),
-            expiresAt: new \DateTimeImmutable($data['expires_at']),
-            domains: $data['domains'],
-            keyType: isset($data['key_type']) ? KeyType::from($data['key_type']) : KeyType::EC_P256,
-            providerSlug: $data['provider_slug'] ?? null,
+            certificate: Arr::string($data, 'certificate'),
+            privateKey: Arr::string($data, 'private_key'),
+            fullchain: Arr::string($data, 'fullchain'),
+            caBundle: Arr::string($data, 'ca_bundle'),
+            issuedAt: new \DateTimeImmutable(Arr::string($data, 'issued_at')),
+            expiresAt: new \DateTimeImmutable(Arr::string($data, 'expires_at')),
+            domains: Arr::strings($data, 'domains'),
+            keyType: $keyType !== null ? KeyType::from($keyType) : KeyType::EC_P256, // pre-key-type records were EC P-256
+            providerSlug: Arr::stringOrNull($data, 'provider_slug'),
         );
     }
 
@@ -137,7 +153,7 @@ readonly class StoredCertificate
 
     // ── Certificate inspection ────────────────────────────────────────────────
 
-    /** @return array<string, mixed> */
+    /** @return array<mixed> */
     private function parsedCertificate(): array
     {
         $parsed = openssl_x509_parse($this->certificate);
@@ -157,10 +173,9 @@ readonly class StoredCertificate
      */
     public function sans(): array
     {
-        $parsed = $this->parsedCertificate();
-        $san    = $parsed['extensions']['subjectAltName'] ?? '';
+        $san = Arr::stringOrNull(Arr::array($this->parsedCertificate(), 'extensions'), 'subjectAltName') ?? '';
 
-        if (empty($san)) {
+        if ($san === '') {
             return [];
         }
 
@@ -180,7 +195,7 @@ readonly class StoredCertificate
      */
     public function serialNumber(): string
     {
-        return strtolower($this->parsedCertificate()['serialNumberHex'] ?? '');
+        return strtolower(Arr::stringOrNull($this->parsedCertificate(), 'serialNumberHex') ?? '');
     }
 
     /**
@@ -189,8 +204,7 @@ readonly class StoredCertificate
      */
     public function authorityKeyId(): ?string
     {
-        $parsed = $this->parsedCertificate();
-        $ext    = $parsed['extensions']['authorityKeyIdentifier'] ?? null;
+        $ext = Arr::stringOrNull(Arr::array($this->parsedCertificate(), 'extensions'), 'authorityKeyIdentifier');
 
         if ($ext === null) {
             return null;
@@ -212,10 +226,10 @@ readonly class StoredCertificate
     /**
      * Issuer Distinguished Name fields as returned by openssl_x509_parse().
      *
-     * @return array{CN?: string, O?: string, C?: string}
+     * @return array<string, string> e.g. ['CN' => 'R12', 'O' => "Let's Encrypt", 'C' => 'US']
      */
     public function issuer(): array
     {
-        return $this->parsedCertificate()['issuer'] ?? [];
+        return array_filter(Arr::array($this->parsedCertificate(), 'issuer'), is_string(...));
     }
 }

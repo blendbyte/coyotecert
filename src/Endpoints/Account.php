@@ -11,6 +11,7 @@ use CoyoteCert\Exceptions\AccountNotFoundException;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\CryptoException;
 use CoyoteCert\Http\Response;
+use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\Base64;
 use CoyoteCert\Support\JsonWebKey;
 use CoyoteCert\Support\JsonWebSignature;
@@ -96,7 +97,7 @@ class Account extends Endpoint
             $this->logResponse('error', 'Account does not exist for the stored key', $response);
 
             throw new AccountNotFoundException(
-                $response->jsonBody()['detail'] ?? 'Account does not exist.',
+                Arr::stringOrNull($response->jsonBody(), 'detail') ?? 'Account does not exist.',
                 problemType: 'urn:ietf:params:acme:error:accountDoesNotExist',
             );
         }

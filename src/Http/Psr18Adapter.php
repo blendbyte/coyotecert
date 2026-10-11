@@ -118,9 +118,8 @@ class Psr18Adapter implements HttpClientInterface
         }
 
         $rawBody = (string) $psrResponse->getBody();
-        $body    = json_validate($rawBody)
-            ? json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR)
-            : $rawBody;
+        $decoded = json_validate($rawBody) ? json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR) : null;
+        $body    = is_array($decoded) ? $decoded : $rawBody;
 
         return new Response(
             headers: $headers,

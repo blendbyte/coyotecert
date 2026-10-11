@@ -6,6 +6,7 @@ namespace CoyoteCert\Endpoints;
 
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Http\Response;
+use CoyoteCert\Support\Arr;
 
 class Directory extends Endpoint
 {
@@ -35,42 +36,40 @@ class Directory extends Endpoint
      * The directory's meta object (RFC 8555 §7.1.1): caaIdentities, profiles,
      * externalAccountRequired, termsOfService, website. Empty when the CA sends none.
      *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     public function meta(): array
     {
-        $meta = $this->all()->jsonBody()['meta'] ?? [];
-
-        return is_array($meta) ? $meta : [];
+        return Arr::array($this->all()->jsonBody(), 'meta');
     }
 
     public function newNonce(): string
     {
-        return $this->all()->jsonBody()['newNonce'];
+        return Arr::string($this->all()->jsonBody(), 'newNonce');
     }
 
     public function newAccount(): string
     {
-        return $this->all()->jsonBody()['newAccount'];
+        return Arr::string($this->all()->jsonBody(), 'newAccount');
     }
 
     public function newOrder(): string
     {
-        return $this->all()->jsonBody()['newOrder'];
+        return Arr::string($this->all()->jsonBody(), 'newOrder');
     }
 
     public function revoke(): string
     {
-        return $this->all()->jsonBody()['revokeCert'];
+        return Arr::string($this->all()->jsonBody(), 'revokeCert');
     }
 
     public function renewalInfo(): ?string
     {
-        return $this->all()->jsonBody()['renewalInfo'] ?? null;
+        return Arr::stringOrNull($this->all()->jsonBody(), 'renewalInfo');
     }
 
     public function keyChange(): string
     {
-        return $this->all()->jsonBody()['keyChange'];
+        return Arr::string($this->all()->jsonBody(), 'keyChange');
     }
 }

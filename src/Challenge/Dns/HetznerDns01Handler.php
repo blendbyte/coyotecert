@@ -7,6 +7,7 @@ namespace CoyoteCert\Challenge\Dns;
 use CoyoteCert\Challenge\Dns\Internal\JsonHttpClient;
 use CoyoteCert\Exceptions\ChallengeException;
 use CoyoteCert\Exceptions\HttpChallengeException;
+use CoyoteCert\Support\Arr;
 
 /**
  * DNS-01 challenge handler for Hetzner DNS via the Hetzner Cloud API.
@@ -108,7 +109,7 @@ class HetznerDns01Handler extends AbstractDns01Handler
     /**
      * @param array<string, mixed>|null $payload
      * @param array<string, mixed>|null $queryParams
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function request(string $method, string $path, ?array $payload = null, ?array $queryParams = null): array
     {
@@ -140,14 +141,16 @@ class HetznerDns01Handler extends AbstractDns01Handler
         return strtolower($this->relativeRecordName($domain, $zoneName));
     }
 
-    /** @param array<string, mixed> $response */
+    /** @param array<mixed> $response */
     private function assertActionSucceeded(array $response, string $what): void
     {
-        if (($response['action']['status'] ?? null) === 'error') {
+        $action = Arr::array($response, 'action');
+
+        if (Arr::stringOrNull($action, 'status') === 'error') {
             throw new ChallengeException(sprintf(
                 'Hetzner failed %s: %s',
                 $what,
-                $response['action']['error']['message'] ?? 'unknown error',
+                Arr::stringOrNull(Arr::array($action, 'error'), 'message') ?? 'unknown error',
             ));
         }
     }
@@ -162,18 +165,17 @@ class HetznerDns01Handler extends AbstractDns01Handler
                 return $this->zoneCache[$this->zoneId];
             }
 
-            $response = $this->request('GET', '/zones/' . rawurlencode($this->zoneId));
-            $zone     = $response['zone'] ?? null;
+            $zone = Arr::array($this->request('GET', '/zones/' . rawurlencode($this->zoneId)), 'zone');
+            $id   = Arr::id($zone, 'id');
+            $name = Arr::stringOrNull($zone, 'name');
 
-            if (empty($zone['id']) || empty($zone['name'])) {
+            if ($id === null || $name === null || $name === '') {
                 throw new ChallengeException(
                     sprintf('Hetzner zone "%s" not found or the token cannot read it.', $this->zoneId),
                 );
             }
 
-            $this->zoneCache[$this->zoneId] = ['id' => (string) $zone['id'], 'name' => $zone['name']];
-
-            return $this->zoneCache[$this->zoneId];
+            return $this->zoneCache[$this->zoneId] = ['id' => $id, 'name' => $name];
         }
 
         foreach ($this->zoneCandidates(strtolower($domain)) as $candidate) {
@@ -182,12 +184,10 @@ class HetznerDns01Handler extends AbstractDns01Handler
             }
 
             $response = $this->request('GET', '/zones', queryParams: ['name' => $candidate]);
-            $zones    = $response['zones'] ?? [];
+            $id       = Arr::id(Arr::arrays($response, 'zones')[0] ?? [], 'id');
 
-            if (!empty($zones[0]['id'])) {
-                $this->zoneCache[$candidate] = ['id' => (string) $zones[0]['id'], 'name' => $candidate];
-
-                return $this->zoneCache[$candidate];
+            if ($id !== null) {
+                return $this->zoneCache[$candidate] = ['id' => $id, 'name' => $candidate];
             }
         }
 

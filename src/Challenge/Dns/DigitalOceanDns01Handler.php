@@ -7,6 +7,7 @@ namespace CoyoteCert\Challenge\Dns;
 use CoyoteCert\Challenge\Dns\Internal\JsonHttpClient;
 use CoyoteCert\Exceptions\ChallengeException;
 use CoyoteCert\Exceptions\HttpChallengeException;
+use CoyoteCert\Support\Arr;
 
 /**
  * DNS-01 challenge handler for the DigitalOcean DNS API.
@@ -64,11 +65,13 @@ class DigitalOceanDns01Handler extends AbstractDns01Handler
             'ttl'  => 30, // Lowest TTL DigitalOcean accepts.
         ]);
 
-        if (empty($response['domain_record']['id'])) {
+        $recordId = Arr::id(Arr::array($response, 'domain_record'), 'id');
+
+        if ($recordId === null || $recordId === '') {
             throw new ChallengeException('DigitalOcean did not return a record ID after creating the TXT record.');
         }
 
-        $this->recordIds[$domain][] = (string) $response['domain_record']['id'];
+        $this->recordIds[$domain][] = $recordId;
         $this->awaitPropagation($domain, $keyAuthorization);
     }
 
@@ -98,9 +101,9 @@ class DigitalOceanDns01Handler extends AbstractDns01Handler
             'name' => $this->challengeName($domain),
         ]);
 
-        foreach ($response['domain_records'] ?? [] as $record) {
-            if (!empty($record['id'])) {
-                $this->httpClient->request('DELETE', '/domains/' . $zone . '/records/' . $record['id']);
+        foreach (Arr::arrays($response, 'domain_records') as $record) {
+            if (($recordId = Arr::id($record, 'id')) !== null) {
+                $this->httpClient->request('DELETE', '/domains/' . $zone . '/records/' . $recordId);
             }
         }
     }

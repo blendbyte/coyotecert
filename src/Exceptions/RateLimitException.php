@@ -6,7 +6,7 @@ namespace CoyoteCert\Exceptions;
 
 class RateLimitException extends AcmeException
 {
-    /** @param array<int, array<string, mixed>> $subproblems */
+    /** @param list<array<mixed>> $subproblems */
     public function __construct(
         string $message,
         private readonly ?int $retryAfter = null,

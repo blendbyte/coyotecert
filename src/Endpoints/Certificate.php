@@ -35,8 +35,7 @@ class Certificate extends Endpoint
             return $primary;
         }
 
-        $linkHeader = $response->getHeader('link', '');
-        $linkHeader = is_string($linkHeader) ? $linkHeader : '';
+        $linkHeader = $response->getHeaderLine('link');
 
         foreach ($this->parseAlternateLinks($linkHeader) as $url) {
             $altResponse = $this->postSigned($url, $orderData->accountUrl, headers: [self::ACCEPT_PEM]);

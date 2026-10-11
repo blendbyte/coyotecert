@@ -28,7 +28,7 @@ class CertsCommand extends CoyoteCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io          = new SymfonyStyle($input, $output);
-        $storagePath = (string) $input->getOption('storage');
+        $storagePath = $this->stringOption($input, 'storage') ?? './certs';
         $dir         = rtrim($storagePath, '/') . '/';
 
         if (!is_dir($dir)) {

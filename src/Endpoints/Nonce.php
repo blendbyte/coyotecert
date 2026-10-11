@@ -21,9 +21,9 @@ class Nonce extends Endpoint
         $response = $this->client
             ->getHttpClient()
             ->head($this->client->directory()->newNonce());
-        $nonce = $response->getHeader('replay-nonce');
+        $nonce = $response->getHeaderLine('replay-nonce');
 
-        if (!is_string($nonce) || trim($nonce) === '') {
+        if ($nonce === '') {
             throw new AcmeException(sprintf(
                 'The CA returned no Replay-Nonce (HTTP %d from %s).',
                 $response->getHttpResponseCode(),
@@ -31,6 +31,6 @@ class Nonce extends Endpoint
             ));
         }
 
-        return trim($nonce);
+        return $nonce;
     }
 }

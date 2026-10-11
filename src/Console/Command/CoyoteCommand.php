@@ -88,6 +88,26 @@ abstract class CoyoteCommand extends Command
         )));
     }
 
+    /** A string option, or null when not given (or given empty). */
+    protected function stringOption(InputInterface $input, string $option): ?string
+    {
+        $value = $input->getOption($option);
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * A repeatable (array) option.
+     *
+     * @return list<string>
+     */
+    protected function stringsOption(InputInterface $input, string $option): array
+    {
+        $value = $input->getOption($option);
+
+        return is_array($value) ? array_values(array_filter($value, is_string(...))) : [];
+    }
+
     /** A secret from its option, falling back to an environment variable so it can stay out of argv. */
     protected function secret(InputInterface $input, string $option, string $env): ?string
     {

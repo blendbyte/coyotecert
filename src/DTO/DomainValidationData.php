@@ -11,11 +11,11 @@ use CoyoteCert\Support\Arr;
 readonly class DomainValidationData
 {
     /**
-     * @param array<string, mixed> $identifier
-     * @param array<string, mixed> $file
-     * @param array<string, mixed> $dns
-     * @param array<string, mixed> $tlsAlpn
-     * @param array<string, mixed> $validationRecord
+     * @param array{type: string, value: string} $identifier
+     * @param array<mixed> $file The http-01 challenge object, empty when not offered
+     * @param array<mixed> $dns The dns-01 challenge object, empty when not offered
+     * @param array<mixed> $tlsAlpn The tls-alpn-01 challenge object, empty when not offered
+     * @param array<mixed> $validationRecord
      */
     public function __construct(
         public array $identifier,
@@ -30,31 +30,33 @@ readonly class DomainValidationData
     public static function fromResponse(Response $response): DomainValidationData
     {
         $body       = $response->jsonBody();
-        $challenges = $body['challenges'];
+        $identifier = Arr::array($body, 'identifier');
+        $challenges = Arr::arrays($body, 'challenges');
 
         return new self(
-            identifier: $body['identifier'],
-            status: $body['status'],
-            expires: $body['expires'] ?? null,
+            identifier: ['type' => Arr::string($identifier, 'type'), 'value' => Arr::string($identifier, 'value')],
+            status: Arr::string($body, 'status'),
+            expires: Arr::stringOrNull($body, 'expires'),
             file: self::getValidationByType($challenges, AuthorizationChallengeEnum::HTTP),
             dns: self::getValidationByType($challenges, AuthorizationChallengeEnum::DNS),
             tlsAlpn: self::getValidationByType($challenges, AuthorizationChallengeEnum::TLS_ALPN),
-            validationRecord: Arr::get($body, 'validationRecord', []),
+            validationRecord: Arr::array($body, 'validationRecord'),
         );
     }
 
     /**
-     * @param array<int, array<string, mixed>> $haystack
-     * @return array<string, mixed>
+     * @param list<array<mixed>> $challenges
+     * @return array<mixed>
      */
-    private static function getValidationByType(array $haystack, AuthorizationChallengeEnum $authChallenge): array
+    private static function getValidationByType(array $challenges, AuthorizationChallengeEnum $authChallenge): array
     {
-        $matches = array_values(array_filter(
-            $haystack,
-            static fn(array $entry) => ($entry['type'] ?? '') === $authChallenge->value,
-        ));
+        foreach ($challenges as $challenge) {
+            if (($challenge['type'] ?? '') === $authChallenge->value) {
+                return $challenge;
+            }
+        }
 
-        return $matches[0] ?? [];
+        return [];
     }
 
     public function isPending(): bool
@@ -84,7 +86,7 @@ readonly class DomainValidationData
         return false;
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /** @return list<array{domainValidationType: string, error: array<mixed>}> */
     public function getErrors(): array
     {
         $errors = [];
@@ -95,7 +97,7 @@ readonly class DomainValidationData
             if (!empty($data['error'])) {
                 $errors[] = [
                     'domainValidationType' => $type->value,
-                    'error'                => Arr::get($data, 'error'),
+                    'error'                => Arr::array($data, 'error'),
                 ];
             }
         }
@@ -103,7 +105,7 @@ readonly class DomainValidationData
         return $errors;
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<mixed> */
     public function challengeData(AuthorizationChallengeEnum $type): array
     {
         return match ($type) {

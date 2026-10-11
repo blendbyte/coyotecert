@@ -7,6 +7,7 @@ namespace CoyoteCert\Endpoints;
 use CoyoteCert\DTO\AccountData;
 use CoyoteCert\DTO\OrderData;
 use CoyoteCert\Exceptions\AcmeException;
+use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\Base64;
 
 class Order extends Endpoint
@@ -120,11 +121,12 @@ class Order extends Endpoint
             }
 
             if (($body['status'] ?? '') === 'invalid') {
-                $detail = $body['error']['detail'] ?? null;
+                $error  = Arr::array($body, 'error');
+                $detail = Arr::stringOrNull($error, 'detail');
 
                 throw new AcmeException(
                     'Order became invalid during finalization' . ($detail !== null ? ": {$detail}" : '.'),
-                    $body['error']['subproblems'] ?? [],
+                    Arr::arrays($error, 'subproblems'),
                 );
             }
 

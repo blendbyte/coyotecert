@@ -36,8 +36,8 @@ class RevokeCommand extends CoyoteCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io         = new SymfonyStyle($input, $output);
-        $identifier = $input->getOption('identifier');
-        $provider   = $input->getOption('provider');
+        $identifier = $this->stringOption($input, 'identifier');
+        $provider   = $this->stringOption($input, 'provider');
 
         if ($identifier === null) {
             return $this->invalid($io, '--identifier is required.');
@@ -50,13 +50,13 @@ class RevokeCommand extends CoyoteCommand
         try {
             // Revocation is signed with the stored account key; EAB is only needed to register one
             $acmeProvider = ProviderResolver::resolve($provider, requireEab: false);
-            $keyType      = $input->getOption('key-type') !== null ? $this->parseKeyType($input->getOption('key-type')) : null;
-            $reason       = $this->parseReason($input->getOption('reason'));
+            $keyType      = ($type = $this->stringOption($input, 'key-type')) !== null ? $this->parseKeyType($type) : null;
+            $reason       = $this->parseReason($this->stringOption($input, 'reason') ?? 'unspecified');
         } catch (\InvalidArgumentException $e) {
             return $this->invalid($io, $e->getMessage());
         }
 
-        $storagePath = $input->getOption('storage');
+        $storagePath = $this->stringOption($input, 'storage') ?? './certs';
         $fs          = new FilesystemStorage($storagePath);
         $certs       = $this->findCertificates($fs, $identifier, $keyType);
 

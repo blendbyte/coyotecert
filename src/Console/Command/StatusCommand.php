@@ -29,15 +29,15 @@ class StatusCommand extends CoyoteCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io         = new SymfonyStyle($input, $output);
-        $identifier = $input->getOption('identifier');
-        $storage    = $input->getOption('storage');
+        $identifier = $this->stringOption($input, 'identifier');
+        $storage    = $this->stringOption($input, 'storage') ?? './certs';
 
         if ($identifier === null) {
             return $this->invalid($io, '--identifier is required.');
         }
 
         try {
-            $keyType = $input->getOption('key-type') !== null ? $this->parseKeyType($input->getOption('key-type')) : null;
+            $keyType = ($type = $this->stringOption($input, 'key-type')) !== null ? $this->parseKeyType($type) : null;
         } catch (\InvalidArgumentException $e) {
             return $this->invalid($io, $e->getMessage());
         }

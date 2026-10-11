@@ -6,6 +6,7 @@ namespace CoyoteCert\Challenge\Dns\Internal;
 
 use CoyoteCert\Exceptions\ChallengeException;
 use CoyoteCert\Exceptions\HttpChallengeException;
+use CoyoteCert\Support\Arr;
 
 /**
  * Shared JSON HTTP client for DNS provider API calls.
@@ -38,7 +39,7 @@ class JsonHttpClient
      * @param array<string, mixed>|null $payload JSON request body (POST only).
      * @param array<string, mixed>|null $queryParams URL query parameters (GET only).
      * @param array<int, string> $extraHeaders Per-request headers merged after defaults.
-     * @return array<string, mixed>
+     * @return array<mixed>
      * @throws ChallengeException on connection error or HTTP 4xx/5xx.
      */
     public function request(
@@ -70,7 +71,7 @@ class JsonHttpClient
      * Marked protected so tests can subclass and bypass the network.
      *
      * @param array<int, string> $headers
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     protected function send(string $method, string $url, ?string $body, array $headers): array
     {
@@ -126,7 +127,9 @@ class JsonHttpClient
             return [];
         }
 
-        return json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
+        $data = json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
+
+        return is_array($data) ? $data : [];
     }
 
     /**
@@ -138,9 +141,11 @@ class JsonHttpClient
         $body = json_decode($raw, true);
 
         if (is_array($body)) {
-            $message = $body['errors'][0]['message'] ?? $body['error']['message'] ?? $body['message'] ?? null;
+            $message = Arr::stringOrNull(Arr::arrays($body, 'errors')[0] ?? [], 'message')
+                ?? Arr::stringOrNull(Arr::array($body, 'error'), 'message')
+                ?? Arr::stringOrNull($body, 'message');
 
-            if (is_string($message) && $message !== '') {
+            if ($message !== null && $message !== '') {
                 return $message;
             }
         }

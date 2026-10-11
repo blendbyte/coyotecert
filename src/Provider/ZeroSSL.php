@@ -6,6 +6,7 @@ namespace CoyoteCert\Provider;
 
 use CoyoteCert\DTO\EabCredentials;
 use CoyoteCert\Exceptions\AcmeException;
+use CoyoteCert\Support\Arr;
 
 class ZeroSSL extends AbstractProvider
 {
@@ -87,13 +88,16 @@ class ZeroSSL extends AbstractProvider
         }
 
         $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $data = is_array($data) ? $data : [];
+        $kid  = Arr::stringOrNull($data, 'eab_kid');
+        $hmac = Arr::stringOrNull($data, 'eab_hmac_key');
 
-        if (empty($data['success']) || empty($data['eab_kid']) || empty($data['eab_hmac_key'])) {
+        if (empty($data['success']) || !$kid || !$hmac) {
             throw new AcmeException(
                 'ZeroSSL EAB provisioning returned an unexpected response.',
             );
         }
 
-        return new EabCredentials($data['eab_kid'], $data['eab_hmac_key']);
+        return new EabCredentials($kid, $hmac);
     }
 }

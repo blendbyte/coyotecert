@@ -86,9 +86,7 @@ class DatabaseStorage implements StorageInterface
     {
         $json = $this->get($this->certKey($domain, $keyType));
 
-        return $json !== null
-            ? StoredCertificate::fromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR))
-            : null;
+        return $json !== null ? StoredCertificate::fromJson($json) : null;
     }
 
     public function saveCertificate(string $domain, StoredCertificate $cert): void
@@ -122,9 +120,9 @@ class DatabaseStorage implements StorageInterface
             $this->quote('store_key'),
         ));
         $stmt->execute([':key' => $key]);
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $value = $stmt->fetchColumn();
 
-        return $row !== false ? (string) $row['value'] : null;
+        return is_string($value) ? $value : null;
     }
 
     private function set(string $key, string $value): void

@@ -25,6 +25,7 @@ use CoyoteCert\Provider\AcmeProviderInterface;
 use CoyoteCert\Storage\InMemoryStorage;
 use CoyoteCert\Storage\StorageInterface;
 use CoyoteCert\Storage\StoredCertificate;
+use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\CaaChecker;
 use CoyoteCert\Support\OpenSsl;
 use DateTimeImmutable;
@@ -334,9 +335,8 @@ class CoyoteCert
             return;
         }
 
-        $fromDirectory = $api->directory()->meta()['caaIdentities'] ?? [];
-        $identities    = array_values(array_unique([...$identities, ...(is_array($fromDirectory) ? $fromDirectory : [])]));
-        $domains       = array_values(array_filter(
+        $identities = array_values(array_unique([...$identities, ...Arr::strings($api->directory()->meta(), 'caaIdentities')]));
+        $domains    = array_values(array_filter(
             $this->domains,
             static fn(string $id): bool => !filter_var($id, FILTER_VALIDATE_IP),
         ));

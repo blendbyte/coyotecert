@@ -11,8 +11,8 @@ use CoyoteCert\Support\Url;
 readonly class OrderData
 {
     /**
-     * @param array<int, array<string, string>> $identifiers
-     * @param string[] $domainValidationUrls
+     * @param list<array{type: string, value: string}> $identifiers
+     * @param list<string> $domainValidationUrls
      */
     public function __construct(
         public string  $id,
@@ -28,24 +28,22 @@ readonly class OrderData
 
     public static function fromResponse(Response $response, string $accountUrl = ''): OrderData
     {
-        $url = $response->getHeader('location');
-
-        if (empty($url)) {
-            $url = $response->getRequestedUrl();
-        }
-
-        $url = trim(rtrim($url, '?'));
+        $url  = trim(rtrim($response->getHeaderLine('location') ?: $response->getRequestedUrl(), '?'));
+        $body = $response->jsonBody();
 
         return new self(
             id: Url::extractId($url),
             url: $url,
-            status: $response->jsonBody()['status'],
-            expires: $response->jsonBody()['expires'] ?? null,
-            identifiers: $response->jsonBody()['identifiers'],
-            domainValidationUrls: $response->jsonBody()['authorizations'],
-            finalizeUrl: $response->jsonBody()['finalize'],
+            status: Arr::string($body, 'status'),
+            expires: Arr::stringOrNull($body, 'expires'),
+            identifiers: array_map(
+                static fn(array $id): array => ['type' => Arr::string($id, 'type'), 'value' => Arr::string($id, 'value')],
+                Arr::arrays($body, 'identifiers'),
+            ),
+            domainValidationUrls: Arr::strings($body, 'authorizations'),
+            finalizeUrl: Arr::string($body, 'finalize'),
             accountUrl: $accountUrl,
-            certificateUrl: Arr::get($response->jsonBody(), 'certificate'),
+            certificateUrl: Arr::stringOrNull($body, 'certificate'),
         );
     }
 

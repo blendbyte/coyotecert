@@ -9,6 +9,7 @@ use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\AuthException;
 use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Http\Response;
+use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\KeyId;
 
 abstract class Endpoint
@@ -64,10 +65,10 @@ abstract class Endpoint
      */
     protected function cacheResponseNonce(Response $response): void
     {
-        $nonce = $response->getHeader('replay-nonce', '');
+        $nonce = $response->getHeaderLine('replay-nonce');
 
-        if (is_string($nonce) && $nonce !== '') {
-            $this->client->storeNonce(trim($nonce));
+        if ($nonce !== '') {
+            $this->client->storeNonce($nonce);
         }
     }
 
@@ -80,7 +81,7 @@ abstract class Endpoint
     /** @param array<string, mixed> $additionalContext */
     protected function throwError(Response $response, string $defaultMessage, array $additionalContext = []): never
     {
-        $this->logResponse('error', $response->jsonBody()['detail'] ?? $defaultMessage, $response, $additionalContext);
+        $this->logResponse('error', Arr::stringOrNull($response->jsonBody(), 'detail') ?? $defaultMessage, $response, $additionalContext);
 
         throw $this->createException($response, $defaultMessage);
     }
@@ -92,12 +93,10 @@ abstract class Endpoint
      */
     protected function createException(Response $response, string $defaultMessage): AcmeException
     {
-        $body    = $response->jsonBody();
-        $message = $body['detail'] ?? $defaultMessage;
-
-        /** @var array<int, array<string, mixed>> $subproblems */
-        $subproblems = $body['subproblems'] ?? [];
-        $type        = $body['type']        ?? null;
+        $body        = $response->jsonBody();
+        $message     = Arr::stringOrNull($body, 'detail') ?? $defaultMessage;
+        $subproblems = Arr::arrays($body, 'subproblems');
+        $type        = Arr::stringOrNull($body, 'type');
 
         return match ($response->getHttpResponseCode()) {
             401, 403 => new AuthException($message, $subproblems, problemType: $type),
@@ -109,13 +108,11 @@ abstract class Endpoint
     /** Retry-After as seconds from now; the header may be delay-seconds or an HTTP-date (RFC 9110 §10.2.3). */
     protected function parseRetryAfterSeconds(Response $response): ?int
     {
-        $value = $response->getHeader('retry-after', '');
+        $value = $response->getHeaderLine('retry-after');
 
-        if (!is_string($value) || trim($value) === '') {
+        if ($value === '') {
             return null;
         }
-
-        $value = trim($value);
 
         if (ctype_digit($value)) {
             $seconds = (int) $value;

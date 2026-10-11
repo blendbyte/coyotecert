@@ -52,12 +52,12 @@ class IssueCommand extends CoyoteCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io          = new SymfonyStyle($input, $output);
-        $identifiers = $input->getOption('identifier');
-        $webroot     = $input->getOption('webroot');
-        $dnsProvider = $input->getOption('dns');
-        $provider    = $input->getOption('provider');
+        $identifiers = $this->stringsOption($input, 'identifier');
+        $webroot     = $this->stringOption($input, 'webroot');
+        $dnsProvider = $this->stringOption($input, 'dns');
+        $provider    = $this->stringOption($input, 'provider');
 
-        if (empty($identifiers)) {
+        if ($identifiers === []) {
             return $this->invalid($io, 'No identifiers specified. Use --identifier example.com (repeatable for SANs).');
         }
 
@@ -76,16 +76,16 @@ class IssueCommand extends CoyoteCommand
                 eabKid: $this->secret($input, 'eab-kid', 'ACME_EAB_KID'),
                 eabHmac: $this->secret($input, 'eab-hmac', 'ACME_EAB_HMAC'),
             );
-            $keyType          = $this->parseKeyType($input->getOption('key-type'));
+            $keyType          = $this->parseKeyType($this->stringOption($input, 'key-type') ?? 'ec256');
             $days             = $this->intOption($input, 'days', min: 1);
             $challengeHandler = $dnsProvider !== null
                 ? $this->dnsHandler($input, $dnsProvider)
-                : new Http01Handler($webroot);
+                : new Http01Handler((string) $webroot);
         } catch (\InvalidArgumentException $e) {
             return $this->invalid($io, $e->getMessage());
         }
 
-        $storagePath = $input->getOption('storage');
+        $storagePath = $this->stringOption($input, 'storage') ?? './certs';
         $coyote      = CoyoteCert::with($acmeProvider)
             ->storage(new FilesystemStorage($storagePath))
             ->identifiers($identifiers)
@@ -96,8 +96,8 @@ class IssueCommand extends CoyoteCommand
             $coyote->logger(new ConsoleLogger($output));
         }
 
-        if ($input->getOption('email')) {
-            $coyote->email($input->getOption('email'));
+        if (($email = $this->stringOption($input, 'email')) !== null) {
+            $coyote->email($email);
         }
 
         if ($input->getOption('skip-caa')) {
@@ -115,7 +115,7 @@ class IssueCommand extends CoyoteCommand
         ));
 
         try {
-            [$cert, $wasIssued] = $this->performIssue($coyote, $input->getOption('force'), $days);
+            [$cert, $wasIssued] = $this->performIssue($coyote, (bool) $input->getOption('force'), $days);
         } catch (RateLimitException $e) {
             $retryAfter = $e->getRetryAfter();
 
