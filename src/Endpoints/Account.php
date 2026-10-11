@@ -41,16 +41,20 @@ class Account extends Endpoint
             $payload['contact'] = ['mailto:' . $email];
         }
 
-        if ($this->client->getProvider()->isEabRequired()) {
-            $eab = $this->client->getProvider()->getEabCredentials($email);
+        // The directory says whether EAB is mandatory; the provider says whether it uses EAB at
+        // all (e.g. configured credentials), so credentials are sent whenever either asks for them
+        $provider = $this->client->getProvider();
+        $required = (bool) ($this->client->directory()->meta()['externalAccountRequired'] ?? $provider->isEabRequired());
+        $eab      = $required || $provider->isEabRequired() ? $provider->getEabCredentials($email) : null;
 
-            if ($eab === null) {
-                throw new AcmeException(sprintf(
-                    '%s requires EAB credentials. Pass your EAB key ID and HMAC key when constructing the provider.',
-                    $this->client->getProvider()->getDisplayName(),
-                ));
-            }
+        if ($required && $eab === null) {
+            throw new AcmeException(sprintf(
+                '%s requires EAB credentials. Pass your EAB key ID and HMAC key when constructing the provider.',
+                $provider->getDisplayName(),
+            ));
+        }
 
+        if ($eab !== null) {
             $payload['externalAccountBinding'] = $this->buildEab(
                 json_encode(JsonWebKey::compute($accountKey), JSON_THROW_ON_ERROR),
                 $this->client->directory()->newAccount(),

@@ -84,17 +84,6 @@ it('fails for google provider without EAB credentials', function () {
     expect($output)->toContain('eab-kid');
 });
 
-it('fails for sslcom provider without EAB credentials', function () {
-    [$code, $output] = runIssue([
-        '--identifier' => ['example.com'],
-        '--webroot'    => '/tmp',
-        '--provider'   => 'sslcom',
-    ]);
-
-    expect($code)->toBe(Command::INVALID);
-    expect($output)->toContain('eab-kid');
-});
-
 // ── Happy path / exception paths (via stub) ───────────────────────────────────
 
 function makeIssueCert(int $daysUntilExpiry = 90, bool $wasIssued = true, KeyType $keyType = KeyType::EC_P256): array

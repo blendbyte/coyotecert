@@ -6,10 +6,11 @@ use CoyoteCert\DTO\EabCredentials;
 
 class SslCom extends AbstractProvider
 {
+    /** SSL.com's directories don't require EAB; pass credentials to link the account to your SSL.com account. */
     public function __construct(
-        private readonly string $eabKid,
-        private readonly string $eabHmac,
-        private readonly bool   $ecc = false,
+        private readonly ?string $eabKid = null,
+        private readonly ?string $eabHmac = null,
+        private readonly bool    $ecc = false,
     ) {}
 
     public function getDirectoryUrl(): string
@@ -31,12 +32,14 @@ class SslCom extends AbstractProvider
 
     public function isEabRequired(): bool
     {
-        return true;
+        return $this->eabKid !== null;
     }
 
     public function getEabCredentials(string $email): ?EabCredentials
     {
-        return new EabCredentials($this->eabKid, $this->eabHmac);
+        return $this->eabKid !== null && $this->eabHmac !== null
+            ? new EabCredentials($this->eabKid, $this->eabHmac)
+            : null;
     }
 
     public function getCaaIdentifiers(): array

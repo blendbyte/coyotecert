@@ -97,7 +97,7 @@ CoyoteCert checks CAA DNS records for every domain before touching the CA. If a 
 
 ### Short-lived certificates and ACME profiles
 
-Let's Encrypt's `shortlived` profile gives you 6-day certs with no OCSP or CRL overhead. CoyoteCert passes the profile through and quietly ignores it on CAs that haven't caught up yet. Call `->profile()` unconditionally.
+Let's Encrypt's `shortlived` profile gives you 6-day certs, and renewal timing adapts to the certificate's lifetime automatically. CoyoteCert checks the profile against the ones the CA lists in its directory, so a typo or an unsupported profile fails before an order is placed instead of quietly issuing something else.
 
 ### RFC 8555 + RFC 9773, done right
 
@@ -475,9 +475,11 @@ CoyoteCert ships with built-in providers for every major public ACME CA. Pick on
 | `LetsEncrypt` | Let's Encrypt (production) | No | Yes | `letsencrypt.org` |
 | `LetsEncryptStaging` | Let's Encrypt (staging) | No | Yes | `letsencrypt.org` |
 | `ZeroSSL` | ZeroSSL | Yes | No | `sectigo.com`, `comodoca.com` |
-| `GoogleTrustServices` | Google Trust Services | Yes | No | `pki.goog` |
-| `SslCom` | SSL.com | Yes | No | `ssl.com` |
+| `GoogleTrustServices` | Google Trust Services | Yes | Yes | `pki.goog` |
+| `SslCom` | SSL.com | Optional | No | `ssl.com` |
 | `CustomProvider` | Any RFC 8555-compliant CA | Optional | Optional | configurable (default: skip) |
+
+The CA's own directory has the last word: CAA identities it lists (`meta.caaIdentities`) are added to the ones above, the profiles it lists (`meta.profiles`) are the ones you can request, and its `externalAccountRequired` flag decides whether EAB credentials are mandatory.
 
 ### Let's Encrypt
 
@@ -518,7 +520,7 @@ CoyoteCert::with(new GoogleTrustServices(eabKid: 'kid', eabHmac: 'hmac'))
 
 ### SSL.com
 
-Exposes separate endpoints for RSA and ECC certificates.
+Exposes separate endpoints for RSA and ECC certificates. Its directories don't require EAB; pass your EAB credentials to link the ACME account to your SSL.com account.
 
 ```php
 use CoyoteCert\Provider\SslCom;
@@ -544,7 +546,7 @@ CoyoteCert::with(new CustomProvider(
     eabKid:            'kid',             // omit if EAB not required
     eabHmac:           'hmac',
     verifyTls:         true,
-    profilesSupported: false,
+    profilesSupported: false,             // only used when the directory doesn't list its profiles
     eabAlgorithm:      EabAlgorithm::HS256, // HS256 (default), HS384, or HS512
     caaIdentifiers:    ['myca.com'],      // CAA values that permit this CA; omit to skip CAA check
 ))
@@ -1171,6 +1173,7 @@ CoyoteCert::with(new LetsEncrypt())
 // Mixed hostname + IP certificate
 CoyoteCert::with(new LetsEncrypt())
     ->identifiers(['example.com', '192.0.2.1', '2001:db8::1'])
+    ->profile('shortlived')
     ->challenge(new Http01Handler('/var/www/html'))
     ->issueOrRenew();
 ```
@@ -1235,13 +1238,14 @@ No configuration needed. It just works.
 Profiles let you request a specific certificate type from the CA. Let's Encrypt currently supports two:
 
 ```php
-->profile('shortlived') // 6-day certificate, no OCSP/CRL infrastructure needed
-->profile('classic')    // 90-day certificate (default if no profile is set)
+->profile('classic')    // 90 days, the default when no profile is set
+->profile('tlsserver')  // 45 days, slimmer certificate (no subject CN), up to 25 names
+->profile('shortlived') // about 6 days, up to 25 names; the only one that allows IP addresses
 ```
 
 Short-lived certificates renew more often but eliminate the need for OCSP stapling, CRL checks, and revocation infrastructure. Simpler to operate.
 
-Profiles are forwarded to the CA only if the provider reports `supportsProfiles() === true`. For CAs that don't support profiles, the setting is silently ignored. Call `->profile()` unconditionally if you want.
+The profile is checked against the CA's directory, which lists the profiles it offers (`meta.profiles`). Requesting one it doesn't list throws an `AcmeException` naming the available profiles, and so does requesting any profile from a CA without profile support. Other CAs have their own names, for example Google Trust Services offers `minimal` and `standard`.
 
 ---
 

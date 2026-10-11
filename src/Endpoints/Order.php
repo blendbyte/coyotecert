@@ -32,7 +32,8 @@ class Order extends Endpoint
 
         $payload = ['identifiers' => $identifiers];
 
-        if ($profile !== '' && $this->client->getProvider()->supportsProfiles()) {
+        if ($profile !== '') {
+            $this->assertProfileOffered($profile);
             $payload['profile'] = $profile;
         }
 
@@ -65,6 +66,29 @@ class Order extends Endpoint
         }
 
         $this->throwError($response, 'Creating new order failed.', ['payload' => $payload]);
+    }
+
+    /**
+     * A requested profile must be one the CA lists in its directory; without that list the
+     * provider decides. Silently dropping it would issue a certificate of the wrong kind.
+     */
+    private function assertProfileOffered(string $profile): void
+    {
+        $offered  = $this->client->directory()->meta()['profiles'] ?? null;
+        $provider = $this->client->getProvider();
+
+        if (is_array($offered) && !array_key_exists($profile, $offered)) {
+            throw new AcmeException(sprintf(
+                '%s does not offer the "%s" profile. Available: %s.',
+                $provider->getDisplayName(),
+                $profile,
+                implode(', ', array_keys($offered)),
+            ));
+        }
+
+        if (!is_array($offered) && !$provider->supportsProfiles()) {
+            throw new AcmeException(sprintf('%s does not support ACME profiles.', $provider->getDisplayName()));
+        }
     }
 
     public function refresh(OrderData $order): OrderData

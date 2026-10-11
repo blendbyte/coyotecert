@@ -17,6 +17,10 @@ interface AcmeProviderInterface
 
     public function getDisplayName(): string;
 
+    /**
+     * Whether to send EAB credentials. The directory's externalAccountRequired, when present,
+     * decides whether missing credentials are an error.
+     */
     public function isEabRequired(): bool;
 
     /**
@@ -25,15 +29,15 @@ interface AcmeProviderInterface
      */
     public function getEabCredentials(string $email): ?EabCredentials;
 
-    /** When false, the profile field is omitted from new-order requests. */
+    /** Fallback for CAs whose directory doesn't list its profiles (meta.profiles). */
     public function supportsProfiles(): bool;
 
     /** Set to false only for local test CAs (e.g. Pebble). */
     public function verifyTls(): bool;
 
     /**
-     * CAA DNS record values that authorise this CA (e.g. ['letsencrypt.org']).
-     * Return an empty array to skip the CAA pre-check.
+     * CAA DNS record values that authorise this CA (e.g. ['letsencrypt.org']); the directory's
+     * caaIdentities are added to them. Return an empty array to skip the CAA pre-check.
      *
      * @return string[]
      */

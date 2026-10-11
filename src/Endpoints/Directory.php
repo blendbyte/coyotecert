@@ -29,6 +29,19 @@ class Directory extends Endpoint
         return $this->response = $response;
     }
 
+    /**
+     * The directory's meta object (RFC 8555 §7.1.1): caaIdentities, profiles,
+     * externalAccountRequired, termsOfService, website. Empty when the CA sends none.
+     *
+     * @return array<string, mixed>
+     */
+    public function meta(): array
+    {
+        $meta = $this->all()->jsonBody()['meta'] ?? [];
+
+        return is_array($meta) ? $meta : [];
+    }
+
     public function newNonce(): string
     {
         return $this->all()->jsonBody()['newNonce'];

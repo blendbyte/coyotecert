@@ -1911,3 +1911,78 @@ it('Account::keyRollover() signs the inner JWS with the new key and no nonce (RF
     expect($innerPayload['account'])->toBe('https://acme.example/account/1');
     expect($innerPayload)->toHaveKey('oldKey');
 });
+
+// ── Directory meta ────────────────────────────────────────────────────────────
+
+function metaApi(array $meta, array &$sent, ?\CoyoteCert\Provider\AcmeProviderInterface $provider = null): Api
+{
+    $provider ??= testProvider();
+    $storage = new InMemoryStorage();
+    $storage->saveAccountKey($provider->getSlug(), rsaKeyPem(), KeyType::RSA_2048);
+
+    return new Api(
+        provider: $provider,
+        storage: $storage,
+        httpClient: closureMock(
+            getHandler: fn($url) => new Response([], $url, 200, directoryBody() + ['meta' => $meta]),
+            postHandler: function ($url, $jws) use (&$sent) {
+                $sent[] = json_decode(Base64::urlSafeDecode($jws['payload']), true);
+
+                return str_contains($url, 'new-order')
+                    ? new Response(['location' => 'https://acme.example/order/1'], $url, 201, orderBody('pending'))
+                    : new Response(['location' => 'https://acme.example/account/1'], $url, 201, accountBody());
+            },
+        ),
+    );
+}
+
+it('Order::new() rejects a profile the directory does not list', function () {
+    $sent = [];
+    $api  = metaApi(['profiles' => ['classic' => 'x', 'shortlived' => 'y']], $sent);
+
+    expect(fn() => $api->order()->new(makeAccountData(), ['example.com'], 'tlsserver'))
+        ->toThrow(AcmeException::class, 'does not offer the "tlsserver" profile. Available: classic, shortlived');
+    expect($sent)->toBe([]);
+});
+
+it('Order::new() sends a listed profile even when the provider class does not claim profile support', function () {
+    $sent = [];
+    $api  = metaApi(['profiles' => ['minimal' => 'x']], $sent, new \CoyoteCert\Provider\GoogleTrustServices('kid', 'hmac'));
+
+    $api->order()->new(makeAccountData(), ['example.com'], 'minimal');
+
+    expect($sent[0]['profile'])->toBe('minimal');
+});
+
+it('Order::new() rejects a profile when the CA supports none instead of dropping it', function () {
+    $sent = [];
+    $api  = metaApi([], $sent);
+
+    expect(fn() => $api->order()->new(makeAccountData(), ['example.com'], 'shortlived'))
+        ->toThrow(AcmeException::class, 'does not support ACME profiles');
+});
+
+it('Account::create() follows the directory: no EAB error when it is not required', function () {
+    $sent = [];
+    $api  = metaApi(['externalAccountRequired' => false], $sent, new \CoyoteCert\Provider\SslCom());
+
+    $api->account()->create();
+
+    expect($sent[0])->not->toHaveKey('externalAccountBinding');
+});
+
+it('Account::create() sends configured EAB credentials even when the directory does not require them', function () {
+    $sent = [];
+    $api  = metaApi(['externalAccountRequired' => false], $sent, new \CoyoteCert\Provider\SslCom('kid', 'c2VjcmV0'));
+
+    $api->account()->create();
+
+    expect($sent[0])->toHaveKey('externalAccountBinding');
+});
+
+it('Account::create() requires EAB when the directory says so, whatever the provider class claims', function () {
+    $sent = [];
+    $api  = metaApi(['externalAccountRequired' => true], $sent);
+
+    expect(fn() => $api->account()->create())->toThrow(AcmeException::class, 'requires EAB credentials');
+});

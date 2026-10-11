@@ -245,17 +245,6 @@ class CoyoteCert
     {
         $this->validate();
 
-        if (!$this->skipCaaCheck) {
-            $domainIdentifiers = array_values(array_filter(
-                $this->domains,
-                static fn(string $id): bool => !filter_var($id, FILTER_VALIDATE_IP),
-            ));
-
-            if (!empty($domainIdentifiers)) {
-                (new CaaChecker())->check($domainIdentifiers, $this->provider->getCaaIdentifiers());
-            }
-        }
-
         $challengeHandler = $this->challengeHandler ?? throw new AcmeException('No challenge handler configured.');
 
         $api = new Api(
@@ -266,6 +255,10 @@ class CoyoteCert
             httpClient: $this->httpClient,
             accountKeyType: $this->accountKeyType,
         );
+
+        if (!$this->skipCaaCheck) {
+            $this->checkCaa($api);
+        }
 
         $account = $this->getOrCreateAccount($api);
 
@@ -326,6 +319,30 @@ class CoyoteCert
     }
 
     // ── Private issue() helpers ───────────────────────────────────────────────
+
+    /**
+     * The CA's own caaIdentities complement the provider's list: a CAA record naming any of
+     * them authorises the CA. A provider returning no identifiers opts out of the check.
+     */
+    private function checkCaa(Api $api): void
+    {
+        $identities = $this->provider->getCaaIdentifiers();
+
+        if ($identities === []) {
+            return;
+        }
+
+        $fromDirectory = $api->directory()->meta()['caaIdentities'] ?? [];
+        $identities    = array_values(array_unique([...$identities, ...(is_array($fromDirectory) ? $fromDirectory : [])]));
+        $domains       = array_values(array_filter(
+            $this->domains,
+            static fn(string $id): bool => !filter_var($id, FILTER_VALIDATE_IP),
+        ));
+
+        if ($domains !== []) {
+            (new CaaChecker())->check($domains, $identities);
+        }
+    }
 
     private function getOrCreateAccount(Api $api): AccountData
     {

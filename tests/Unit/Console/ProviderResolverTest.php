@@ -78,9 +78,9 @@ it('throws for google without eab-hmac', function () {
     ProviderResolver::resolve('google', eabKid: 'kid');
 })->throws(\InvalidArgumentException::class, 'eab-hmac');
 
-it('throws for sslcom without EAB credentials', function () {
-    ProviderResolver::resolve('sslcom');
-})->throws(\InvalidArgumentException::class, 'eab-kid');
+it('resolves sslcom without EAB credentials, which its directory does not require', function () {
+    expect(ProviderResolver::resolve('sslcom')->getEabCredentials(''))->toBeNull();
+});
 
 // ── getSlug() ─────────────────────────────────────────────────────────────────
 

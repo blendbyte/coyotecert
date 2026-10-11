@@ -42,13 +42,8 @@ class ProviderResolver
                 $requireEab,
             ),
 
-            'sslcom', 'ssl.com' => self::requireEab(
-                fn(string $kid, string $hmac) => new SslCom($kid, $hmac),
-                $eabKid,
-                $eabHmac,
-                'SSL.com',
-                $requireEab,
-            ),
+            'sslcom', 'ssl.com'
+                => new SslCom($eabKid, $eabHmac),
 
             default => throw new \InvalidArgumentException(
                 sprintf(
