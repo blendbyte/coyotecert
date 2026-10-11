@@ -28,7 +28,7 @@ it('getHelp describes the app and lists supported CAs', function () {
     expect($help)->toContain('coyote');
     expect($help)->toContain("Let's Encrypt");
     expect($help)->toContain('ZeroSSL');
-    expect($help)->toContain('Buypass');
+    expect($help)->toContain('SSL.com');
 });
 
 it('doRun shows the command list when --help is passed with no command', function () {

@@ -3,8 +3,6 @@
 namespace CoyoteCert\Console;
 
 use CoyoteCert\Provider\AcmeProviderInterface;
-use CoyoteCert\Provider\BuypassGo;
-use CoyoteCert\Provider\BuypassGoStaging;
 use CoyoteCert\Provider\GoogleTrustServices;
 use CoyoteCert\Provider\LetsEncrypt;
 use CoyoteCert\Provider\LetsEncryptStaging;
@@ -46,15 +44,9 @@ class ProviderResolver
                 'SSL.com',
             ),
 
-            'buypass'
-                => new BuypassGo(),
-
-            'buypass-staging'
-                => new BuypassGoStaging(),
-
             default => throw new \InvalidArgumentException(
                 sprintf(
-                    'Unknown provider "%s". Supported: letsencrypt, letsencrypt-staging, zerossl, google, buypass, buypass-staging, sslcom.',
+                    'Unknown provider "%s". Supported: letsencrypt, letsencrypt-staging, zerossl, google, sslcom.',
                     $name,
                 ),
             ),

@@ -1,8 +1,6 @@
 <?php
 
 use CoyoteCert\Console\ProviderResolver;
-use CoyoteCert\Provider\BuypassGo;
-use CoyoteCert\Provider\BuypassGoStaging;
 use CoyoteCert\Provider\GoogleTrustServices;
 use CoyoteCert\Provider\LetsEncrypt;
 use CoyoteCert\Provider\LetsEncryptStaging;
@@ -63,14 +61,6 @@ it('resolves sslcom via ssl.com alias', function () {
     expect(ProviderResolver::resolve('ssl.com', eabKid: 'k', eabHmac: 'h'))->toBeInstanceOf(SslCom::class);
 });
 
-it('resolves buypass', function () {
-    expect(ProviderResolver::resolve('buypass'))->toBeInstanceOf(BuypassGo::class);
-});
-
-it('resolves buypass-staging', function () {
-    expect(ProviderResolver::resolve('buypass-staging'))->toBeInstanceOf(BuypassGoStaging::class);
-});
-
 it('is case-insensitive', function () {
     expect(ProviderResolver::resolve('LetsEncrypt'))->toBeInstanceOf(LetsEncrypt::class);
     expect(ProviderResolver::resolve('ZEROSSL'))->toBeInstanceOf(ZeroSSL::class);
@@ -108,14 +98,6 @@ it('zerossl slug is zerossl', function () {
 
 it('google slug is google', function () {
     expect(ProviderResolver::resolve('google', eabKid: 'k', eabHmac: 'h')->getSlug())->toBe('google');
-});
-
-it('buypass slug is buypass', function () {
-    expect(ProviderResolver::resolve('buypass')->getSlug())->toBe('buypass');
-});
-
-it('buypass-staging slug is buypass-staging', function () {
-    expect(ProviderResolver::resolve('buypass-staging')->getSlug())->toBe('buypass-staging');
 });
 
 it('sslcom slug is sslcom', function () {

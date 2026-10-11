@@ -19,6 +19,7 @@ use CoyoteCert\Http\Psr18Adapter;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
 use CoyoteCert\Interfaces\HttpClientInterface;
 use CoyoteCert\Provider\AcmeProviderInterface;
+use CoyoteCert\Storage\InMemoryStorage;
 use CoyoteCert\Storage\StorageInterface;
 use CoyoteCert\Storage\StoredCertificate;
 use CoyoteCert\Support\CaaChecker;
@@ -245,7 +246,8 @@ class CoyoteCert
 
         $api = new Api(
             provider: $this->provider,
-            storage: $this->storage,
+            // Without storage the account key only lives for this call, so each issue() registers a new account
+            storage: $this->storage ?? new InMemoryStorage(),
             logger: $this->logger,
             httpClient: $this->httpClient,
             accountKeyType: $this->accountKeyType,

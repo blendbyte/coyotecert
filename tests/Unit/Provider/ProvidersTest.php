@@ -1,7 +1,5 @@
 <?php
 
-use CoyoteCert\Provider\BuypassGo;
-use CoyoteCert\Provider\BuypassGoStaging;
 use CoyoteCert\Provider\CustomProvider;
 use CoyoteCert\Provider\GoogleTrustServices;
 use CoyoteCert\Provider\LetsEncrypt;
@@ -63,59 +61,6 @@ it('LetsEncryptStaging verifies TLS', function () {
 
 it('LetsEncryptStaging CAA identifier is letsencrypt.org', function () {
     expect((new LetsEncryptStaging())->getCaaIdentifiers())->toContain('letsencrypt.org');
-});
-
-// ── BuypassGo ────────────────────────────────────────────────────────────────
-
-it('BuypassGo has correct directory URL', function () {
-    expect((new BuypassGo())->getDirectoryUrl())->toContain('buypass');
-});
-
-it('BuypassGo does not require EAB', function () {
-    expect((new BuypassGo())->isEabRequired())->toBeFalse();
-    expect((new BuypassGo())->getEabCredentials('e@example.com'))->toBeNull();
-});
-
-it('BuypassGo has a display name', function () {
-    expect((new BuypassGo())->getDisplayName())->toContain('Buypass');
-});
-
-it('BuypassGo does not support profiles', function () {
-    expect((new BuypassGo())->supportsProfiles())->toBeFalse();
-});
-
-it('BuypassGo verifies TLS', function () {
-    expect((new BuypassGo())->verifyTls())->toBeTrue();
-});
-
-it('BuypassGo CAA identifier is buypass.com', function () {
-    expect((new BuypassGo())->getCaaIdentifiers())->toContain('buypass.com');
-});
-
-it('BuypassGoStaging has a different directory URL', function () {
-    expect((new BuypassGoStaging())->getDirectoryUrl())
-        ->not->toBe((new BuypassGo())->getDirectoryUrl());
-});
-
-it('BuypassGoStaging has a display name', function () {
-    expect((new BuypassGoStaging())->getDisplayName())->toContain('Buypass');
-});
-
-it('BuypassGoStaging does not require EAB', function () {
-    expect((new BuypassGoStaging())->isEabRequired())->toBeFalse();
-    expect((new BuypassGoStaging())->getEabCredentials('e@example.com'))->toBeNull();
-});
-
-it('BuypassGoStaging does not support profiles', function () {
-    expect((new BuypassGoStaging())->supportsProfiles())->toBeFalse();
-});
-
-it('BuypassGoStaging verifies TLS', function () {
-    expect((new BuypassGoStaging())->verifyTls())->toBeTrue();
-});
-
-it('BuypassGoStaging CAA identifier is buypass.com', function () {
-    expect((new BuypassGoStaging())->getCaaIdentifiers())->toContain('buypass.com');
 });
 
 // ── ZeroSSL ───────────────────────────────────────────────────────────────────

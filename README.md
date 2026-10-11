@@ -9,7 +9,7 @@
 [![Static Analysis](https://img.shields.io/github/actions/workflow/status/blendbyte/coyotecert/static-analysis.yml?branch=main&style=flat-square&label=phpstan)](https://github.com/blendbyte/coyotecert/actions/workflows/static-analysis.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/blendbyte/coyotecert?style=flat-square)](https://codecov.io/gh/blendbyte/coyotecert)
 
-**A PHP 8.3+ ACME v2 client for issuing, renewing, and revoking TLS certificates.** Works with Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, Buypass, and any RFC 8555-compliant CA. Fluent API, no framework dependencies, solid test coverage.
+**A PHP 8.3+ ACME v2 client for issuing, renewing, and revoking TLS certificates.** Works with Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and any RFC 8555-compliant CA. Fluent API, no framework dependencies, solid test coverage.
 
 ACME (Automatic Certificate Management Environment) is the protocol behind free, automated TLS certificates. Yes, same name as the cartoon supply company. We leaned into it. CoyoteCert covers the whole thing: account management, order lifecycle, HTTP-01, DNS-01, and TLS-ALPN-01 challenges, certificate issuance, ARI smart renewal, and revocation. One `composer require blendbyte/coyotecert` and you're off. No cliff. No 🪨.
 
@@ -73,7 +73,7 @@ Cells verified from each library's public repository, May 2026. If something's c
 
 ### Every major CA, out of the box
 
-Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and Buypass. Full EAB support included; ZeroSSL auto-provisions credentials from your API key, no token copy-pasting. Need something more exotic? `CustomProvider` handles any RFC 8555-compliant CA.
+Built-in providers for Let's Encrypt, ZeroSSL, Google Trust Services, and SSL.com. Full EAB support included; ZeroSSL auto-provisions credentials from your API key, no token copy-pasting. Need something more exotic? `CustomProvider` handles any RFC 8555-compliant CA.
 
 ### A CLI that ships with the package
 
@@ -351,8 +351,6 @@ If a valid certificate already exists and expiry is more than `--days` away, the
 | `letsencrypt-staging`, `le-staging`, `staging` | Let's Encrypt (staging) |
 | `zerossl` | ZeroSSL (use `--zerossl-key` or `--eab-kid`/`--eab-hmac`) |
 | `google`, `gts` | Google Trust Services (requires `--eab-kid` and `--eab-hmac`) |
-| `buypass` | Buypass Go SSL (production) |
-| `buypass-staging` | Buypass Go SSL (staging) |
 | `sslcom`, `ssl.com` | SSL.com (requires `--eab-kid` and `--eab-hmac`) |
 
 **DNS providers**
@@ -472,8 +470,6 @@ CoyoteCert ships with built-in providers for every major public ACME CA. Pick on
 | `LetsEncrypt` | Let's Encrypt (production) | No | Yes | `letsencrypt.org` |
 | `LetsEncryptStaging` | Let's Encrypt (staging) | No | Yes | `letsencrypt.org` |
 | `ZeroSSL` | ZeroSSL | Yes | No | `sectigo.com`, `comodoca.com` |
-| `BuypassGo` | Buypass Go SSL (production) | No | No | `buypass.com` |
-| `BuypassGoStaging` | Buypass Go SSL (staging) | No | No | `buypass.com` |
 | `GoogleTrustServices` | Google Trust Services | Yes | No | `pki.goog` |
 | `SslCom` | SSL.com | Yes | No | `ssl.com` |
 | `CustomProvider` | Any RFC 8555-compliant CA | Optional | Optional | configurable (default: skip) |
@@ -527,16 +523,6 @@ CoyoteCert::with(new SslCom(eabKid: 'kid', eabHmac: 'hmac'))
 
 // ECC endpoint
 CoyoteCert::with(new SslCom(eabKid: 'kid', eabHmac: 'hmac', ecc: true))
-```
-
-### Buypass Go SSL
-
-```php
-use CoyoteCert\Provider\BuypassGo;
-use CoyoteCert\Provider\BuypassGoStaging;
-
-CoyoteCert::with(new BuypassGo())
-CoyoteCert::with(new BuypassGoStaging())
 ```
 
 ### Custom CA
@@ -857,7 +843,7 @@ $cert = CoyoteCert::with(new LetsEncrypt())
 $myVault->put('example.com', $cert->fullchain, $cert->privateKey);
 ```
 
-Note: without storage, `needsRenewal()` always returns `true` and `issueOrRenew()` will issue on every call. Manage renewal yourself, or use a custom storage backend.
+Note: without storage, `needsRenewal()` always returns `true` and `issueOrRenew()` will issue on every call. The ACME account key isn't kept either, so every `issue()` registers a new account with the CA. For anything beyond one-off issuance, configure a storage backend (`InMemoryStorage` is enough to reuse one account within a long-running process).
 
 ### Custom storage
 

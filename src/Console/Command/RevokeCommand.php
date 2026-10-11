@@ -25,7 +25,7 @@ class RevokeCommand extends Command
     {
         $this
             ->addOption('identifier', 'i', InputOption::VALUE_REQUIRED, 'Primary identifier of the certificate to revoke')
-            ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA the certificate was issued by: letsencrypt, letsencrypt-staging, zerossl, google, buypass, buypass-staging, sslcom')
+            ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA the certificate was issued by: letsencrypt, letsencrypt-staging, zerossl, google, sslcom')
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Directory where certificates are stored', './certs')
             ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Key type of the certificate: ec256, ec384, rsa2048, rsa4096', 'ec256')
             ->addOption('reason', null, InputOption::VALUE_REQUIRED, 'Revocation reason: unspecified, keycompromise, cacompromise, affiliationchanged, superseded, cessationofoperation, certificatehold, privilegewithdrawn, aacompromise', 'unspecified')

@@ -1,6 +1,6 @@
 {
   "name": "blendbyte/coyotecert",
-  "description": "Full-featured ACME v2 (RFC 8555) PHP 8.3+ client for issuing, renewing, and revoking TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, Buypass, or any standards-compliant CA — with ARI smart renewal, ECDSA/RSA key support, EAB, and PSR-18 HTTP client integration.",
+  "description": "Full-featured ACME v2 (RFC 8555) PHP 8.3+ client for issuing, renewing, and revoking TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, or any standards-compliant CA — with ARI smart renewal, ECDSA/RSA key support, EAB, and PSR-18 HTTP client integration.",
   "keywords": ["acme", "letsencrypt", "ssl", "tls", "certificate", "psr-18"],
   "type": "library",
   "license": "MIT",

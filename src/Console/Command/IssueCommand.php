@@ -33,7 +33,7 @@ class IssueCommand extends Command
             ->addOption('dns-propagation-timeout', null, InputOption::VALUE_REQUIRED, 'Seconds to wait for DNS propagation before submitting the challenge (default: 60)')
             ->addOption('dns-propagation-delay', null, InputOption::VALUE_REQUIRED, 'Settle delay in seconds after the propagation check, letting resolver caches expire before validation (default: 60)')
             ->addOption('dns-skip-propagation', null, InputOption::VALUE_NONE, 'Skip the post-deploy DNS propagation check (use for split-horizon or internal DNS)')
-            ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA to use: letsencrypt, letsencrypt-staging, zerossl, google, buypass, buypass-staging, sslcom')
+            ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA to use: letsencrypt, letsencrypt-staging, zerossl, google, sslcom')
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Directory to store certificates and account keys', './certs')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Days before expiry to trigger renewal', '30')
             ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Certificate key type: ec256, ec384, rsa2048, rsa4096', 'ec256')
@@ -65,7 +65,7 @@ class IssueCommand extends Command
         }
 
         if ($provider === null) {
-            $this->renderError('--provider is required. Supported: letsencrypt, letsencrypt-staging, zerossl, google, buypass, buypass-staging, sslcom.');
+            $this->renderError('--provider is required. Supported: letsencrypt, letsencrypt-staging, zerossl, google, sslcom.');
 
             return Command::FAILURE;
         }

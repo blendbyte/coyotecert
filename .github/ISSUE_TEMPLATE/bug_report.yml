@@ -17,8 +17,6 @@ body:
         - Let's Encrypt (staging)
         - ZeroSSL
         - Google Trust Services
-        - Buypass Go SSL (production)
-        - Buypass Go SSL (staging)
         - SSL.com
         - Custom / other
     validations:

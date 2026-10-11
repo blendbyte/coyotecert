@@ -677,3 +677,41 @@ it('deployAndValidate() keeps cleaning up and succeeds when a cleanup call throw
 
     expect($handler->cleaned)->toBe($domains);
 });
+
+it('issue() works without storage and registers an account with a throwaway key', function () {
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $client  = new class ($factory) implements \Psr\Http\Client\ClientInterface {
+        public array $posted = [];
+
+        public function __construct(private \Nyholm\Psr7\Factory\Psr17Factory $factory) {}
+
+        public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
+        {
+            if ($r->getMethod() === 'POST') {
+                $this->posted[] = (string) $r->getUri();
+
+                // Stop the flow once the account registration has been signed and sent
+                return $this->factory->createResponse(403)
+                    ->withHeader('Content-Type', 'application/problem+json')
+                    ->withBody($this->factory->createStream('{"detail":"stop here"}'));
+            }
+
+            return $this->factory->createResponse(200)
+                ->withHeader('Replay-Nonce', 'nonce')
+                ->withBody($this->factory->createStream(json_encode([
+                    'newNonce'   => 'https://acme.example/nonce',
+                    'newAccount' => 'https://acme.example/new-account',
+                    'newOrder'   => 'https://acme.example/new-order',
+                ])));
+        }
+    };
+
+    $coyote = makeCoyote()
+        ->httpClient($client, $factory, $factory)
+        ->identifiers('example.com')
+        ->challenge(makeNoOpHandler())
+        ->skipCaaCheck();
+
+    expect(fn() => $coyote->issue())->toThrow(\CoyoteCert\Exceptions\AuthException::class, 'stop here');
+    expect($client->posted)->toBe(['https://acme.example/new-account']);
+});
