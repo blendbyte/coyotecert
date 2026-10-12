@@ -6,7 +6,7 @@
 
 ### Behaviour changes in the builder
 
-- **Renewal timing.** `needsRenewal()` and `issueOrRenew()` no longer default to "30 days before expiry". When the CA offers ARI, its renewal window decides (and a window that has already passed now means "renew now"). Otherwise renewal is due once a third of the certificate's lifetime remains. Pass `$daysBeforeExpiry` to keep a fixed threshold; it applies in addition to the ARI window.
+- **Renewal timing.** `needsRenewal()` and `issueOrRenew()` no longer default to "30 days before expiry". When the CA offers ARI, its renewal window decides (and a window that has already passed now means "renew now"). Otherwise renewal is due once a third of the certificate's lifetime remains. Pass `$daysBeforeExpiry` to keep a fixed threshold (renew when that many days or fewer remain); it applies in addition to the ARI window.
 - **Renewal on changed identifiers.** A stored certificate that doesn't cover every configured identifier, has expired or can't be parsed is renewed.
 - **Identifiers are lower-cased.** Certificates stored under a mixed-case primary domain by 1.x are not found and get reissued once.
 - **Profiles are checked.** A profile the CA doesn't list in its directory throws an `AcmeException` instead of being silently dropped.
@@ -63,7 +63,7 @@ Removed:
 - Existing tables keep working, provided `store_key` is the primary key or has a unique index. Hand-made SQLite or PostgreSQL tables without one fail loudly now (1.x silently added duplicate rows on SQLite).
 - `DatabaseStorage` rejects PDO drivers other than mysql, pgsql and sqlite when it is constructed.
 - `FilesystemStorage` writes every file except the public certificate and chain PEMs with mode 0600, including `cert.json`.
-- `FilesystemStorage` writes atomically: a temp file in the storage directory is renamed over the target. The directory itself must be writable, and a rewritten file is a new file (owned by the writing user). Symlinked files are written through, as before.
+- `FilesystemStorage` writes atomically: a temp file next to the target is renamed over it. The directory must be writable (for a symlinked file, the directory it points into), and a rewritten file is a new file owned by the writing user. Symlinked files are written through, as before, including links whose target doesn't exist yet.
 
 ### CLI
 

@@ -24,9 +24,7 @@ class Certificate extends Endpoint
         $response = $this->postSigned($orderData->certificateUrl, $orderData->accountUrl, headers: [self::ACCEPT_PEM]);
 
         if ($response->getHttpResponseCode() !== 200) {
-            $this->logResponse('error', 'Failed to fetch certificate', $response);
-
-            throw new AcmeException('Failed to fetch certificate.');
+            $this->throwError($response, 'Failed to fetch certificate.');
         }
 
         $primary = CertificateBundleData::fromResponse($response);

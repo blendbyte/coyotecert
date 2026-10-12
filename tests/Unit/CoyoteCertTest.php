@@ -808,18 +808,64 @@ it('deployAndValidate() does not deploy challenges for authorizations that are a
     expect($handler->cleaned)->toBe(['b.example.com']);
 });
 
-it('needsRenewal() applies an explicit day threshold even when the CA offers ARI', function () {
-    $storage = new InMemoryStorage();
-    $storage->saveCertificate('example.com', makeCoyoteCert(expiresInDays: 20, issuedDaysAgo: 70));
+it('needsRenewal() applies an explicit day threshold even when the ARI window is still closed', function () {
+    [$certPem, $issuerPem] = caSignedLeaf();
+    $storage               = new InMemoryStorage();
+    $storage->saveCertificate('example.com', new StoredCertificate(
+        certificate: $certPem,
+        privateKey: 'key',
+        fullchain: $certPem . $issuerPem,
+        caBundle: $issuerPem,
+        issuedAt: new DateTimeImmutable('-70 days'),
+        expiresAt: new DateTimeImmutable('+20 days'),
+        domains: ['example.com'],
+        keyType: KeyType::EC_P256,
+    ));
 
-    // Threshold reached: true without asking ARI (the failing client proves no request is made)
-    $failing = new class implements \Psr\Http\Client\ClientInterface {
+    // A CA with ARI whose window opens far in the future
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $client  = new class ($factory) implements \Psr\Http\Client\ClientInterface {
+        public int $calls = 0;
+
+        public function __construct(private \Nyholm\Psr7\Factory\Psr17Factory $f) {}
+
         public function sendRequest(\Psr\Http\Message\RequestInterface $r): \Psr\Http\Message\ResponseInterface
         {
-            throw new \RuntimeException('no request expected');
+            $this->calls++;
+            $body = str_contains((string) $r->getUri(), '/ari/')
+                ? ['suggestedWindow' => ['start' => '2099-01-01T00:00:00Z', 'end' => '2099-01-02T00:00:00Z']]
+                : ['newNonce' => 'https://acme.example/n', 'newAccount' => 'https://acme.example/a', 'newOrder' => 'https://acme.example/o', 'revokeCert' => 'https://acme.example/r', 'renewalInfo' => 'https://acme.example/ari/'];
+
+            return $this->f->createResponse(200)->withBody($this->f->createStream((string) json_encode($body)));
         }
     };
-    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $coyote = makeCoyote()->httpClient($client, $factory, $factory)->identifiers('example.com')->storage($storage);
 
-    expect(makeCoyote()->httpClient($failing, $factory, $factory)->identifiers('example.com')->storage($storage)->needsRenewal(30))->toBeTrue();
+    // 20 days left, threshold 30: due, decided before ARI is even asked
+    expect($coyote->needsRenewal(30))->toBeTrue();
+    expect($client->calls)->toBe(0);
+
+    // Threshold 10 not met: the closed ARI window decides
+    expect($coyote->needsRenewal(10))->toBeFalse();
+    expect($client->calls)->toBeGreaterThan(0);
+});
+
+it('withHttpTimeout() keeps the provider\'s TLS setting', function () {
+    $coyote = CoyoteCert::with(new Pebble(verifyTls: false))->withHttpTimeout(30);
+    $client = (new \ReflectionProperty(CoyoteCert::class, 'httpClient'))->getValue($coyote);
+
+    expect((new \ReflectionProperty(\CoyoteCert\Http\Client::class, 'verifyTls'))->getValue($client))->toBeFalse();
+});
+
+it('treats an unreadable stored certificate as missing instead of failing', function () {
+    $dir = sys_get_temp_dir() . '/coyote-corrupt-' . uniqid();
+    mkdir($dir);
+    file_put_contents($dir . '/example.com.EC_P256.cert.json', '{"certificate": "trunc');
+
+    try {
+        expect(makeCoyote()->identifiers('example.com')->storage(new \CoyoteCert\Storage\FilesystemStorage($dir))->needsRenewal())->toBeTrue();
+    } finally {
+        array_map('unlink', glob($dir . '/*') ?: []);
+        rmdir($dir);
+    }
 });

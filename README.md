@@ -338,7 +338,7 @@ If a valid certificate already exists and renewal isn't due yet, the command exi
 | `--dns-skip-propagation` | | | Skip the post-deploy DNS propagation check entirely (split-horizon or internal DNS) |
 | `--provider` | `-p` | | CA to use. See provider table below. **Required** |
 | `--storage` | `-s` | `./certs` | Directory to read/write certificates and account keys |
-| `--days` | | | Also renew when fewer than this many days remain. Default: the CA's ARI window, or a third of the lifetime without ARI |
+| `--days` | | | Renew when this many days or fewer remain, in addition to the CA's ARI window. Without it: the ARI window, or a third of the lifetime when the CA has no ARI |
 | `--key-type` | | `ec256` | Certificate key type: `ec256`, `ec384`, `rsa2048`, `rsa4096` |
 | `--force` | `-f` | | Issue a fresh certificate even if the current one is still valid |
 | `--skip-caa` | | | Skip CAA DNS pre-check |
@@ -762,7 +762,7 @@ $handler = new ShellDns01Handler(
 );
 ```
 
-Don't quote the placeholders; the values are already shell-escaped. The cleanup command runs once per deployed value with the same placeholders, so a hook can remove exactly the value it added (a wildcard and its base domain share one `_acme-challenge` name). A non-zero exit code, or a command running longer than the `timeout` (default 120 seconds), throws `ChallengeException`.
+Don't quote the placeholders; the values are already shell-escaped. The cleanup command runs once per deployed value with the same placeholders, so a hook can remove exactly the value it added (a wildcard and its base domain share one `_acme-challenge` name). A non-zero exit code, or a command running longer than the `timeout` (default 120 seconds), throws `ChallengeException`. On timeout the shell running the command is stopped, but not processes the hook started itself, so give long-running tools (`nsupdate`, `curl`) their own timeout.
 
 ---
 
@@ -797,7 +797,7 @@ ssl_certificate     /var/certs/example.com.EC_P256.fullchain.pem;
 ssl_certificate_key /var/certs/example.com.EC_P256.private_key.pem;
 ```
 
-The directory is created automatically (mode 0700) and must stay writable. Every file is written to a temporary file and renamed into place, so readers (and a web server reload) never see a half-written certificate or key. A symlinked file is written through, not replaced.
+The directory is created automatically (mode 0700) and must stay writable. Every file is written to a temporary file next to it and renamed into place, so readers (and a web server reload) never see a half-written certificate or key. A symlinked file is written through, not replaced (into the directory the link points to, which must be writable too).
 
 ### Database (PDO)
 
@@ -973,7 +973,7 @@ Returns `true` when:
 - no storage is configured
 - no certificate is stored for the primary domain
 - the stored certificate has expired, can't be read, or doesn't cover every configured identifier
-- fewer than `$daysBeforeExpiry` days remain, when you pass a threshold (this applies with or without ARI)
+- `$daysBeforeExpiry` days or fewer remain, when you pass a threshold (with or without ARI; it replaces the lifetime rule below)
 - the CA's ARI renewal window has opened (see [ARI](#ari-ca-guided-renewal-windows))
 - without ARI and without a threshold: a third or less of the certificate's lifetime remains (30 days for a 90-day certificate, 15 for 45 days, 2 for a 6-day `shortlived` one)
 
@@ -1234,7 +1234,7 @@ Randomizing the start time within the hour avoids stampeding the CA at the same 
 
 - If the CA exposes a `renewalInfo` URL, its window decides: `needsRenewal()` returns `true` once the window has started, including when it has already passed (the CA may be about to revoke the certificate).
 - If the ARI request fails or the CA doesn't support ARI, CoyoteCert falls back to the lifetime rule.
-- A `$daysBeforeExpiry` threshold you pass applies in both cases, as an extra trigger next to the window.
+- A `$daysBeforeExpiry` threshold you pass is checked too: with ARI it is an extra trigger next to the window, without ARI it replaces the lifetime rule.
 
 No configuration needed. It just works.
 

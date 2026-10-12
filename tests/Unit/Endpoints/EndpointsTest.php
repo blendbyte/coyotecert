@@ -11,6 +11,7 @@ use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Enums\KeyType;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\AuthException;
+use CoyoteCert\Exceptions\DomainValidationException;
 use CoyoteCert\Exceptions\RateLimitException;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Interfaces\HttpClientInterface;
@@ -782,32 +783,31 @@ it('DomainValidation::start() sends DNS challenge with localTest=false', functio
     expect($response->getHttpResponseCode())->toBe(200);
 });
 
-it('DomainValidation::start() with localTest=true passes HTTP local check when body matches', function () {
-    $storage    = withKeyStorage();
-    $thumbprint = \CoyoteCert\Support\JsonWebKey::thumbprint(\CoyoteCert\Support\JsonWebKey::compute($storage->getAccountKey(testProvider()->getSlug())));
-    $token      = 'local-test-token';
-    $keyAuth    = $token . '.' . $thumbprint;
+it('DomainValidation::start() runs the local self-test with its own HTTP client, not the ACME transport', function () {
+    $posted = [];
+    $mock   = closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: function ($url) use (&$posted) {
+            $posted[] = $url;
 
-    $mock = closureMock(
-        getHandler: fn($url) => str_contains($url, 'directory')
-            ? new Response([], $url, 200, directoryBody())
-            : new Response([], $url, 200, $keyAuth),
-        postHandler: fn($url) => new Response([], $url, 200, []),
+            return new Response([], $url, 200, []);
+        },
     );
 
     $dvd = new DomainValidationData(
-        identifier: ['type' => 'dns', 'value' => 'example.com'],
+        identifier: ['type' => 'ip', 'value' => '127.0.0.1'],
         status: 'pending',
         expires: '2099-01-01T00:00:00Z',
-        file: ['type' => 'http-01', 'token' => $token, 'url' => 'https://acme.example/ch/1'],
+        file: ['type' => 'http-01', 'token' => 'local-test-token', 'url' => 'https://acme.example/ch/1'],
         dns: [],
         validationRecord: [],
     );
 
-    $response = makeEndpointApi($mock, $storage)->domainValidation()
-        ->start(makeAccountData(), $dvd, AuthorizationChallengeEnum::HTTP, true);
-
-    expect($response->getHttpResponseCode())->toBe(200);
+    // Nothing serves the token on 127.0.0.1, so the self-test fails before the challenge is submitted
+    expect(fn() => makeEndpointApi($mock, withKeyStorage())->domainValidation()
+        ->start(makeAccountData(), $dvd, AuthorizationChallengeEnum::HTTP, true))
+        ->toThrow(DomainValidationException::class, '127.0.0.1');
+    expect($posted)->toBe([]);
 });
 
 it('DomainValidation::start() throws DomainValidationException when challenge data is empty', function () {
@@ -957,8 +957,9 @@ it('Certificate::getBundle() throws on non-200 response', function () {
         certificateUrl: 'https://acme.example/cert/1',
     );
 
+    // The CA's own detail is kept (and 429s become RateLimitException via throwError())
     expect(fn() => $api->certificate()->getBundle($order))
-        ->toThrow(AcmeException::class, 'Failed to fetch certificate');
+        ->toThrow(AcmeException::class, 'Not Found');
 });
 
 it('Certificate::revoke() throws when PEM is invalid (no header)', function () {
@@ -2008,4 +2009,19 @@ it('Account::create() accepts 200 for a stored key that is already registered (R
     ), withKeyStorage());
 
     expect($api->account()->create()->url)->toBe('https://acme.example/account/9');
+});
+
+it('Certificate::getBundle() raises RateLimitException with Retry-After on a 429 download', function () {
+    $api = makeEndpointApi(closureMock(
+        getHandler: fn($url) => new Response([], $url, 200, directoryBody()),
+        postHandler: fn($url) => new Response(['retry-after' => '60'], $url, 429, ['type' => 'urn:ietf:params:acme:error:rateLimited', 'detail' => 'Slow down']),
+    ), withKeyStorage());
+
+    try {
+        $api->certificate()->getBundle(certOrderData());
+        $this->fail('Expected RateLimitException');
+    } catch (RateLimitException $e) {
+        expect($e->getRetryAfter())->toBe(60);
+        expect($e->getMessage())->toBe('Slow down');
+    }
 });

@@ -18,8 +18,11 @@ use CoyoteCert\Exceptions\ChallengeException;
  * Don't quote the placeholders in the template; the values are already escaped.
  * Each cleanup() call runs the cleanup command for one deployed value, in deploy
  * order and with the same placeholders, so a hook can remove exactly the value it
- * added (a wildcard and its base name share one _acme-challenge name). A non-zero exit code, or running longer than $timeout
- * seconds, throws ChallengeException.
+ * added (a wildcard and its base name share one _acme-challenge name).
+ *
+ * A non-zero exit code, or running longer than $timeout seconds, throws ChallengeException.
+ * On timeout the shell running the command is stopped; processes the hook started itself
+ * (e.g. a hung nsupdate) are not, so give long-running tools their own timeout.
  *
  * Usage:
  *
@@ -152,11 +155,12 @@ class ShellDns01Handler extends AbstractDns01Handler
         $exitCode = $status['exitcode'];
         $stderr   = trim($stderr);
 
-        if ($exitCode !== 0) {
+        if ($exitCode !== 0 || $status['signaled']) {
             $detail = $stderr !== '' ? ': ' . (strlen($stderr) > 1000 ? substr($stderr, 0, 1000) . '...' : $stderr) : '.';
+            $how    = $status['signaled'] ? sprintf('was killed by signal %d', $status['termsig']) : sprintf('exited with code %d', $exitCode);
 
             throw new ChallengeException(
-                sprintf('ShellDns01Handler: "%s" exited with code %d%s', $cmdTemplate, $exitCode, $detail),
+                sprintf('ShellDns01Handler: "%s" %s%s', $cmdTemplate, $how, $detail),
             );
         }
     }

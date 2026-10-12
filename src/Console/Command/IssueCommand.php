@@ -40,7 +40,7 @@ class IssueCommand extends CoyoteCommand
             ->addOption('dns-skip-propagation', null, InputOption::VALUE_NONE, 'Skip the post-deploy DNS propagation check (use for split-horizon or internal DNS)')
             ->addOption('provider', 'p', InputOption::VALUE_REQUIRED, 'CA to use: ' . self::PROVIDERS)
             ->addOption('storage', 's', InputOption::VALUE_REQUIRED, 'Directory to store certificates and account keys', './certs')
-            ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Also renew when fewer than this many days remain (default: the CA\'s ARI window, or when a third of the lifetime remains)')
+            ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Renew when this many days or fewer remain, in addition to the CA\'s ARI window (replaces the default: a third of the lifetime remaining)')
             ->addOption('key-type', null, InputOption::VALUE_REQUIRED, 'Certificate key type: ' . self::KEY_TYPES, 'ec256')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Force issuance even if the certificate is still valid')
             ->addOption('skip-caa', null, InputOption::VALUE_NONE, 'Skip CAA DNS pre-check')

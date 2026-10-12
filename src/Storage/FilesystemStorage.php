@@ -63,15 +63,16 @@ class FilesystemStorage implements StorageInterface
     public function saveCertificate(string $domain, StoredCertificate $cert): void
     {
         $this->ensureDirectory();
-        $this->writeFile(
-            $this->certPath($domain, $cert->keyType),
-            json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
-        );
         $base = $this->pemBase($domain, $cert->keyType);
         $this->writeFile($base . 'certificate.pem', $cert->certificate, public: true);
         $this->writeFile($base . 'private_key.pem', $cert->privateKey);
         $this->writeFile($base . 'fullchain.pem', $cert->fullchain, public: true);
         $this->writeFile($base . 'ca.pem', $cert->caBundle, public: true);
+        // Written last: if a PEM write fails, the old record stays and the next run renews again
+        $this->writeFile(
+            $this->certPath($domain, $cert->keyType),
+            json_encode($cert->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
+        );
     }
 
     public function deleteCertificate(string $domain, KeyType $keyType): void
@@ -133,7 +134,7 @@ class FilesystemStorage implements StorageInterface
             );
         }
 
-        if (!is_dir($dir) && !mkdir($dir, 0o700, true) && !is_dir($dir)) {
+        if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
             throw new StorageException(
                 sprintf('Storage directory "%s" could not be created.', $dir),
             );
@@ -193,9 +194,15 @@ class FilesystemStorage implements StorageInterface
      */
     private function writeFile(string $path, string $contents, bool $public = false): void
     {
-        // Write through a symlinked file (e.g. one pointing into a deploy directory) instead of replacing the link
-        if (is_link($path) && ($target = realpath($path)) !== false) {
-            $path = $target;
+        // Write through a symlinked file (e.g. one pointing into a deploy directory) instead of
+        // replacing the link, also when its target doesn't exist yet
+        if (is_link($path)) {
+            $link = readlink($path);
+            $path = realpath($path) ?: match (true) {
+                $link === false             => $path,
+                str_starts_with($link, '/') => $link,
+                default                     => dirname($path) . '/' . $link,
+            };
         }
 
         $dir = dirname($path);

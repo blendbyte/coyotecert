@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace CoyoteCert\Http;
 
+use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Interfaces\HttpClientInterface;
+use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
@@ -81,7 +83,26 @@ class Psr18Adapter implements HttpClientInterface
             $request        = $request->withHeader(trim($name), trim($value));
         }
 
-        return $this->send($request, $url);
+        $response = $this->send($request, $url);
+
+        // Follow redirects ourselves: PSR-18 clients differ (Guzzle doesn't follow them in sendRequest())
+        for ($i = 0; $i < $maxRedirects && in_array($response->getHttpResponseCode(), [301, 302, 303, 307, 308], true); $i++) {
+            $location = $response->getHeaderLine('location');
+
+            if ($location === '') {
+                break;
+            }
+
+            // A relative Location is resolved against the current scheme and host
+            $uri = $request->getUri();
+            $url = preg_match('~^https?://~i', $location)
+                ? $location
+                : sprintf('%s://%s/%s', $uri->getScheme(), $uri->getAuthority(), ltrim($location, '/'));
+            $request  = $request->withUri($this->requestFactory->createRequest('GET', $url)->getUri());
+            $response = $this->send($request, $url);
+        }
+
+        return $response;
     }
 
     /**
@@ -110,7 +131,12 @@ class Psr18Adapter implements HttpClientInterface
 
     private function send(\Psr\Http\Message\RequestInterface $request, string $url): Response
     {
-        $psrResponse = $this->client->sendRequest($request);
+        try {
+            $psrResponse = $this->client->sendRequest($request);
+        } catch (ClientExceptionInterface $e) {
+            // Same contract as the curl client: transport failures are AcmeExceptions
+            throw new AcmeException(sprintf('%s %s failed: %s', $request->getMethod(), $url, $e->getMessage()), previous: $e);
+        }
 
         $headers = [];
         foreach ($psrResponse->getHeaders() as $name => $values) {

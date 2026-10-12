@@ -12,6 +12,7 @@ use CoyoteCert\DTO\OrderData;
 use CoyoteCert\DTO\TlsAlpn01ValidationData;
 use CoyoteCert\Enums\AuthorizationChallengeEnum;
 use CoyoteCert\Exceptions\DomainValidationException;
+use CoyoteCert\Http\Client;
 use CoyoteCert\Http\Response;
 use CoyoteCert\Support\Arr;
 use CoyoteCert\Support\DnsDigest;
@@ -137,11 +138,13 @@ class DomainValidation extends Endpoint
         $keyAuthorization = $token . '.' . $thumbprint;
 
         if ($localTest && $authChallenge === AuthorizationChallengeEnum::HTTP) {
+            // Its own curl client, not the ACME transport: the CA doesn't check TLS when it follows
+            // an HTTP-01 redirect to https (often a self-signed cert before the first issuance)
             LocalChallengeTest::http(
                 $domainValidation->identifier['value'],
                 $token,
                 $keyAuthorization,
-                $this->client->getHttpClient(),
+                new Client(verifyTls: false),
             );
         }
 

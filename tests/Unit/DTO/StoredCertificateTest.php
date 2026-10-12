@@ -321,3 +321,12 @@ it('isValidForDomains() returns false when one of several requested domains is m
 
     expect($cert->isValidForDomains(['example.com', 'missing.com']))->toBeFalse();
 });
+
+it('fromJson() turns unreadable data into a StorageException', function (string $json) {
+    expect(fn() => StoredCertificate::fromJson($json))->toThrow(\CoyoteCert\Exceptions\StorageException::class, 'Stored certificate data');
+})->with([
+    'truncated JSON'   => ['{"certificate": "x'],
+    'not an object'    => ['"just a string"'],
+    'unknown key type' => ['{"certificate":"c","private_key":"k","fullchain":"f","ca_bundle":"a","issued_at":"2026-01-01T00:00:00+00:00","expires_at":"2026-04-01T00:00:00+00:00","domains":["x"],"key_type":"DSA"}'],
+    'missing field'    => ['{"certificate":"c"}'],
+]);

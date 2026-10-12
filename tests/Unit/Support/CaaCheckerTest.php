@@ -163,3 +163,10 @@ it('checks every domain and throws on the first blocked one', function () {
     expect(fn() => $checker->check(['ok.example.com', 'blocked.example.com'], ['letsencrypt.org']))
         ->toThrow(CaaException::class, 'blocked.example.com');
 });
+
+it('reports a failed CAA lookup as a CaaException with a hint', function () {
+    $checker = new CaaChecker(static fn(string $domain): array => throw new RuntimeException('dig timed out'));
+
+    expect(fn() => $checker->check(['example.com'], ['letsencrypt.org']))
+        ->toThrow(\CoyoteCert\Exceptions\CaaException::class, 'CAA lookup for "example.com" failed: dig timed out. Use skipCaaCheck()');
+});

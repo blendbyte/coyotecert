@@ -42,16 +42,23 @@ readonly class StoredCertificate
         ];
     }
 
-    /** @throws StorageException when $json is not a stored certificate object */
+    /** @throws StorageException when $json is not a readable stored certificate */
     public static function fromJson(string $json): self
     {
-        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        try {
+            $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
 
-        if (!is_array($data)) {
-            throw new StorageException('Stored certificate data is not a JSON object.');
+            if (!is_array($data)) {
+                throw new StorageException('Stored certificate data is not a JSON object.');
+            }
+
+            return self::fromArray($data);
+        } catch (StorageException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // Truncated JSON, a missing field, an unknown key type or a bad date
+            throw new StorageException('Stored certificate data is unreadable: ' . $e->getMessage(), previous: $e);
         }
-
-        return self::fromArray($data);
     }
 
     /** @param array<mixed> $data */

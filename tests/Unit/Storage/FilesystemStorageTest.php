@@ -322,3 +322,30 @@ it('writes through a symlinked file instead of replacing the link', function () 
     expect(is_link($this->dir . '/example.com.EC_P256.fullchain.pem'))->toBeTrue();
     expect(file_get_contents($target))->toBe(makeFileCert()->fullchain);
 });
+
+it('writes cert.json last, so a failed PEM write leaves the previous record in place', function () {
+    $this->storage->saveCertificate('example.com', makeFileCert());
+    $before = file_get_contents($this->dir . '/example.com.EC_P256.cert.json');
+
+    unlink($this->dir . '/example.com.EC_P256.fullchain.pem');
+    mkdir($this->dir . '/example.com.EC_P256.fullchain.pem'); // makes the fullchain write fail
+
+    $renewed = new StoredCertificate('renewed', 'renewed-key', 'renewed-chain', 'ca', new DateTimeImmutable(), new DateTimeImmutable('+90 days'), ['example.com'], KeyType::EC_P256);
+
+    try {
+        expect(fn() => $this->storage->saveCertificate('example.com', $renewed))->toThrow(\CoyoteCert\Exceptions\StorageException::class);
+        expect(file_get_contents($this->dir . '/example.com.EC_P256.cert.json'))->toBe($before);
+    } finally {
+        rmdir($this->dir . '/example.com.EC_P256.fullchain.pem');
+    }
+});
+
+it('writes through a symlink whose target does not exist yet', function () {
+    mkdir($this->dir, 0o700, true);
+    symlink('deployed-key.pem', $this->dir . '/account-letsencrypt.pem'); // relative, dangling
+
+    $this->storage->saveAccountKey('letsencrypt', 'the-key', KeyType::EC_P256);
+
+    expect(is_link($this->dir . '/account-letsencrypt.pem'))->toBeTrue();
+    expect(file_get_contents($this->dir . '/deployed-key.pem'))->toBe('the-key');
+});

@@ -151,3 +151,10 @@ it('run() stops a command that runs longer than the timeout', function () {
         ->toThrow(ChallengeException::class, 'did not finish within 1 seconds');
     expect(microtime(true) - $start)->toBeLessThan(4);
 });
+
+it('run() reports a hook killed by a signal', function () {
+    $handler = new ShellHandlerWithRealRun('kill -9 $$');
+
+    expect(fn() => $handler->deploy('example.com', '', 'keyauth'))
+        ->toThrow(ChallengeException::class, 'was killed by signal 9');
+});

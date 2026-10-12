@@ -98,8 +98,15 @@ class CaaChecker
 
         while (count($labels) >= 2) {
             $check = implode('.', $labels);
-            /** @var CAA[] $records */
-            $records = ($this->resolver)($check);
+            try {
+                /** @var CAA[] $records */
+                $records = ($this->resolver)($check);
+            } catch (\Throwable $e) {
+                throw new CaaException(
+                    sprintf('CAA lookup for "%s" failed: %s. Use skipCaaCheck() when DNS is not reachable from here.', $check, $e->getMessage()),
+                    previous: $e,
+                );
+            }
 
             if (!empty($records)) {
                 return $records;

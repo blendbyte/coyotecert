@@ -17,6 +17,7 @@ use CoyoteCert\Enums\RevocationReason;
 use CoyoteCert\Exceptions\AccountNotFoundException;
 use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Exceptions\CryptoException;
+use CoyoteCert\Exceptions\StorageException;
 use CoyoteCert\Http\Client as HttpClient;
 use CoyoteCert\Http\Psr18Adapter;
 use CoyoteCert\Interfaces\ChallengeHandlerInterface;
@@ -201,7 +202,7 @@ class CoyoteCert
         if ($this->httpClient instanceof HttpClient) {
             $this->httpClient->setTimeout($seconds);
         } elseif ($this->httpClient === null) {
-            $this->httpClient = new HttpClient(timeout: $seconds);
+            $this->httpClient = new HttpClient(timeout: $seconds, verifyTls: $this->provider->verifyTls());
         }
 
         return $this;
@@ -211,9 +212,9 @@ class CoyoteCert
 
     /**
      * Whether the certificate is missing, expired, no longer covers the configured identifiers,
-     * or is due for renewal. Renewal is due within $daysBeforeExpiry days when given, and when the
-     * CA's ARI window has opened. Without ARI and without a threshold, it is due once a third of
-     * the lifetime remains (30 days for a 90-day certificate, 2 for a 6-day one).
+     * or is due for renewal: when the CA's ARI window has opened, and when $daysBeforeExpiry days
+     * or fewer remain (if given). Without ARI and without a threshold, renewal is due once a third
+     * of the lifetime remains (30 days for a 90-day certificate, 2 for a 6-day one).
      */
     public function needsRenewal(?int $daysBeforeExpiry = null): bool
     {
@@ -221,7 +222,7 @@ class CoyoteCert
             return true;
         }
 
-        $cert = $this->storage->getCertificate($this->domains[0], $this->certKeyType);
+        $cert = $this->storedCertificate();
 
         if ($cert === null || $cert->isExpired() || !$this->coversIdentifiers($cert)) {
             return true;
@@ -271,7 +272,7 @@ class CoyoteCert
         $account = $this->getOrCreateAccount($api);
 
         $replacesId   = '';
-        $existingCert = $this->storage?->getCertificate($this->domains[0], $this->certKeyType);
+        $existingCert = $this->storedCertificate();
         $sameProvider = $existingCert?->providerSlug === $this->provider->getSlug();
         if ($existingCert !== null && $sameProvider) {
             try {
@@ -298,8 +299,8 @@ class CoyoteCert
     public function issueOrRenew(?int $daysBeforeExpiry = null): StoredCertificate
     {
         if (!$this->needsRenewal($daysBeforeExpiry)) {
-            // needsRenewal() returns false only when storage is set and a cert exists
-            return $this->storage?->getCertificate($this->domains[0], $this->certKeyType)
+            // needsRenewal() returns false only when storage is set and a readable cert exists
+            return $this->storedCertificate()
                 ?? throw new AcmeException('Certificate unexpectedly missing from storage.');
         }
 
@@ -496,6 +497,22 @@ class CoyoteCert
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /** The stored certificate; an unreadable record counts as missing so the next issuance replaces it. */
+    private function storedCertificate(): ?StoredCertificate
+    {
+        if ($this->storage === null || $this->domains === []) {
+            return null;
+        }
+
+        try {
+            return $this->storage->getCertificate($this->domains[0], $this->certKeyType);
+        } catch (StorageException $e) {
+            $this->logger?->warning('Ignoring unreadable stored certificate: ' . $e->getMessage());
+
+            return null;
+        }
+    }
 
     private function coversIdentifiers(StoredCertificate $cert): bool
     {

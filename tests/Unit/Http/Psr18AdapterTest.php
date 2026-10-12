@@ -184,3 +184,46 @@ it('response headers are lowercased', function () {
 
     expect($response->hasHeader('x-header'))->toBeTrue();
 });
+
+it('wraps PSR-18 transport errors in an AcmeException, like the curl client', function () {
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $client  = new class implements \Psr\Http\Client\ClientInterface {
+        public function sendRequest(\Psr\Http\Message\RequestInterface $request): \Psr\Http\Message\ResponseInterface
+        {
+            throw new class ('Connection refused') extends \RuntimeException implements \Psr\Http\Client\NetworkExceptionInterface {
+                public function getRequest(): \Psr\Http\Message\RequestInterface
+                {
+                    throw new \LogicException('unused');
+                }
+            };
+        }
+    };
+
+    expect(fn() => (new \CoyoteCert\Http\Psr18Adapter($client, $factory, $factory))->get('https://acme.example/dir'))
+        ->toThrow(\CoyoteCert\Exceptions\AcmeException::class, 'GET https://acme.example/dir failed: Connection refused');
+});
+
+it('follows redirects on GET when asked to, including relative Location headers', function () {
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    $client  = new class ($factory) implements \Psr\Http\Client\ClientInterface {
+        public array $urls = [];
+
+        public function __construct(private \Nyholm\Psr7\Factory\Psr17Factory $f) {}
+
+        public function sendRequest(\Psr\Http\Message\RequestInterface $request): \Psr\Http\Message\ResponseInterface
+        {
+            $this->urls[] = (string) $request->getUri();
+
+            return match ($request->getUri()->getPath()) {
+                '/start' => $this->f->createResponse(301)->withHeader('Location', 'https://example.com/a'),
+                '/a'     => $this->f->createResponse(302)->withHeader('Location', '/b'),
+                default  => $this->f->createResponse(200)->withBody($this->f->createStream('done')),
+            };
+        }
+    };
+    $adapter = new \CoyoteCert\Http\Psr18Adapter($client, $factory, $factory);
+
+    expect($adapter->get('http://example.com/start', maxRedirects: 10)->rawBody())->toBe('done');
+    expect($client->urls)->toBe(['http://example.com/start', 'https://example.com/a', 'https://example.com/b']);
+    expect($adapter->get('http://example.com/start')->getHttpResponseCode())->toBe(301); // no redirects by default
+});
