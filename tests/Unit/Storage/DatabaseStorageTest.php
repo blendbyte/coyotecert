@@ -311,3 +311,11 @@ it('reports database errors as StorageException', function () {
     expect(fn() => $storage->hasAccountKey('letsencrypt'))
         ->toThrow(StorageException::class, 'Database storage query failed');
 });
+
+it('reports database errors as StorageException when PDO errors are silent', function () {
+    $pdo     = new PDO('sqlite::memory:', options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT]);
+    $storage = new DatabaseStorage($pdo, 'missing_table');
+
+    expect(fn() => $storage->hasAccountKey('letsencrypt'))
+        ->toThrow(StorageException::class, 'no such table');
+});

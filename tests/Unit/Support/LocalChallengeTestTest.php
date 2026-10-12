@@ -101,14 +101,16 @@ function redirectingClient(array $routes): HttpClientInterface
 
 it('http follows redirects to http/https on ports 80 and 443, resolving relative locations', function () {
     $client = redirectingClient([
-        'http://example.com/.well-known/acme-challenge/tok' => [301, 'https://www.example.com/acme/tok'],
-        'https://www.example.com/acme/tok'                  => [302, 'final'],
-        'https://www.example.com/acme/final'                => [200, 'tok.thumb'],
+        'http://example.com/.well-known/acme-challenge/tok' => [301, '//www.example.com/a/tok'],
+        'http://www.example.com/a/tok'                      => [302, '/b/tok'],
+        'http://www.example.com/b/tok'                      => [307, 'https://www.example.com:443/acme/tok'],
+        'https://www.example.com:443/acme/tok'              => [302, 'final'],
+        'https://www.example.com:443/acme/final'            => [200, 'tok.thumb'],
     ]);
 
     LocalChallengeTest::http('example.com', 'tok', 'tok.thumb', $client);
 
-    expect($client->requested)->toHaveCount(3);
+    expect($client->requested)->toHaveCount(5);
 });
 
 it('http refuses redirects the CA would not follow', function (string $location) {

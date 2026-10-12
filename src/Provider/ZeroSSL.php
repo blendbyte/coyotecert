@@ -72,8 +72,19 @@ class ZeroSSL extends AbstractProvider
             ],
         ]);
 
-        // @: a connection failure would otherwise raise a PHP warning containing the URL, API key included
-        $body = @file_get_contents($url, false, $context);
+        // Catch the warning of a failed connection: it contains the URL, API key included
+        $error = null;
+        set_error_handler(static function (int $errno, string $message) use (&$error): bool {
+            $error = $message;
+
+            return true;
+        });
+
+        try {
+            $body = file_get_contents($url, false, $context);
+        } finally {
+            restore_error_handler();
+        }
 
         // $http_response_header is populated by file_get_contents as a side-effect
         $httpCode = 0;
@@ -84,9 +95,10 @@ class ZeroSSL extends AbstractProvider
         }
 
         if ($body === false && $httpCode === 0) {
-            $error = preg_replace('/access_key=[^&\s)]*/', 'access_key=***', error_get_last()['message'] ?? 'no response');
-
-            throw new AcmeException(sprintf('ZeroSSL EAB provisioning failed: %s', $error));
+            throw new AcmeException(sprintf(
+                'ZeroSSL EAB provisioning failed: %s',
+                preg_replace('/access_key=[^&\s)]*/', 'access_key=***', $error ?? 'no response'),
+            ));
         }
 
         if ($body === false || $httpCode !== 200) {

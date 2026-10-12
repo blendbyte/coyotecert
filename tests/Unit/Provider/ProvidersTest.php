@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CoyoteCert\Exceptions\AcmeException;
 use CoyoteCert\Provider\CustomProvider;
 use CoyoteCert\Provider\GoogleTrustServices;
 use CoyoteCert\Provider\LetsEncrypt;
@@ -82,6 +83,33 @@ it('ZeroSSL returns pre-provisioned EAB credentials', function () {
 
 it('ZeroSSL returns null when no credentials configured', function () {
     expect((new ZeroSSL())->getEabCredentials('test@example.com'))->toBeNull();
+});
+
+it('ZeroSSL masks the API key when EAB provisioning cannot connect', function () {
+    // Stand in for the https wrapper so the request fails without touching the network
+    $failingWrapper = new class {
+        public mixed $context;
+
+        public function stream_open(): bool
+        {
+            return false;
+        }
+    };
+
+    stream_wrapper_unregister('https');
+    stream_wrapper_register('https', $failingWrapper::class);
+
+    try {
+        expect(fn() => (new ZeroSSL(apiKey: 'secret-key'))->getEabCredentials('test@example.com'))
+            ->toThrow(function (AcmeException $e) {
+                expect($e->getMessage())
+                    ->toContain('ZeroSSL EAB provisioning failed')
+                    ->toContain('access_key=***')
+                    ->not->toContain('secret-key');
+            });
+    } finally {
+        stream_wrapper_restore('https');
+    }
 });
 
 it('ZeroSSL does not support profiles', function () {
