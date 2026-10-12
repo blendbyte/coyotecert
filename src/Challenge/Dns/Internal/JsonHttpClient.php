@@ -45,7 +45,9 @@ class JsonHttpClient
     public function request(
         string $method,
         string $path,
+        #[\SensitiveParameter]
         ?array $payload = null,
+        #[\SensitiveParameter]
         ?array $queryParams = null,
         array $extraHeaders = [],
     ): array {
@@ -73,7 +75,7 @@ class JsonHttpClient
      * @param array<int, string> $headers
      * @return array<mixed>
      */
-    protected function send(string $method, string $url, ?string $body, array $headers): array
+    protected function send(string $method, #[\SensitiveParameter] string $url, ?string $body, #[\SensitiveParameter] array $headers): array
     {
         $ch = curl_init($url);
 

@@ -44,7 +44,7 @@ class InMemoryStorage implements StorageInterface
         return $this->accounts[$providerSlug]['type'];
     }
 
-    public function saveAccountKey(string $providerSlug, string $pem, KeyType $type): void
+    public function saveAccountKey(string $providerSlug, #[\SensitiveParameter] string $pem, KeyType $type): void
     {
         $this->accounts[$providerSlug] = ['pem' => $pem, 'type' => $type];
     }
@@ -61,7 +61,7 @@ class InMemoryStorage implements StorageInterface
         return $this->certificates[$this->certKey($domain, $keyType)] ?? null;
     }
 
-    public function saveCertificate(string $domain, StoredCertificate $cert): void
+    public function saveCertificate(string $domain, #[\SensitiveParameter] StoredCertificate $cert): void
     {
         $this->certificates[$this->certKey($domain, $cert->keyType)] = $cert;
     }

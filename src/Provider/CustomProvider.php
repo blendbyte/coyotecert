@@ -13,6 +13,7 @@ class CustomProvider extends AbstractProvider
         private readonly string       $directoryUrl,
         private readonly string       $displayName = 'Custom CA',
         private readonly ?string      $eabKid = null,
+        #[\SensitiveParameter]
         private readonly ?string      $eabHmac = null,
         private readonly bool         $verifyTls = true,
         private readonly bool         $profilesSupported = false,

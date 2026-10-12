@@ -30,7 +30,7 @@ class Http01Handler implements ChallengeHandlerInterface
 
     public function deploy(string $domain, string $token, string $keyAuthorization): void
     {
-        if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $token)) {
+        if (!preg_match('/^[a-zA-Z0-9_\-]+\z/', $token)) {
             throw new ChallengeException(
                 sprintf('Invalid ACME token "%s": must match [a-zA-Z0-9_-]+.', $token),
             );
@@ -67,7 +67,7 @@ class Http01Handler implements ChallengeHandlerInterface
 
     public function cleanup(string $domain, string $token): void
     {
-        if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $token)) {
+        if (!preg_match('/^[a-zA-Z0-9_\-]+\z/', $token)) {
             return;
         }
 

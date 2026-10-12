@@ -303,3 +303,11 @@ it('rejects PDO drivers it cannot generate SQL for', function () {
 
     expect(fn() => new DatabaseStorage($pdo))->toThrow(\InvalidArgumentException::class, 'Unsupported PDO driver "sqlsrv"');
 });
+
+it('reports database errors as StorageException', function () {
+    $pdo     = new PDO('sqlite::memory:', options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $storage = new DatabaseStorage($pdo, 'missing_table');
+
+    expect(fn() => $storage->hasAccountKey('letsencrypt'))
+        ->toThrow(StorageException::class, 'Database storage query failed');
+});

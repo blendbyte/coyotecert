@@ -23,16 +23,41 @@ class LocalChallengeTest
         string $keyAuthorization,
         HttpClientInterface $httpClient,
     ): void {
-        // IPv6 identifiers (RFC 8738) need brackets in a URL; follow redirects like the CA does (RFC 8555 §8.3)
+        // IPv6 identifiers (RFC 8738) need brackets in a URL
         $host = filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $domain . ']' : $domain;
+        $url  = 'http://' . $host . '/.well-known/acme-challenge/' . $token;
 
-        try {
-            $response = $httpClient->get('http://' . $host . '/.well-known/acme-challenge/' . $token, maxRedirects: 10);
-        } catch (AcmeException|ClientExceptionInterface $e) {
-            throw new DomainValidationException(
-                sprintf('The local HTTP challenge test for %s could not connect: %s', $domain, $e->getMessage()),
-                previous: $e,
-            );
+        // Redirects are followed here, the way the CA does: at most 10, and only to http/https on
+        // ports 80 and 443. Following anything else would let whoever controls the site point
+        // this (often privileged) server at internal services.
+        for ($redirects = 0; ; $redirects++) {
+            try {
+                $response = $httpClient->get($url);
+            } catch (AcmeException|ClientExceptionInterface $e) {
+                throw new DomainValidationException(
+                    sprintf('The local HTTP challenge test for %s could not connect: %s', $domain, $e->getMessage()),
+                    previous: $e,
+                );
+            }
+
+            $location = $response->getHeaderLine('location');
+
+            if ($redirects >= 10 || $location === '' || !in_array($response->getHttpResponseCode(), [301, 302, 303, 307, 308], true)) {
+                break;
+            }
+
+            $url    = self::resolveRedirect($url, $location);
+            $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+            $port   = parse_url($url, PHP_URL_PORT) ?? ($scheme === 'https' ? 443 : 80);
+
+            if (!in_array($scheme, ['http', 'https'], true) || !in_array($port, [80, 443], true)) {
+                throw new DomainValidationException(sprintf(
+                    'The local HTTP challenge test for %s was redirected to %s, which the CA does not follow '
+                    . '(only http and https on ports 80 and 443).',
+                    $domain,
+                    $url,
+                ));
+            }
         }
 
         if (trim($response->rawBody()) === $keyAuthorization) {
@@ -43,6 +68,31 @@ class LocalChallengeTest
             $domain,
             (string) $response->getHttpResponseCode(),
         );
+    }
+
+    /** Resolve a Location header (absolute, protocol-relative or relative) against the current URL. */
+    private static function resolveRedirect(string $current, string $location): string
+    {
+        if (preg_match('~^[a-z][a-z0-9+.-]*:~i', $location)) {
+            return $location;
+        }
+
+        $scheme = (string) parse_url($current, PHP_URL_SCHEME);
+
+        if (str_starts_with($location, '//')) {
+            return $scheme . ':' . $location;
+        }
+
+        $authority = $scheme . '://' . parse_url($current, PHP_URL_HOST)
+            . (($port = parse_url($current, PHP_URL_PORT)) !== null ? ':' . $port : '');
+
+        if (str_starts_with($location, '/')) {
+            return $authority . $location;
+        }
+
+        $path = (string) parse_url($current, PHP_URL_PATH);
+
+        return $authority . substr($path, 0, (int) strrpos($path, '/') + 1) . $location;
     }
 
     public static function dns(string $domain, string $name, string $value): void

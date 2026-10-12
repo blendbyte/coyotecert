@@ -591,8 +591,10 @@ class CoyoteCert
         // Strip one leading wildcard label before validating the rest
         $check = str_starts_with($domain, '*.') ? substr($domain, 2) : $domain;
 
-        return (bool) preg_match(
-            '/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/',
+        // \z, not $: `$` also matches before a trailing newline, which would break the CSR config
+        // after the order had already been placed. The TLD may be an IDN in punycode (xn--...).
+        return strlen($check) <= 253 && (bool) preg_match(
+            '/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:[a-zA-Z]{2,63}|xn--[a-zA-Z0-9\-]{1,59})\z/',
             $check,
         );
     }

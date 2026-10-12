@@ -42,6 +42,7 @@ class DigitalOceanDns01Handler extends AbstractDns01Handler
     private JsonHttpClient $httpClient;
 
     public function __construct(
+        #[\SensitiveParameter]
         string $apiToken,
         private readonly ?string $zone = null,
         ?JsonHttpClient $httpClient = null,

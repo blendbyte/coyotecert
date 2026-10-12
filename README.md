@@ -93,7 +93,7 @@ CoyoteCert checks CAA DNS records for every domain before touching the CA. If a 
 
 ### Typed exceptions that tell you what actually went wrong
 
-`RateLimitException` carries the CA's `Retry-After` seconds so your retry logic is precise. `AuthException` means bad credentials, not a transient blip. `AcmeException::getSubproblems()` tells you exactly which domain in a multi-domain order was rejected and why.
+`RateLimitException` carries the CA's `Retry-After` seconds so your retry logic is precise. `AuthException` means the CA refused the request (401/403), not a transient blip; `getProblemType()` says why. `AcmeException::getSubproblems()` tells you exactly which domain in a multi-domain order was rejected and why.
 
 ### Short-lived certificates and ACME profiles
 
@@ -651,11 +651,11 @@ class MyTlsAlpn01Handler extends TlsAlpn01Handler
 Six built-in DNS-01 handlers, all extending `AbstractDns01Handler`, which runs a post-deploy propagation check by default. Every TXT record of an order is written before the check runs, so a wildcard and its base name (which share one `_acme-challenge` name) are never published as a half-complete record set, and the check requires all of that name's values on every authoritative nameserver. A settle delay then lets caching resolvers in front of the CA drop the pre-update answer. Four fluent controls tune the behaviour:
 
 ```php
-// All return a new immutable instance.
-$handler->propagationTimeout(120)    // seconds to poll for the TXT record (default: 60)
-$handler->propagationDelay(300)      // settle pause after the check, for resolver caches (default: 60)
-$handler->skipPropagationCheck()     // skip polling entirely (split-horizon / internal DNS)
-$handler->keepExistingRecords()      // do not delete stale _acme-challenge records before deploying
+// All return a new instance; use the return value.
+$handler = $handler->propagationTimeout(120);  // seconds to poll for the TXT record (default: 60)
+$handler = $handler->propagationDelay(300);    // settle pause after the check, for resolver caches (default: 60)
+$handler = $handler->skipPropagationCheck();   // skip polling entirely (split-horizon / internal DNS)
+$handler = $handler->keepExistingRecords();    // do not delete stale _acme-challenge records before deploying
 ```
 
 Before deploying a new `_acme-challenge` TXT record, each handler deletes any pre-existing records for that name. This prevents stale records from a previous failed run causing the CA to see multiple values and potentially refuse validation. Call `keepExistingRecords()` to disable this if you manage multiple certificates for the same domain simultaneously and need both records to coexist.
@@ -816,9 +816,9 @@ $storage = new DatabaseStorage($pdo, table: 'ssl_storage');
 Run this once to create the table. Pass the PDO driver so the SQL matches your database:
 
 ```php
-$pdo->exec(DatabaseStorage::createTableSql(driver: $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
+$pdo->exec(DatabaseStorage::createTableSql(driver: (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
 // Or with a custom name:
-$pdo->exec(DatabaseStorage::createTableSql('ssl_storage', $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
+$pdo->exec(DatabaseStorage::createTableSql('ssl_storage', (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)));
 ```
 
 The generated schema for MySQL/MariaDB (`driver: 'mysql'`, the default):
@@ -869,6 +869,7 @@ Implement `StorageInterface` with eight methods:
 
 ```php
 use CoyoteCert\Enums\KeyType;
+use CoyoteCert\Exceptions\StorageException;
 use CoyoteCert\Storage\StorageInterface;
 use CoyoteCert\Storage\StoredCertificate;
 
@@ -883,12 +884,13 @@ class RedisStorage implements StorageInterface
 
     public function getAccountKey(string $providerSlug): string
     {
-        return $this->redis->get("acme:{$providerSlug}:account:pem");
+        return $this->redis->get("acme:{$providerSlug}:account:pem")
+            ?: throw new StorageException('No account key stored.'); // Redis returns false for a missing key
     }
 
     public function getAccountKeyType(string $providerSlug): KeyType
     {
-        return KeyType::from($this->redis->get("acme:{$providerSlug}:account:type"));
+        return KeyType::from((string) $this->redis->get("acme:{$providerSlug}:account:type"));
     }
 
     public function saveAccountKey(string $providerSlug, string $pem, KeyType $type): void
@@ -1100,7 +1102,7 @@ try {
 }
 ```
 
-`AuthException` is thrown on 401 and 403 responses, distinct from a rate limit or transient error, so you can alert or re-provision credentials rather than retrying blindly.
+`AuthException` is thrown on 401 and 403 responses, distinct from a rate limit or transient error, so you can alert rather than retry blindly. CAs use 403 for more than bad credentials (a deactivated account, but also `unauthorized` or `caa` problems), so check `getProblemType()` before re-provisioning anything.
 
 ### Per-identifier subproblems (RFC 8555 §6.7)
 
@@ -1128,7 +1130,7 @@ try {
 ```
 AcmeException          - base; always safe to catch
 ├── AccountNotFoundException - the CA has no account for the stored key (registered automatically by issue())
-├── AuthException      - 401/403 (bad credentials, revoked account)
+├── AuthException      - 401/403 (deactivated account, bad EAB, unauthorized or CAA refusal; see getProblemType())
 ├── RateLimitException - 429 (too many requests); carries getRetryAfter()
 ├── CaaException       - CAA DNS record blocks issuance
 ├── ChallengeException - challenge handler failed (DNS provider API, shell hook)
@@ -1311,7 +1313,8 @@ use CoyoteCert\Storage\FilesystemStorage;
 $storage = new FilesystemStorage('/var/certs');
 $coyote  = CoyoteCert::with(new LetsEncrypt())->storage($storage);
 
-$cert = $storage->getCertificate('example.com', KeyType::EC_P256);
+$cert = $storage->getCertificate('example.com', KeyType::EC_P256)
+    ?? throw new RuntimeException('No certificate stored for example.com');
 
 $coyote->revoke($cert);                                              // Unspecified (default)
 $coyote->revoke($cert, RevocationReason::KeyCompromise);
@@ -1447,12 +1450,12 @@ $cert->serialNumber(); // 'a1b2c3...'
 $cert->authorityKeyId(); // 'A1:B2:C3:...'
 
 // Issuer DN fields
-$cert->issuer(); // ['CN' => "Let's Encrypt R11", 'O' => "Let's Encrypt", 'C' => 'US']
+$cert->issuer(); // ['CN' => 'R11', 'O' => "Let's Encrypt", 'C' => 'US']
 ```
 
 ### Serialisation
 
-`StoredCertificate` round-trips through JSON cleanly:
+`StoredCertificate` round-trips through JSON (dates are kept to the second):
 
 ```php
 $array = $cert->toArray();
@@ -1660,7 +1663,7 @@ dig _acme-challenge.example.com TXT @ns1.your-provider.net
 If that TTL is the zone default (often 3600 or 86400), that is the problem. CoyoteCert logs a warning when the TTL it observes is longer than the settle delay. Two fixes, both worth doing:
 
 - Create the challenge record with a short TTL. The built-in handlers already use the lowest value each provider accepts (10 for Route53, 30 for DigitalOcean, 60 elsewhere). A custom handler needs to set this itself, otherwise the record inherits the zone default
-- Raise `$handler->propagationDelay()` to at least that TTL so the cached answer expires before validation starts
+- Raise `propagationDelay()` on the handler to at least that TTL so the cached answer expires before validation starts
 
 ---
 
@@ -1670,9 +1673,9 @@ Your DNS tool is probably querying a resolver. CoyoteCert queries the authoritat
 
 Three ways out:
 
-- `$handler->propagationTimeout(120)` to wait longer before giving up
-- `$handler->propagationDelay(60)` to lengthen the settle pause after the check passes
-- `$handler->skipPropagationCheck()` if you are confident the record will be there by the time the CA arrives
+- `->challenge($handler->propagationTimeout(120))` to wait longer before giving up
+- `->challenge($handler->propagationDelay(60))` to lengthen the settle pause after the check passes
+- `->challenge($handler->skipPropagationCheck())` if you are confident the record will be there by the time the CA arrives
 
 ---
 
@@ -1711,7 +1714,7 @@ If you were using HTTP-01 with a certbot webroot, the `Http01Handler` webroot pa
 
 ### I run on multiple servers. Can they share an account?
 
-Yes. Use `DatabaseStorage` with a shared database, or `FilesystemStorage` on a shared volume with consistent paths. File locking is safe across concurrent processes, so two servers racing to `issueOrRenew()` at the same time will not corrupt anything. They will both end up holding the same certificate, which is the civilised outcome.
+Yes. Use `DatabaseStorage` with a shared database, or `FilesystemStorage` on a shared volume with consistent paths. Each file is written atomically, but CoyoteCert does not lock issuance across processes: two servers running `issueOrRenew()` at the same moment would each order a certificate, and their saves could interleave. Run renewal from one server (or wrap the cron job in `flock`), and let the others read the shared storage.
 
 ```php
 ->storage(new DatabaseStorage($sharedPdo))

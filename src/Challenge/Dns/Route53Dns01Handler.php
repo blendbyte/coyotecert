@@ -50,8 +50,10 @@ class Route53Dns01Handler extends AbstractDns01Handler
 
     public function __construct(
         string $accessKeyId,
+        #[\SensitiveParameter]
         string $secretAccessKey,
         private readonly ?string $zoneId = null,
+        #[\SensitiveParameter]
         ?string $sessionToken = null,
     ) {
         $this->signer = new AwsSigV4Signer($accessKeyId, $secretAccessKey, 'us-east-1', 'route53', $sessionToken);

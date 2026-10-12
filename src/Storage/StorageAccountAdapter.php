@@ -24,7 +24,7 @@ class StorageAccountAdapter
         return $this->storage->getAccountKey($this->providerSlug);
     }
 
-    public function savePrivateKey(string $pem, KeyType $keyType): void
+    public function savePrivateKey(#[\SensitiveParameter] string $pem, KeyType $keyType): void
     {
         $this->storage->saveAccountKey($this->providerSlug, $pem, $keyType);
     }

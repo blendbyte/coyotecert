@@ -10,6 +10,7 @@ readonly class EabCredentials
 {
     public function __construct(
         public string       $kid,
+        #[\SensitiveParameter]
         public string       $hmacKey,
         public EabAlgorithm $algorithm = EabAlgorithm::HS256,
     ) {}

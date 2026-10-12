@@ -149,6 +149,9 @@ class Client implements HttpClientInterface
         curl_setopt($curlHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
         curl_setopt($curlHandle, CURLOPT_ENCODING, 'gzip, deflate');
         curl_setopt($curlHandle, CURLOPT_HEADER, true);
+        // Never speak anything but HTTP(S), also not after a redirect (no file://, gopher://, ...)
+        curl_setopt($curlHandle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        curl_setopt($curlHandle, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
         if ($maxRedirects > 0) {
             curl_setopt($curlHandle, CURLOPT_FOLLOWLOCATION, true);

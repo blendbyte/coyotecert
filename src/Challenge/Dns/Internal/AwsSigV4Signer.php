@@ -17,10 +17,12 @@ class AwsSigV4Signer
 {
     public function __construct(
         private readonly string $accessKeyId,
+        #[\SensitiveParameter]
         private readonly string $secretAccessKey,
         private readonly string $region,
         private readonly string $service,
         // Temporary credentials (STS, SSO, instance roles) also need their session token signed
+        #[\SensitiveParameter]
         private readonly ?string $sessionToken = null,
     ) {}
 

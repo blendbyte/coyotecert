@@ -32,7 +32,7 @@ class FilesystemStorage implements StorageInterface
         return KeyType::from(Arr::string(is_array($meta) ? $meta : [], 'key_type'));
     }
 
-    public function saveAccountKey(string $providerSlug, string $pem, KeyType $type): void
+    public function saveAccountKey(string $providerSlug, #[\SensitiveParameter] string $pem, KeyType $type): void
     {
         $this->ensureDirectory();
         $this->writeFile($this->accountKeyPath($providerSlug), $pem);
@@ -60,7 +60,7 @@ class FilesystemStorage implements StorageInterface
         return StoredCertificate::fromJson($this->readFile($path));
     }
 
-    public function saveCertificate(string $domain, StoredCertificate $cert): void
+    public function saveCertificate(string $domain, #[\SensitiveParameter] StoredCertificate $cert): void
     {
         $this->ensureDirectory();
         $base = $this->pemBase($domain, $cert->keyType);
@@ -192,7 +192,7 @@ class FilesystemStorage implements StorageInterface
      * reader (or a web server reload) never sees a half-written file. Files are owner-only
      * unless $public: that covers the keys and cert.json, which embeds the private key.
      */
-    private function writeFile(string $path, string $contents, bool $public = false): void
+    private function writeFile(string $path, #[\SensitiveParameter] string $contents, bool $public = false): void
     {
         // Write through a symlinked file (e.g. one pointing into a deploy directory) instead of
         // replacing the link, also when its target doesn't exist yet

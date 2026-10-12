@@ -15,6 +15,8 @@
 - **Account contact.** `email()` is now sent to the CA as the account contact.
 - **No storage.** `issue()` without `storage()` works (it registers a new ACME account on every call).
 - **Unparseable certificates.** `issue()` throws an `AcmeException` when the CA returns a certificate it can't parse, instead of assuming a 90-day lifetime.
+- **Self-test redirects.** The local HTTP-01 self-test follows redirects only to http and https on ports 80 and 443, as Let's Encrypt does; other redirects fail with a `DomainValidationException`.
+- **Stricter domain check.** Domains longer than 253 characters, or with a trailing newline, are rejected; punycode TLDs (`xn--...`) are accepted.
 
 ### Providers
 
@@ -62,7 +64,8 @@ Removed:
 - `DatabaseStorage::createTableSql()` takes the PDO driver as a second argument (`mysql` by default) and now generates working SQL for PostgreSQL and SQLite; other drivers throw `InvalidArgumentException`. The MySQL table now uses `store_key` as its primary key (no `id` column, no trailing `;`).
 - Existing tables keep working, provided `store_key` is the primary key or has a unique index. Hand-made SQLite or PostgreSQL tables without one fail loudly now (1.x silently added duplicate rows on SQLite).
 - `DatabaseStorage` rejects PDO drivers other than mysql, pgsql and sqlite when it is constructed.
-- `FilesystemStorage` writes every file except the public certificate and chain PEMs with mode 0600, including `cert.json`.
+- `FilesystemStorage` writes every file except the public certificate and chain PEMs with mode 0600, including `cert.json`. Files 1.x already wrote keep their mode until they are rewritten; `chmod 600` existing `*.cert.json` files, which contain the private key.
+- `DatabaseStorage` turns database errors into `StorageException` in every PDO error mode (it used to let `PDOException` through, or ignore failures in silent mode).
 - `FilesystemStorage` writes atomically: a temp file next to the target is renamed over it. The directory must be writable (for a symlinked file, the directory it points into), and a rewritten file is a new file owned by the writing user. Symlinked files are written through, as before, including links whose target doesn't exist yet.
 
 ### CLI

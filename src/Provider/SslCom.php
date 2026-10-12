@@ -11,6 +11,7 @@ class SslCom extends AbstractProvider
     /** SSL.com's directories don't require EAB; pass credentials to link the account to your SSL.com account. */
     public function __construct(
         private readonly ?string $eabKid = null,
+        #[\SensitiveParameter]
         private readonly ?string $eabHmac = null,
         private readonly bool    $ecc = false,
     ) {}

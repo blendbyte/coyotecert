@@ -14,6 +14,7 @@ class GoogleTrustServices extends AbstractProvider
      */
     public function __construct(
         private readonly string $eabKid,
+        #[\SensitiveParameter]
         private readonly string $eabHmac,
     ) {}
 

@@ -78,7 +78,7 @@ class DatabaseStorage implements StorageInterface
         return KeyType::from($value);
     }
 
-    public function saveAccountKey(string $providerSlug, string $pem, KeyType $type): void
+    public function saveAccountKey(string $providerSlug, #[\SensitiveParameter] string $pem, KeyType $type): void
     {
         $this->set('account:' . $providerSlug . ':pem', $pem);
         $this->set('account:' . $providerSlug . ':key_type', $type->value);
@@ -98,7 +98,7 @@ class DatabaseStorage implements StorageInterface
         return $json !== null ? StoredCertificate::fromJson($json) : null;
     }
 
-    public function saveCertificate(string $domain, StoredCertificate $cert): void
+    public function saveCertificate(string $domain, #[\SensitiveParameter] StoredCertificate $cert): void
     {
         $this->set(
             $this->certKey($domain, $cert->keyType),
@@ -108,9 +108,10 @@ class DatabaseStorage implements StorageInterface
 
     public function deleteCertificate(string $domain, KeyType $keyType): void
     {
-        $this->pdo
-            ->prepare(sprintf('DELETE FROM %s WHERE %s = :key', $this->quote($this->table), $this->quote('store_key')))
-            ->execute([':key' => $this->certKey($domain, $keyType)]);
+        $this->execute(
+            sprintf('DELETE FROM %s WHERE %s = :key', $this->quote($this->table), $this->quote('store_key')),
+            [':key' => $this->certKey($domain, $keyType)],
+        );
     }
 
     // ── PDO helpers ───────────────────────────────────────────────────────────
@@ -122,36 +123,34 @@ class DatabaseStorage implements StorageInterface
 
     private function get(string $key): ?string
     {
-        $stmt = $this->pdo->prepare(sprintf(
+        $value = $this->execute(sprintf(
             'SELECT %s FROM %s WHERE %s = :key LIMIT 1',
             $this->quote('value'),
             $this->quote($this->table),
             $this->quote('store_key'),
-        ));
-        $stmt->execute([':key' => $key]);
-        $value = $stmt->fetchColumn();
+        ), [':key' => $key])->fetchColumn();
 
         return is_string($value) ? $value : null;
     }
 
-    private function set(string $key, string $value): void
+    private function set(string $key, #[\SensitiveParameter] string $value): void
     {
         [$table, $keyColumn, $valueColumn] = [$this->quote($this->table), $this->quote('store_key'), $this->quote('value')];
 
         if ($this->isMysql()) {
             // A second placeholder instead of VALUES(), which MySQL 8 deprecates (MariaDB lacks the alias syntax)
-            $this->pdo->prepare(sprintf(
+            $this->execute(sprintf(
                 'INSERT INTO %s (%s, %s) VALUES (:key, :value) ON DUPLICATE KEY UPDATE %s = :update_value',
                 $table,
                 $keyColumn,
                 $valueColumn,
                 $valueColumn,
-            ))->execute([':key' => $key, ':value' => $value, ':update_value' => $value]);
+            ), [':key' => $key, ':value' => $value, ':update_value' => $value]);
 
             return;
         }
 
-        $this->pdo->prepare(sprintf(
+        $this->execute(sprintf(
             'INSERT INTO %s (%s, %s) VALUES (:key, :value) ON CONFLICT (%s) DO UPDATE SET %s = excluded.%s',
             $table,
             $keyColumn,
@@ -159,7 +158,27 @@ class DatabaseStorage implements StorageInterface
             $keyColumn,
             $valueColumn,
             $valueColumn,
-        ))->execute([':key' => $key, ':value' => $value]);
+        ), [':key' => $key, ':value' => $value]);
+    }
+
+    /**
+     * Run a statement; database errors (in any PDO error mode) become StorageException.
+     *
+     * @param array<string, string> $params
+     */
+    private function execute(string $sql, #[\SensitiveParameter] array $params): \PDOStatement
+    {
+        try {
+            $stmt = $this->pdo->prepare($sql);
+
+            if ($stmt === false || !$stmt->execute($params)) {
+                throw new StorageException(sprintf('Database storage query failed: %s', implode(' ', array_map(strval(...), $this->pdo->errorInfo()))));
+            }
+
+            return $stmt;
+        } catch (\PDOException $e) {
+            throw new StorageException('Database storage query failed: ' . $e->getMessage(), previous: $e);
+        }
     }
 
     /** MySQL quotes identifiers with backticks; PostgreSQL and SQLite with standard double quotes. */
@@ -175,7 +194,7 @@ class DatabaseStorage implements StorageInterface
 
     private static function validateIdentifier(string $name): void
     {
-        if (!preg_match('/^[a-zA-Z0-9_]+$/', $name)) {
+        if (!preg_match('/^[a-zA-Z0-9_]+\z/', $name)) {
             throw new \InvalidArgumentException(
                 sprintf('Invalid SQL identifier "%s": only [a-zA-Z0-9_] are allowed.', $name),
             );

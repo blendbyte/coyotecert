@@ -53,6 +53,7 @@ class ClouDnsDns01Handler extends AbstractDns01Handler
 
     public function __construct(
         private readonly string $authId,
+        #[\SensitiveParameter]
         private readonly string $authPassword,
         private readonly ?string $zone = null,
         ?JsonHttpClient $httpClient = null,

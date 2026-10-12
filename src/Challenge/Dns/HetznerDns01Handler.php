@@ -48,6 +48,7 @@ class HetznerDns01Handler extends AbstractDns01Handler
     private JsonHttpClient $httpClient;
 
     public function __construct(
+        #[\SensitiveParameter]
         string $apiToken,
         private readonly ?string $zoneId = null,
         ?JsonHttpClient $httpClient = null,

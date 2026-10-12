@@ -40,7 +40,7 @@ it('http passes when body matches keyAuthorization', function () {
         ->not->toThrow(DomainValidationException::class);
 });
 
-it('http brackets IPv6 identifiers in the URL and follows up to 10 redirects', function () {
+it('http brackets IPv6 identifiers in the URL', function () {
     $client = new class implements HttpClientInterface {
         public string $url       = '';
         public int $maxRedirects = 0;
@@ -66,7 +66,74 @@ it('http brackets IPv6 identifiers in the URL and follows up to 10 redirects', f
     LocalChallengeTest::http('2001:db8::1', 'tok', 'tok.thumb', $client);
 
     expect($client->url)->toBe('http://[2001:db8::1]/.well-known/acme-challenge/tok');
-    expect($client->maxRedirects)->toBe(10);
+    expect($client->maxRedirects)->toBe(0); // redirects are followed by the self-test itself
+});
+
+/** Answers each URL from $routes: [status, Location or body]; records the URLs requested. */
+function redirectingClient(array $routes): HttpClientInterface
+{
+    return new class ($routes) implements HttpClientInterface {
+        public array $requested = [];
+
+        public function __construct(private array $routes) {}
+
+        public function head(string $url): Response
+        {
+            return new Response([], $url, 200, '');
+        }
+
+        public function get(string $url, array $headers = [], array $arguments = [], int $maxRedirects = 0): Response
+        {
+            $this->requested[] = $url;
+            [$status, $value]  = $this->routes[$url] ?? [404, ''];
+
+            return $status >= 300 && $status < 400
+                ? new Response(['location' => $value], $url, $status, '')
+                : new Response([], $url, $status, $value);
+        }
+
+        public function post(string $url, array $payload = [], array $headers = [], int $maxRedirects = 0): Response
+        {
+            return new Response([], $url, 200, '');
+        }
+    };
+}
+
+it('http follows redirects to http/https on ports 80 and 443, resolving relative locations', function () {
+    $client = redirectingClient([
+        'http://example.com/.well-known/acme-challenge/tok' => [301, 'https://www.example.com/acme/tok'],
+        'https://www.example.com/acme/tok'                  => [302, 'final'],
+        'https://www.example.com/acme/final'                => [200, 'tok.thumb'],
+    ]);
+
+    LocalChallengeTest::http('example.com', 'tok', 'tok.thumb', $client);
+
+    expect($client->requested)->toHaveCount(3);
+});
+
+it('http refuses redirects the CA would not follow', function (string $location) {
+    $client = redirectingClient(['http://example.com/.well-known/acme-challenge/tok' => [302, $location]]);
+
+    expect(fn() => LocalChallengeTest::http('example.com', 'tok', 'tok.thumb', $client))
+        ->toThrow(DomainValidationException::class, 'which the CA does not follow');
+    expect($client->requested)->toHaveCount(1);
+})->with([
+    'internal port' => ['http://127.0.0.1:8080/admin'],
+    'other scheme'  => ['gopher://127.0.0.1:6379/_FLUSHALL'],
+    'file'          => ['file:///etc/passwd'],
+]);
+
+it('http stops after 10 redirects', function () {
+    $routes = [];
+    for ($i = 0; $i <= 11; $i++) {
+        $from          = $i === 0 ? 'http://example.com/.well-known/acme-challenge/tok' : "http://example.com/r{$i}";
+        $routes[$from] = [302, 'http://example.com/r' . ($i + 1)];
+    }
+    $client = redirectingClient($routes);
+
+    expect(fn() => LocalChallengeTest::http('example.com', 'tok', 'tok.thumb', $client))
+        ->toThrow(DomainValidationException::class, '302 status code');
+    expect($client->requested)->toHaveCount(11);
 });
 
 it('http passes when body has surrounding whitespace', function () {

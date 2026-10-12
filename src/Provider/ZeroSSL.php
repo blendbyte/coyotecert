@@ -11,6 +11,7 @@ use CoyoteCert\Support\Arr;
 class ZeroSSL extends AbstractProvider
 {
     public function __construct(
+        #[\SensitiveParameter]
         private readonly ?string $apiKey = null,
         private readonly ?string $eabKid = null,
         private readonly ?string $eabHmac = null,
@@ -71,7 +72,8 @@ class ZeroSSL extends AbstractProvider
             ],
         ]);
 
-        $body = file_get_contents($url, false, $context);
+        // @: a connection failure would otherwise raise a PHP warning containing the URL, API key included
+        $body = @file_get_contents($url, false, $context);
 
         // $http_response_header is populated by file_get_contents as a side-effect
         $httpCode = 0;
@@ -79,6 +81,12 @@ class ZeroSSL extends AbstractProvider
             if (preg_match('/HTTP\/\S+\s+(\d+)/', $http_response_header[0], $m)) {
                 $httpCode = (int) $m[1];
             }
+        }
+
+        if ($body === false && $httpCode === 0) {
+            $error = preg_replace('/access_key=[^&\s)]*/', 'access_key=***', error_get_last()['message'] ?? 'no response');
+
+            throw new AcmeException(sprintf('ZeroSSL EAB provisioning failed: %s', $error));
         }
 
         if ($body === false || $httpCode !== 200) {

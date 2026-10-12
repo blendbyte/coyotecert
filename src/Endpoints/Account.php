@@ -214,7 +214,9 @@ class Account extends Endpoint
      * @return array<string, string>
      */
     private function buildKeyChangeOuterJws(
+        #[\SensitiveParameter]
         string $oldKeyPem,
+        #[\SensitiveParameter]
         string $newKeyPem,
         array  $oldJwk,
         string $accountUrl,
@@ -232,7 +234,7 @@ class Account extends Endpoint
     }
 
     /** @return array<string, string> */
-    private function buildEab(string $jwkJson, string $url, EabCredentials $eab): array
+    private function buildEab(string $jwkJson, string $url, #[\SensitiveParameter] EabCredentials $eab): array
     {
         $protected64 = Base64::urlSafeEncode(json_encode([
             'alg' => $eab->algorithm->value,
@@ -258,6 +260,7 @@ class Account extends Endpoint
      * @return array<string, string>
      */
     private function buildKeyChangeInnerJws(
+        #[\SensitiveParameter]
         string $newKeyPem,
         array  $oldJwk,
         string $accountUrl,
@@ -270,7 +273,7 @@ class Account extends Endpoint
      * @param array<string, mixed> $payload
      * @return array<string, string>
      */
-    private function signPayload(array $payload, string $accountKey): array
+    private function signPayload(array $payload, #[\SensitiveParameter] string $accountKey): array
     {
         return JsonWebSignature::generate(
             $payload,
@@ -281,7 +284,7 @@ class Account extends Endpoint
     }
 
     /** @param array<string, mixed> $payload */
-    private function postToAccountUrl(array $payload, ?string $accountKey = null): Response
+    private function postToAccountUrl(array $payload, #[\SensitiveParameter] ?string $accountKey = null): Response
     {
         $url = $this->client->directory()->newAccount();
         $accountKey ??= $this->client->accountAdapter()->getPrivateKey();
