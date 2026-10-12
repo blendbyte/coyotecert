@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<title>CoyoteCert — Modern ACME v2 client for PHP 8.3+</title>
-<meta name="description" content="CoyoteCert is a small, cheerful PHP 8.3+ ACME v2 client. Issue, renew, and revoke TLS certificates from Let's Encrypt, ZeroSSL, Buypass, and any compliant CA — without shelling out to certbot.">
-<meta name="keywords" content="CoyoteCert, ACME, ACME v2, RFC 8555, PHP, PHP 8.3, Let's Encrypt, ZeroSSL, Buypass, SSL.com, TLS, certificate, HTTPS, Blendbyte">
+<title>CoyoteCert: Modern ACME v2 client for PHP 8.3+</title>
+<meta name="description" content="CoyoteCert is a small, cheerful PHP 8.3+ ACME v2 client. Issue, renew, and revoke TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and any compliant CA, with ARI-guided renewal and no certbot.">
+<meta name="keywords" content="CoyoteCert, ACME, ACME v2, RFC 8555, PHP, PHP 8.3, Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, ARI, RFC 9773, TLS, certificate, HTTPS, Blendbyte">
 <meta name="author" content="Blendbyte">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#c45a28">
@@ -20,8 +20,8 @@
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CoyoteCert">
-<meta property="og:title" content="CoyoteCert — Modern ACME v2 client for PHP 8.3+">
-<meta property="og:description" content="A small, cheerful PHP 8.3+ ACME v2 client. Issue, renew, and revoke TLS certificates from any compliant CA — without shelling out to certbot.">
+<meta property="og:title" content="CoyoteCert: Modern ACME v2 client for PHP 8.3+">
+<meta property="og:description" content="A small, cheerful PHP 8.3+ ACME v2 client. Issue, renew, and revoke TLS certificates from any compliant CA, without shelling out to certbot.">
 <meta property="og:url" content="https://coyotecert.com/">
 <meta property="og:image" content="https://coyotecert.com/assets/og-cover.png">
 <meta property="og:image:width" content="1200">
@@ -30,8 +30,8 @@
 <meta property="og:locale" content="en_US">
 
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CoyoteCert — Modern ACME v2 client for PHP 8.3+">
-<meta name="twitter:description" content="Issue, renew, and revoke TLS certificates from Let's Encrypt, ZeroSSL, Buypass, and any compliant CA. PHP 8.3+. MIT.">
+<meta name="twitter:title" content="CoyoteCert: Modern ACME v2 client for PHP 8.3+">
+<meta name="twitter:description" content="Issue, renew, and revoke TLS certificates from Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and any compliant CA. PHP 8.3+. MIT.">
 <meta name="twitter:image" content="https://coyotecert.com/assets/og-cover.png">
 <meta name="twitter:image:alt" content="CoyoteCert mascot holding a sealed certificate.">
 
@@ -111,8 +111,8 @@
       <p class="tagline">Modern ACME for Modern PHP</p>
       <p class="lede">
         Look, you need TLS certs. You don't need another weekend reading RFC 8555. CoyoteCert is a
-        PHP 8.3+ client that talks ACME to Let's Encrypt, ZeroSSL, Buypass, and anyone else with a
-        compliant directory. It issues. It renews. It revokes. It does not explode at 3am.
+        PHP 8.3+ client that talks ACME to Let's Encrypt, ZeroSSL, Google Trust Services, SSL.com, and
+        anyone else with a compliant directory. It issues. It renews. It revokes. It does not explode at 3am.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://github.com/blendbyte/coyotecert" target="_blank" rel="noopener">
@@ -123,7 +123,7 @@
         </button>
       </div>
       <div class="hero-meta">
-        <div>RFC 8555 · <b>ACME v2</b></div>
+        <div>RFC 8555 · <b>ACME v2</b> · ARI</div>
         <div>PHP <b>8.3+</b> · strict types · PSR-4</div>
         <div>License: <b>MIT</b></div>
         <div>A <b>Blendbyte</b> open-source project</div>
@@ -149,29 +149,29 @@
     </div>
     <div class="bento">
       <article class="tile span-2">
-        <div class="num">№ 01 · HTTP + DNS</div>
-        <h3>HTTP-01 and DNS-01</h3>
-        <p>HTTP challenge? Built in. DNS-01 for wildcards? Cloudflare, Route 53, DigitalOcean, ClouDNS, Hetzner already packed in. Running something weirder? Three methods to implement — <code class="inline">supports</code>, <code class="inline">deploy</code>, <code class="inline">cleanup</code> — and you're certified.</p>
+        <div class="num">№ 01 · HTTP + DNS + ALPN</div>
+        <h3>Every challenge type</h3>
+        <p>HTTP challenge? Built in. DNS-01 for wildcards? Cloudflare, Route 53, DigitalOcean, ClouDNS and Hetzner are packed in, plus a shell hook for everything else. TLS-ALPN-01 too. Running something weirder? Three methods to implement (<code class="inline">supports</code>, <code class="inline">deploy</code>, <code class="inline">cleanup</code>) and you're certified.</p>
       </article>
       <article class="tile span-2">
         <div class="num">№ 02 · AUTO</div>
         <h3>Renewal on autopilot</h3>
-        <p>Comes with a CLI for issuing and renewing. Not a PHP person? Still fine. Drop <code class="inline">vendor/bin/coyote issue</code> in cron. Idempotent, atomic, skips what isn't due. There is no separate <code class="inline">renew</code> command — <code class="inline">issue</code> handles both. Run it every hour. The CA won't even notice.</p>
+        <p>The CA says when to renew (ARI, RFC 9773). No ARI? Renewal starts when a third of the lifetime is left, so 90-day and 6-day certs both just work. Not a PHP person? Drop <code class="inline">vendor/bin/coyote issue</code> in cron. It skips what isn't due, and <code class="inline">issue</code> handles renewal too. Run it daily. The CA won't even notice.</p>
       </article>
       <article class="tile">
-        <div class="num">№ 03 · § 7.4</div>
-        <h3>RFC 8555, by the book</h3>
-        <p>Accounts, orders, authorizations, finalization. Nonces, replay protection, JWS signing. All the boring plumbing happens inside the library. You just ask for a cert.</p>
+        <div class="num">№ 03 · RFC 8555 + 9773</div>
+        <h3>By the book</h3>
+        <p>Accounts, orders, authorizations, finalization, ARI, profiles, key rollover. Nonces, JWS signing, EAB. All the boring plumbing happens inside the library. You just ask for a cert.</p>
       </article>
       <article class="tile">
         <div class="num">№ 04 · TYPED</div>
         <h3>Types, not mystery arrays</h3>
-        <p>PHP 8.3 readonly classes. Enums for every state. Return types everywhere. Your IDE knows what it's doing, and so will you.</p>
+        <p>PHP 8.3 readonly classes. Enums for every state. Strict types and PHPStan level 9. Your IDE knows what it's doing, and so will you.</p>
       </article>
       <article class="tile">
-        <div class="num">№ 05 · KEYS</div>
+        <div class="num">№ 05 · KEYS + STORAGE</div>
         <h3>ECDSA or RSA, your call</h3>
-        <p>P-256, P-384, P-521 or honest 2048 to 4096 bit RSA. Store them on disk, in Vault, in KMS, in a cigar box. One interface, one method.</p>
+        <p>P-256, P-384, or honest RSA 2048 and 4096. Keep them on disk, in MySQL, PostgreSQL or SQLite, or in a cigar box. One interface, eight methods.</p>
       </article>
       <article class="tile">
         <div class="num">№ 06 · OBSERVE</div>
@@ -190,9 +190,9 @@
         <p>Point it at a CA. Hand it a domain and a solver. Get back a fullchain and a private key. That's the whole show. The paperwork is hiding in the basement where it belongs.</p>
         <ul>
           <li><span class="check">✓</span><span>Hit Let's Encrypt staging first. Then prod. Same code, different URL.</span></li>
-          <li><span class="check">✓</span><span>Swap CAs by changing one string. ZeroSSL, Buypass, SSL.com, step-ca.</span></li>
-          <li><span class="check">✓</span><span>Get a real <code class="inline">Certificate</code> object. Not a sack of PEM you have to shake out.</span></li>
-          <li><span class="check">✓</span><span>Typed exceptions for rate limits, bad nonces, and other CA tantrums.</span></li>
+          <li><span class="check">✓</span><span>Swap CAs by changing one line. ZeroSSL, Google Trust Services, SSL.com, step-ca.</span></li>
+          <li><span class="check">✓</span><span>Get a real <code class="inline">StoredCertificate</code> back: cert, chain, key, SANs, expiry. Not a sack of PEM you have to shake out.</span></li>
+          <li><span class="check">✓</span><span>Typed exceptions for rate limits (with Retry-After), CAA blocks, refused auth, and other CA tantrums.</span></li>
         </ul>
       </div>
       <div class="code-win">
@@ -225,48 +225,47 @@
     </div>
     <div class="chips">
       <div class="chip"><strong>Let's Encrypt</strong><small>Staging + Prod</small></div>
-      <div class="chip"><strong>ZeroSSL</strong><small>Free 90-day</small></div>
-      <div class="chip"><strong>Buypass</strong><small>Go SSL</small></div>
-      <div class="chip"><strong>SSL.com</strong><small>Enterprise</small></div>
+      <div class="chip"><strong>ZeroSSL</strong><small>EAB from API key</small></div>
       <div class="chip"><strong>Google Trust</strong><small>Services</small></div>
+      <div class="chip"><strong>SSL.com</strong><small>EAB optional</small></div>
+      <div class="chip"><strong>Pebble</strong><small>Local testing</small></div>
       <div class="chip"><strong>Bring your own</strong><small>Any ACME v2 CA</small></div>
     </div>
 
     <div class="sec-head" style="margin-top:3.25rem">
       <h2 class="sec-title">Wildcards without the yak-shaving.</h2>
-      <p class="sec-sub">Cloudflare, Route 53, DigitalOcean are already in there. Running something else? Implement <code class="inline">supports</code>, <code class="inline">deploy</code>, and <code class="inline">cleanup</code> and ship it.</p>
+      <p class="sec-sub">Cloudflare, Route 53, DigitalOcean, ClouDNS and Hetzner are already in there, with zone detection and propagation checks. Anything with a CLI works through the shell hook. Running something else? Implement <code class="inline">supports</code>, <code class="inline">deploy</code>, and <code class="inline">cleanup</code> and ship it.</p>
     </div>
     <div class="chips">
       <div class="chip"><strong>Cloudflare</strong><small>Built-in</small></div>
-      <div class="chip"><strong>AWS Route 53</strong><small>Built-in</small></div>
+      <div class="chip"><strong>AWS Route 53</strong><small>No AWS SDK</small></div>
       <div class="chip"><strong>DigitalOcean</strong><small>Built-in</small></div>
       <div class="chip"><strong>ClouDNS</strong><small>Built-in</small></div>
-      <div class="chip"><strong>Hetzner</strong><small>Built-in</small></div>
+      <div class="chip"><strong>Hetzner</strong><small>Cloud API</small></div>
+      <div class="chip"><strong>Shell hook</strong><small>Any DNS CLI</small></div>
       <div class="chip"><strong>Bring your own</strong><small>Three methods. Done.</small></div>
     </div>
 
     <div class="stats">
       <div class="stat"><div class="n">8555</div><div class="l">RFC compliant</div></div>
       <div class="stat"><div class="n">8.3+</div><div class="l">PHP required</div></div>
-      <div class="stat"><div class="n">0</div><div class="l">Shell calls</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">certbot needed</div></div>
       <div class="stat"><div class="n">MIT</div><div class="l">Open source</div></div>
     </div>
 
     <div class="laravel">
       <div>
         <h3>Laravel? Already handled.</h3>
-        <p>First-party package. Facade, Artisan commands, HTTP-01 over the cache store (no nginx changes needed), and a daily scheduled renewal task. Zero boilerplate beyond publishing the config.</p>
+        <p>First-party package. Artisan commands, events, a queue job, HTTP-01 over the cache store (no nginx changes needed), and a daily scheduled renewal task. Zero boilerplate beyond publishing the config.</p>
         <a class="laravel-link" href="https://github.com/blendbyte/coyotecert-laravel" target="_blank" rel="noopener">coyotecert-laravel on GitHub →</a>
       </div>
       <div class="code-win">
         <div class="code-tab">
           <div class="dots"><i></i><i></i><i></i></div>
-          <span class="fname">anywhere.php</span>
-          <span class="lang">Laravel</span>
+          <span class="fname">terminal</span>
+          <span class="lang">Artisan</span>
         </div>
-<pre class="code"><span class="c-k">use</span> Blendbyte\CoyoteCertLaravel\Facades\<span class="c-t">Cert</span>;
-
-<span class="c-t">Cert</span>::<span class="c-m">for</span>(<span class="c-s">'example.com'</span>)-><span class="c-m">issueOrRenew</span>();</pre>
+<pre class="code"><span class="c-k">$</span> php artisan cert:issue example.com</pre>
       </div>
     </div>
   </div>
@@ -374,15 +373,15 @@
         <div>
           <h3>Catch your first cert</h3>
           <p>Test on staging. Flip to prod when it stops crashing. (It won't.)</p>
-          <code><span class="c-t">CoyoteCert</span>::<span class="c-m">with</span>(<span class="c-k">new</span> <span class="c-t">LetsEncrypt</span>())-><span class="c-m">issueOrRenew</span>();</code>
+          <code><span class="c-t">CoyoteCert</span>::<span class="c-m">with</span>(<span class="c-k">new</span> <span class="c-t">LetsEncryptStaging</span>())-><span class="c-m">identifiers</span>('example.com')-><span class="c-m">challenge</span>(<span class="c-k">new</span> <span class="c-t">Http01Handler</span>('/var/www/html'))-><span class="c-m">issueOrRenew</span>();</code>
         </div>
       </div>
       <div class="step">
         <div class="n">03</div>
         <div>
           <h3>Set it, forget it</h3>
-          <p>Skip the PHP script. Slap the CLI in cron. Done. There is no <code class="inline">renew</code> command — <code class="inline">issue</code> handles both.</p>
-          <code>0 * * * * vendor/bin/coyote issue --identifier example.com --webroot /var/www/html --provider letsencrypt --storage /etc/certs --email admin@example.com</code>
+          <p>Skip the PHP script. Slap the CLI in cron. Done. There is no <code class="inline">renew</code> command: <code class="inline">issue</code> handles both, and only renews when it's due.</p>
+          <code>0 3 * * * vendor/bin/coyote issue --identifier example.com --webroot /var/www/html --provider letsencrypt --storage /etc/certs --email admin@example.com</code>
         </div>
       </div>
     </div>
@@ -411,7 +410,7 @@
       <details class="faq-item">
         <summary>I'm behind Cloudflare's proxy. Does HTTP-01 still work?</summary>
         <div class="faq-body">
-          <p>Sometimes. If Always Use HTTPS is enabled, the 80-to-443 redirect fires before the token is ever served and the CA gets a redirect instead of a token.</p>
+          <p>Usually. The CA follows the 80-to-443 redirect from Always Use HTTPS, so your origin has to serve the token over HTTPS too. If a WAF rule, a challenge page or a cache rule answers instead, the CA gets that instead of the token.</p>
           <p>Easiest fix: switch to DNS-01. Cloudflare is a built-in DNS provider, so it is a one-line handler swap and the orange cloud stays orange.</p>
           <p>Committed to HTTP-01? Grey-cloud the record (DNS only) during issuance, then flip it back. Cloudflare's proxy can be asked to step aside briefly. It doesn't like it, but it cooperates.</p>
         </div>
@@ -422,6 +421,15 @@
           <p>Missing storage, or the storage path changes between runs. Without a storage backend, <span class="ic">needsRenewal()</span> always returns true because there is nowhere to check what you already have. Like a dog who has never seen a ball before. Every single time.</p>
           <pre>->storage(new FilesystemStorage('/etc/coyotecert'))</pre>
           <p>Same path, every run. If you are using <span class="ic">DatabaseStorage</span>, confirm the connection points at the same database as last time and not your staging environment.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary>When does it actually renew?</summary>
+        <div class="faq-body">
+          <p>When the CA says so. If the CA supports ARI (RFC 9773), its renewal window decides, including the early window it opens when it is about to revoke certificates. Without ARI, renewal starts once a third of the lifetime is left: 30 days for a 90-day cert, about 2 days for a 6-day one.</p>
+          <p>Prefer a fixed threshold? Pass it, and it applies on top of the ARI window:</p>
+          <pre>->issueOrRenew(daysBeforeExpiry: 14)</pre>
+          <p>Either way, a daily cron job is enough. Calls that aren't due do nothing.</p>
         </div>
       </details>
       <details class="faq-item">
@@ -445,9 +453,16 @@
       <details class="faq-item">
         <summary>I run on multiple servers. Can they share one account?</summary>
         <div class="faq-body">
-          <p>Yes. Use <span class="ic">DatabaseStorage</span> with a shared database, or <span class="ic">FilesystemStorage</span> on a shared volume. File locking is safe across concurrent processes, so two servers racing to <span class="ic">issueOrRenew()</span> at the same time will not corrupt anything. They end up holding the same certificate, which is the civilised outcome.</p>
+          <p>Yes. Use <span class="ic">DatabaseStorage</span> with a shared MySQL, PostgreSQL or SQLite database, or <span class="ic">FilesystemStorage</span> on a shared volume. One account key per CA, shared by however many servers you run.</p>
           <pre>->storage(new DatabaseStorage($sharedPdo))</pre>
-          <p>One account key per CA, shared by however many servers you run.</p>
+          <p>Writes are atomic, so nobody ever reads half a key. There is no lock across servers, though: run renewal from one server, or wrap it in a lock (<span class="ic">flock</span>, your scheduler's "one server only" option). Otherwise two servers due at the same moment both order a certificate, and the last one to save wins.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary>I'm on 1.x. What changes in 2.0?</summary>
+        <div class="faq-body">
+          <p>Mostly fixes, some of which change behaviour: ARI now works against real CAs, renewal timing follows the CA or the certificate's lifetime instead of a flat 30 days, Hetzner moved to the Hetzner Cloud API (new token needed), and Buypass is gone because Buypass shut down its ACME service.</p>
+          <p>The <a href="https://github.com/blendbyte/coyotecert/blob/main/UPGRADING.md" target="_blank" rel="noopener">upgrade guide</a> lists every change and what to do about it. Most apps using the builder only need its first section.</p>
         </div>
       </details>
     </div>
@@ -460,7 +475,7 @@
     <p>MIT licensed. Barely any dependencies. Ready whenever your next deploy is.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/blendbyte/coyotecert" target="_blank" rel="noopener">★ Star on GitHub</a>
-      <a class="btn btn-ghost" href="#usage">Read the docs →</a>
+      <a class="btn btn-ghost" href="https://github.com/blendbyte/coyotecert#readme" target="_blank" rel="noopener">Read the docs →</a>
     </div>
   </div>
 </section>
@@ -481,6 +496,7 @@
         <a href="https://github.com/blendbyte/coyotecert" target="_blank" rel="noopener">GitHub repo</a>
         <a href="https://github.com/blendbyte/coyotecert/issues" target="_blank" rel="noopener">Issue tracker</a>
         <a href="https://github.com/blendbyte/coyotecert/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/blendbyte/coyotecert/blob/main/UPGRADING.md" target="_blank" rel="noopener">Upgrading to 2.0</a>
         <a href="https://packagist.org/packages/blendbyte/coyotecert" target="_blank" rel="noopener">Packagist</a>
       </div>
       <div>
@@ -491,6 +507,7 @@
         <a href="#compare">Compare</a>
         <a href="#faq">FAQ</a>
         <a href="https://datatracker.ietf.org/doc/html/rfc8555" target="_blank" rel="noopener">RFC 8555</a>
+        <a href="https://datatracker.ietf.org/doc/html/rfc9773" target="_blank" rel="noopener">RFC 9773 (ARI)</a>
       </div>
       <div>
         <h5>Community</h5>

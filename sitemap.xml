@@ -3,12 +3,12 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://coyotecert.com/</loc>
-    <lastmod>2026-04-22</lastmod>
+    <lastmod>2026-10-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
     <image:image>
       <image:loc>https://coyotecert.com/assets/og-cover.png</image:loc>
-      <image:title>CoyoteCert — Modern ACME for Modern PHP</image:title>
+      <image:title>CoyoteCert: Modern ACME for Modern PHP</image:title>
     </image:image>
   </url>
 </urlset>
