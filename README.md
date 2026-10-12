@@ -147,11 +147,8 @@ First-party Laravel integration is available as a separate package: [`blendbyte/
 
 Adds a service provider, config file, Artisan commands (`cert:issue`, `cert:renew`, `cert:status`, `cert:revoke`), HTTP-01 challenge served through your app via the cache store (no web server changes, works behind load balancers), Laravel Events, queue job support for DNS-01, and a daily scheduled renewal task. No boilerplate beyond publishing the config.
 
-```php
-// In a Laravel app
-use Blendbyte\CoyoteCertLaravel\Facades\Cert;
-
-Cert::for('example.com')->issueOrRenew();
+```bash
+php artisan cert:issue example.com
 ```
 
 Full docs and installation in the [companion repo](https://github.com/blendbyte/coyotecert-laravel).
